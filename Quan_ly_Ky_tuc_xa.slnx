@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Quan_ly_Ky_tuc_xa.csproj" />
+  <Project Path="Tests/Tests.csproj" />
+</Solution>

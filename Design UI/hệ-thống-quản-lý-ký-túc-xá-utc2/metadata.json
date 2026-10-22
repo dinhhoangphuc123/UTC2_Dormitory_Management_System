@@ -1,0 +1,6 @@
+{
+  "name": "Hệ thống Quản lý Ký túc xá UTC2",
+  "description": "Cổng thông tin và quản lý Ký túc xá Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

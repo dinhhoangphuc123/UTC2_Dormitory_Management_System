@@ -1,0 +1,650 @@
+<!DOCTYPE html><html lang="vi" style="width: 1280px; height: 1067px; overflow: hidden; position: relative;"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_dashboard" name="shell-type"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"surface-tint":"#455e91","surface-container-high":"#dfe8ff","primary":"#00163a","inverse-on-surface":"#ecf0ff","on-primary":"#ffffff","inverse-primary":"#aec6ff","on-tertiary":"#ffffff","on-background":"#111c2d","primary-fixed-dim":"#aec6ff","surface-container-low":"#f0f3ff","tertiary":"#11181f","on-error":"#ffffff","on-secondary-fixed-variant":"#1a4390","surface-variant":"#d9e3fb","surface-container":"#e8eeff","on-surface-variant":"#44474f","on-tertiary-container":"#8d939c","secondary-container":"#88a9fd","on-primary-fixed-variant":"#2c4678","on-primary-fixed":"#001a42","primary-fixed":"#d8e2ff","primary-container":"#0b2a5b","surface-bright":"#f9f9ff","outline-variant":"#c4c6d0","surface-container-lowest":"#ffffff","on-error-container":"#93000a","error":"#ba1a1a","on-secondary-container":"#0e3b88","secondary-fixed":"#d9e2ff","outline":"#747780","tertiary-fixed":"#dde3ed","on-surface":"#111c2d","secondary-fixed-dim":"#b1c5ff","surface-container-highest":"#d9e3fb","error-container":"#ffdad6","secondary":"#375ba9","surface":"#f9f9ff","background":"#f9f9ff","on-secondary-fixed":"#001946","on-tertiary-fixed-variant":"#41474f","on-tertiary-fixed":"#161c23","tertiary-container":"#262c33","on-primary-container":"#7a93ca","on-secondary":"#ffffff","inverse-surface":"#273143","surface-dim":"#d0daf2","tertiary-fixed-dim":"#c1c7d1"},borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},spacing:{"space-lg":"1.5rem","margin":"2rem","space-md":"1rem","space-xl":"2rem","space-sm":"0.5rem","margin-mobile":"1rem","gutter-mobile":"1rem","gutter":"1.5rem","space-xs":"0.25rem","space-2xl":"3rem"},fontFamily:{"body-md":["Inter"],"body-lg":["Inter"],"headline-lg":["Be Vietnam Pro"],"body-sm":["Inter"],"label-md":["Inter"],"headline-sm":["Be Vietnam Pro"],"headline-md":["Be Vietnam Pro"],"label-sm":["Inter"],"display-metric":["Be Vietnam Pro"],"code-metric":["Inter"],"display-hero":["Be Vietnam Pro"]},fontSize:{"body-md":["0.875rem",{"lineHeight":"1.5","letterSpacing":"0em","fontWeight":"400"}],"body-lg":["1rem",{"lineHeight":"1.5","letterSpacing":"0em","fontWeight":"400"}],"headline-lg":["1.75rem",{"lineHeight":"1.25","letterSpacing":"-0.015em","fontWeight":"600"}],"body-sm":["0.75rem",{"lineHeight":"1.4","letterSpacing":"0.005em","fontWeight":"400"}],"label-md":["0.875rem",{"lineHeight":"1.25","letterSpacing":"0em","fontWeight":"500"}],"headline-sm":["1.125rem",{"lineHeight":"1.4","letterSpacing":"0em","fontWeight":"600"}],"headline-md":["1.375rem",{"lineHeight":"1.3","letterSpacing":"-0.01em","fontWeight":"600"}],"label-sm":["0.75rem",{"lineHeight":"1.25","letterSpacing":"0.01em","fontWeight":"500"}],"display-metric":["2.25rem",{"lineHeight":"1.2","letterSpacing":"-0.02em","fontWeight":"600"}],"code-metric":["0.8125rem",{"lineHeight":"1.2","letterSpacing":"0.02em","fontWeight":"600"}],"display-hero":["3rem",{"lineHeight":"1.15","letterSpacing":"-0.025em","fontWeight":"700"}]}}}};</script></head><body class="bg-background font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 bottom-0 w-64 bg-[#0b1728] border-r border-[#152a4a] z-50 flex flex-col justify-between select-none">
+  <div class="flex flex-col h-full overflow-hidden">
+    <!-- Header / Brand -->
+    <div class="pt-5 pb-4 px-5 flex items-center gap-3 shrink-0">
+      <div class="w-7 h-7 rounded bg-[#1e40af] flex items-center justify-center shrink-0 shadow-sm">
+        <span class="material-symbols-outlined text-white text-[16px]">apartment</span>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-[15px] font-bold text-white tracking-wide leading-tight uppercase font-headline-sm">KTX UTC2</span>
+        <span class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase leading-none mt-0.5">PHÂN HIỆU TP.HCM</span>
+      </div>
+    </div>
+
+    <!-- Navigation List -->
+    <div class="flex-1 overflow-y-auto px-3.5 py-1 space-y-4 text-[13px]">
+      <!-- TỔNG QUAN -->
+      <div>
+        <div class="px-3 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">TỔNG QUAN</div>
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+          <span class="material-symbols-outlined text-[19px] text-slate-400">grid_view</span>
+          <span class="font-medium">Dashboard</span>
+        </a>
+      </div>
+
+      <!-- ĐĂNG KÝ & NỘI TRÚ -->
+      <div>
+        <div class="px-3 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">ĐĂNG KÝ &amp; NỘI TRÚ</div>
+        <div class="space-y-0.5">
+          <!-- Active Item matching IMAGE_2 -->
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0e3b88] text-white font-semibold shadow-sm">
+            <span class="material-symbols-outlined text-[19px] text-white">how_to_reg</span>
+            <span class="">Đợt &amp; Đơn đăng ký</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">gavel</span>
+            <span class="font-medium">Quản lý Hợp đồng</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- SINH VIÊ N -->
+      <div>
+        <div class="px-3 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">SINH VIÊ N</div>
+        <div class="space-y-0.5">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">badge</span>
+            <span class="font-medium">Hồ sơ Sinh viê n</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">school</span>
+            <span class="font-medium">Lớp &amp; Khoa việ n</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- CƠ SỞ VẬT CHẤT -->
+      <div>
+        <div class="px-3 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">CƠ SỞ VẬT CHẤT</div>
+        <div class="space-y-0.5">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">domain</span>
+            <span class="font-medium">Sơ đồ Phòng &amp; Giường</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- TÀI CHÍNH & VẬN HÀNH -->
+      <div>
+        <div class="px-3 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">TÀI CHÍNH &amp; VẬN HÀNH</div>
+        <div class="space-y-0.5">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">water_drop</span>
+            <span class="font-medium">Điệ n nước &amp; Dịch vụ</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">receipt_long</span>
+            <span class="font-medium">Hóa đơn &amp; Thu phí</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">build</span>
+            <span class="font-medium">Yê u cầu sửa chữ a</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">gavel</span>
+            <span class="font-medium">Vi phạm &amp; Kỷ luật</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- HỆ THỐNG -->
+      <div>
+        <div class="px-3 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">HỆ THỐNG</div>
+        <div class="space-y-0.5">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">manage_accounts</span>
+            <span class="font-medium">Nhân viê n &amp; Tài khoản</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[19px] text-slate-400">bar_chart</span>
+            <span class="font-medium">Báo cáo thống kê</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom User Bar matching IMAGE_2 -->
+    <div class="p-3 bg-[#081322] border-t border-[#152a4a]/80 shrink-0">
+      <div class="flex items-center justify-between p-2 rounded-xl bg-[#112035] hover:bg-[#162942] transition-colors">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-full bg-[#001f4d] flex items-center justify-center shrink-0 border border-blue-500/20">
+            <span class="material-symbols-outlined text-blue-300 text-[18px]">person</span>
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[13px] font-bold text-white truncate leading-tight">Nguyễn Văn An</span>
+            <span class="text-[11px] text-slate-400 font-medium truncate leading-tight mt-0.5">Quản lý KTX</span>
+          </div>
+        </div>
+        <button type="button" class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white transition-colors shrink-0" title="Đăng xuất">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-16 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-space-xl"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-sm w-96 lg:w-[420px] h-11 px-space-md rounded-xl bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] text-on-surface-variant"><span class="material-symbols-outlined text-[18px]">search</span><input class="bg-transparent w-full text-[14px] text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none" placeholder="Tìm kiếm (phòng, SV, hóa đơn...) ⌘K" type="text"><kbd class="font-code-metric text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant font-medium">⌘K</kbd></div></div><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-sm h-11 px-space-md rounded-xl bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] cursor-pointer hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-[18px] text-primary">calendar_today</span><span class="font-label-sm text-label-sm text-on-surface font-medium">Năm học 2026-2027 · HK1</span><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></div><div class="flex items-center gap-1"><button class="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Chuyển giao diện sáng/tối" type="button"><span class="material-symbols-outlined text-[20px]">light_mode</span></button><button class="relative w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Thông báo" type="button"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-error ring-2 ring-surface"></span></button></div><div class="flex items-center gap-space-sm pl-space-sm"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1VEg_e1KgZL29_UWGSHe9LkzfHL711XB560TIZqL2TwwsGUBBut-lF6cxcEoWyjlxbNQUeKZqNz4jPERNeEl7tWfPjEtMxJf226DAUWSDXJgEJ-sGieFawrPt7uD671U48KZ1uZDHe51aXOhRjnHf1PigfQIbDmVGVkxSTtxjkoEMXvkEjZfFmox3lvMhXiEGDOJ3UhUXJvYHEoEmFoJREvVl7UKvK0kjkVaJzhE37UquQkN1i40Kr-xx4f3irijoWB1s6GtYv9qQ"><div class="hidden md:flex flex-col text-left"><span class="font-label-md text-label-sm font-semibold text-on-surface leading-tight">Nguyễn Văn An</span><span class="font-body-sm text-[10px] text-on-surface-variant">Quản lý KTX</span></div></div></div></header><main class="w-full pt-16 bg-background min-h-screen"><div class="flex flex-col w-full p-margin">
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md mb-space-lg">
+
+<div class="flex items-center gap-space-sm self-start lg:self-auto">
+<button class="h-10 px-space-md rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md shadow-sm hover:bg-surface-container transition-all flex items-center gap-space-xs" type="button">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">file_download</span>
+<span class="">Xuất danh sách</span>
+</button>
+<button class="h-10 px-space-md rounded-xl bg-primary text-on-primary font-label-md text-label-md shadow-sm hover:bg-primary-container transition-all flex items-center gap-space-xs" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="">Tạo đợt mới</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-gutter mb-space-lg">
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="flex items-center"><h3 class="font-headline-sm text-headline-sm font-bold text-on-surface uppercase tracking-wider">Tổng hồ sơ</h3></div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display-metric text-display-metric text-on-background tracking-tight">420</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">chỉ tiêu 450</span>
+</div>
+<div>
+<div class="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 93%;"></div>
+</div>
+<div class="flex justify-between items-center mt-1.5 text-on-surface-variant font-label-sm text-[11px]">
+<span class="">Tiến độ lấp đầy</span>
+<span class="font-semibold text-primary">93.3%</span>
+</div>
+</div>
+</div>
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="flex items-center"><h3 class="font-headline-sm text-headline-sm font-bold text-on-surface uppercase tracking-wider">Đã duyệt</h3></div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display-metric text-display-metric text-on-background tracking-tight">312</span>
+<span class="font-label-sm text-label-sm text-secondary font-medium">74.3%</span>
+</div>
+<div>
+<div class="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 74%;"></div>
+</div>
+<div class="flex justify-between items-center mt-1.5 text-on-surface-variant font-label-sm text-[11px]">
+<span class="">Xác nhận đóng phí</span>
+<span class="font-medium text-secondary">289/312 SV</span>
+</div>
+</div>
+</div>
+<div class="p-space-lg rounded-xl shadow-sm flex flex-col justify-between relative overflow-hidden bg-surface-container-lowest">
+<div class="flex items-center"><h3 class="font-headline-sm text-headline-sm font-bold text-on-surface uppercase tracking-wider">Chờ xét duyệt</h3></div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display-metric text-display-metric text-primary font-bold tracking-tight">86</span>
+<span class="font-label-sm text-label-sm text-primary/80">đơn tồn đọng</span>
+</div>
+<div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full rounded-full" style="width: 20%;"></div>
+</div>
+<div class="flex justify-between items-center mt-1.5 font-label-sm text-[11px] text-primary">
+<span class="">Thời gian xử lý TB</span>
+<span class="font-bold">&lt; 2.5 giờ</span>
+</div>
+</div>
+</div>
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="flex items-center"><h3 class="font-headline-sm text-headline-sm font-bold text-on-surface uppercase tracking-wider">Từ chối / Hủy</h3></div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display-metric text-display-metric text-on-background tracking-tight">22</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">5.2%</span>
+</div>
+<div>
+<div class="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
+<div class="bg-outline-variant h-full rounded-full" style="width: 5%;"></div>
+</div>
+<div class="flex justify-between items-center mt-1.5 text-on-surface-variant font-label-sm text-[11px]">
+<span class="">Phúc khảo</span>
+<span class="font-medium text-on-surface">3 đơn</span>
+</div>
+</div>
+</div>
+</div>
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md mb-space-md p-space-sm bg-surface-container-lowest rounded-xl shadow-sm">
+<div class="flex items-center gap-space-xs overflow-x-auto p-1">
+<button class="px-space-md py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-label-sm flex items-center gap-1.5 shadow-sm shrink-0" type="button">
+<span class="">Chờ duyệt</span>
+<span class="px-1.5 py-0.2 rounded-full bg-on-primary/20 text-on-primary text-[11px] font-semibold">86</span>
+</button>
+<button class="px-space-md py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface font-label-md text-label-sm transition-colors flex items-center gap-1.5 shrink-0" type="button">
+<span class="">Đã duyệt</span>
+<span class="text-[11px] text-on-surface-variant">312</span>
+</button>
+<button class="px-space-md py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface font-label-md text-label-sm transition-colors flex items-center gap-1.5 shrink-0" type="button">
+<span class="">Bị từ chối</span>
+<span class="text-[11px] text-on-surface-variant">22</span>
+</button>
+<button class="px-space-md py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface font-label-md text-label-sm transition-colors shrink-0" type="button">
+<span class="">Tất cả (420)</span>
+</button>
+</div>
+<div class="flex items-center gap-space-sm flex-wrap">
+<div class="flex items-center gap-1 px-space-sm py-1 rounded-lg bg-surface-container-low text-on-surface-variant text-label-sm font-label-sm">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<select class="bg-transparent text-on-surface font-medium focus:outline-none cursor-pointer pr-1">
+<option value="">Diện: Tất cả</option>
+<option value="cs">Chính sách</option>
+<option value="hn">Hộ nghèo</option>
+<option value="vs">Vùng sâu</option>
+<option value="dc">Điểm cao (&gt;26đ)</option>
+</select>
+</div>
+<div class="flex items-center gap-1 px-space-sm py-1 rounded-lg bg-surface-container-low text-on-surface-variant text-label-sm font-label-sm">
+<span class="">Khóa:</span>
+<select class="bg-transparent text-on-surface font-medium focus:outline-none cursor-pointer">
+<option value="k65">K65 (2026)</option>
+<option value="k64">K64</option>
+</select>
+</div>
+<div class="flex items-center gap-1 px-space-sm py-1 rounded-lg bg-surface-container-low text-on-surface-variant text-label-sm font-label-sm">
+<span class="">Giới tính:</span>
+<select class="bg-transparent text-on-surface font-medium focus:outline-none cursor-pointer">
+<option value="all">Tất cả</option>
+<option value="nam">Nam</option>
+<option value="nu">Nữ</option>
+</select>
+</div>
+<button class="w-8 h-8 rounded-lg bg-surface-container-low text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors" title="Làm mới dữ liệu" type="button">
+<span class="material-symbols-outlined text-[18px]">sync</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+<div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden lg:col-span-12 w-full">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+<th class="py-3 px-space-md font-semibold">Mã đơn</th>
+<th class="py-3 px-space-md font-semibold">Sinh viên</th>
+<th class="py-3 px-space-md font-semibold">Diện ưu tiên</th>
+<th class="py-3 px-space-md font-semibold">Nguyện vọng</th>
+<th class="py-3 px-space-md font-semibold text-center">Điểm ĐX</th>
+<th class="py-3 px-space-md font-semibold">Nộp lúc</th>
+<th class="py-3 px-space-md font-semibold text-right">Duyệt 1-chạm</th>
+</tr>
+</thead>
+<tbody class="divide-y-0 text-body-sm font-body-md" id="applicant-rows">
+<tr class="hover:bg-surface-container-low/70 transition-colors cursor-pointer group bg-surface-container/60" onclick="selectCandidate(0)">
+<td class="py-3.5 px-space-md font-code-metric text-on-surface font-semibold">#DK-65089</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm min-w-[180px]">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Close up portrait photograph of young Vietnamese male student Nguyen Van Dat smiling neatly for dormitory admissions ID card, daylight neutral setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD798jURCF5IV70n9oR_4AGjJxXADv4s1sLIDoOeoGfGLquw4Z_AOp2-KrB-T3aZ482WZOSbnB_Kptt5DsMZgoVxkV5gavSZ4XILDyt-qa7Aq_HMIVUcAYfD3O6mJ_luZWc5x9VZqnoH_QknwEqfS-VhHJj8Pl9D7CDzMyVHXkskNinfbhfNK_bmIT7_DrE2CBs_u9kjFWmXmB1JniogXSuccZUGH3c42-AixoRZ_AMdOHpXvNx82EQNA">
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate leading-tight group-hover:text-primary">Nguyễn Văn Đạt</span>
+<span class="font-code-metric text-[11px] text-on-surface-variant">231150531201 • CNTT</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<span class="px-2 py-0.5 rounded-full text-[11px] font-label-sm font-semibold bg-surface-container-high text-on-secondary-container">Hộ nghèo</span>
+</td>
+<td class="py-3.5 px-space-md text-on-surface">
+<div class="flex items-center gap-1 font-label-md text-label-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">apartment</span>
+<span class="">Tòa A01 • 8C</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center font-headline-sm text-headline-sm font-bold text-primary">9.5</td>
+<td class="py-3.5 px-space-md text-on-surface-variant text-[12px]">Hôm nay, 08:24</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1.5" onclick="event.stopPropagation()">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-[12px] font-label-md font-semibold transition-all flex items-center gap-1" onclick="handleDecision(this, 'approved', 'Nguyễn Văn Đạt')" title="Duyệt hồ sơ nhanh" type="button">
+<span class="material-symbols-outlined text-[16px]">check</span>
+<span class="">Duyệt</span>
+</button>
+<button class="h-8 w-8 rounded-lg bg-surface-container-low text-error hover:bg-error-container transition-colors flex items-center justify-center" onclick="handleDecision(this, 'rejected', 'Nguyễn Văn Đạt')" title="Từ chối" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+<button class="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container flex items-center justify-center" title="Xem chi tiết" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/70 transition-colors cursor-pointer group bg-surface-container-lowest" onclick="selectCandidate(1)">
+<td class="py-3.5 px-space-md font-code-metric text-on-surface font-semibold">#DK-65090</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm min-w-[180px]">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Headshot of Vietnamese female student Tran Thi Mai wearing simple student uniform clean background warm soft light UTC2 college admissions" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrIKIyFhAEn57rlV_Izz6q-E-d6K3XzKRc8-IbeneR8D2fkV8v1Qnyd1wFHOJZg41Fz8BfUUhwoFdgHiFy-0wnVT0nzp2XzeRKZoe0GtqdHvMpbNa9-hSEuvxOxhO_nWPwGkuGWsdmqPw1EtFSSVbnoNnkpnT3TnZdSjvyT9vIxRrmAZxVH3825PE4ufvF56eDncofbyWs4lCxNUnBXxxjF-Xz8KLVw5kRC2YIN1Ss5ngMe9RRQlUQfw">
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate leading-tight group-hover:text-primary">Trần Thị Mai</span>
+<span class="font-code-metric text-[11px] text-on-surface-variant">231150531205 • Cầu Đường</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<span class="px-2 py-0.5 rounded-full text-[11px] font-label-sm font-semibold bg-surface-container text-primary">Gia đình CS</span>
+</td>
+<td class="py-3.5 px-space-md text-on-surface">
+<div class="flex items-center gap-1 font-label-md text-label-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">apartment</span>
+<span class="">Tòa B02 • 6D</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center font-headline-sm text-headline-sm font-bold text-primary">9.0</td>
+<td class="py-3.5 px-space-md text-on-surface-variant text-[12px]">Hôm nay, 08:35</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1.5" onclick="event.stopPropagation()">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-[12px] font-label-md font-semibold transition-all flex items-center gap-1" onclick="handleDecision(this, 'approved', 'Trần Thị Mai')" type="button">
+<span class="material-symbols-outlined text-[16px]">check</span>
+<span class="">Duyệt</span>
+</button>
+<button class="h-8 w-8 rounded-lg bg-surface-container-low text-error hover:bg-error-container transition-colors flex items-center justify-center" onclick="handleDecision(this, 'rejected', 'Trần Thị Mai')" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+<button class="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/70 transition-colors cursor-pointer group" onclick="selectCandidate(2)">
+<td class="py-3.5 px-space-md font-code-metric text-on-surface font-semibold">#DK-65091</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm min-w-[180px]">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Portrait photography of Vietnamese male university student Le Hoang Nam with glasses smiling modern campus background natural daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5QPUdpRVKTcINC0RU6AOkmC5MK-Iwwmc0GMuxbiZ4baYrQtQshVfE9fL1L0NU0prNJmVNtQUQKahMi7Nm7Vlu3LzrPjKc3IfgfqhAlmaCowyoOXueVAIQBDyDuh3GnfHdweNd4bFPFOU1er9pw5OvfFK3gozWI2MOsktFvoM_XtZrshq6zpEGKJRrXAG6Fs36KFo3ZwmdMWbfhK-gV8KwRnaiI_u3uVa91wcsEHNHZaL62XQNdFMkeQ">
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate leading-tight group-hover:text-primary">Lê Hoàng Nam</span>
+<span class="font-code-metric text-[11px] text-on-surface-variant">231150531210 • Logistics</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<span class="px-2 py-0.5 rounded-full text-[11px] font-label-sm font-semibold bg-surface-container-high text-primary">Điểm &gt; 27.5</span>
+</td>
+<td class="py-3.5 px-space-md text-on-surface">
+<div class="flex items-center gap-1 font-label-md text-label-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">apartment</span>
+<span class="">Tòa A01 • 4B</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center font-headline-sm text-headline-sm font-bold text-primary">8.8</td>
+<td class="py-3.5 px-space-md text-on-surface-variant text-[12px]">Hôm nay, 09:10</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1.5" onclick="event.stopPropagation()">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-[12px] font-label-md font-semibold transition-all flex items-center gap-1" onclick="handleDecision(this, 'approved', 'Lê Hoàng Nam')" type="button">
+<span class="material-symbols-outlined text-[16px]">check</span>
+<span class="">Duyệt</span>
+</button>
+<button class="h-8 w-8 rounded-lg bg-surface-container-low text-error hover:bg-error-container transition-colors flex items-center justify-center" onclick="handleDecision(this, 'rejected', 'Lê Hoàng Nam')" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+<button class="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/70 transition-colors cursor-pointer group" onclick="selectCandidate(3)">
+<td class="py-3.5 px-space-md font-code-metric text-on-surface font-semibold">#DK-65092</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm min-w-[180px]">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Portrait photography of young female Vietnamese freshman student Pham Quynh Anh smiling confidently bright neutral academic background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAI7fryS600KjwYTCTtWTSdhQenBglcpv-MWsNYJprCvgLFs-2-X0zAj0rI_zRHmERsDUYT015unjiseJWfuSanz8g1lIu1ofsHunCGf3gsADPQSlh6C67gT-HYXu8TYQwIdntAd5VYttSPu_rq44HeA6CiH8I-z4CNp3aQIFI6hqtLwHQdOJS32epevGmTSFLghzPhyxZZiB-CdMBwMnzMzc7Ip-z31NBZaxkz7JSbhRGqTMw9mVRJEA">
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate leading-tight group-hover:text-primary">Phạm Quỳnh Anh</span>
+<span class="font-code-metric text-[11px] text-on-surface-variant">231150531218 • Kinh tế VT</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<span class="px-2 py-0.5 rounded-full text-[11px] font-label-sm font-semibold bg-surface-container text-primary">Vùng sâu KV1</span>
+</td>
+<td class="py-3.5 px-space-md text-on-surface">
+<div class="flex items-center gap-1 font-label-md text-label-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">apartment</span>
+<span class="">Tòa B02 • 8A</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center font-headline-sm text-headline-sm font-bold text-primary">8.5</td>
+<td class="py-3.5 px-space-md text-on-surface-variant text-[12px]">Hôm nay, 09:22</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1.5" onclick="event.stopPropagation()">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-[12px] font-label-md font-semibold transition-all flex items-center gap-1" onclick="handleDecision(this, 'approved', 'Phạm Quỳnh Anh')" type="button">
+<span class="material-symbols-outlined text-[16px]">check</span>
+<span class="">Duyệt</span>
+</button>
+<button class="h-8 w-8 rounded-lg bg-surface-container-low text-error hover:bg-error-container transition-colors flex items-center justify-center" onclick="handleDecision(this, 'rejected', 'Phạm Quỳnh Anh')" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+<button class="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/70 transition-colors cursor-pointer group" onclick="selectCandidate(4)">
+<td class="py-3.5 px-space-md font-code-metric text-on-surface font-semibold">#DK-65093</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm min-w-[180px]">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Portrait photography of young Vietnamese male student Vu Tuan Kiet calm friendly demeanor dormitory registration profile shot" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA07G4UGyGQMVP0ZG7BvnywVi5CqjZ7Zy-_3w88SSZof4zoNRo3Ma4c478ddRyoWD41QTQ07HB0MwxQjoQbM9QVM_w85eLD0MuAvj6yroL-z62vwVJ38-v5Cghd0zNMDcFkEMXTOxPDUvBo-hEjuDLJ2SvVyIUKTH5daVurzsrjPR1mba8HgZKTvTJePX2RyEng6gdDkN9kOefgoOBV7wc2u4Ko-P9bW5wf8PKHIK9iZE4ccVYjwfdoVg">
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate leading-tight group-hover:text-primary">Vũ Tuấn Kiệt</span>
+<span class="font-code-metric text-[11px] text-on-surface-variant">231150531222 • Tự động hóa</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<span class="px-2 py-0.5 rounded-full text-[11px] font-label-sm font-semibold bg-surface-container-high text-primary">Hộ cận nghèo</span>
+</td>
+<td class="py-3.5 px-space-md text-on-surface">
+<div class="flex items-center gap-1 font-label-md text-label-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">apartment</span>
+<span class="">Tòa A02 • 6B</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center font-headline-sm text-headline-sm font-bold text-primary">8.0</td>
+<td class="py-3.5 px-space-md text-on-surface-variant text-[12px]">Hôm nay, 09:40</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1.5" onclick="event.stopPropagation()">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-[12px] font-label-md font-semibold transition-all flex items-center gap-1" onclick="handleDecision(this, 'approved', 'Vũ Tuấn Kiệt')" type="button">
+<span class="material-symbols-outlined text-[16px]">check</span>
+<span class="">Duyệt</span>
+</button>
+<button class="h-8 w-8 rounded-lg bg-surface-container-low text-error hover:bg-error-container transition-colors flex items-center justify-center" onclick="handleDecision(this, 'rejected', 'Vũ Tuấn Kiệt')" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+<button class="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/70 transition-colors cursor-pointer group" onclick="selectCandidate(5)">
+<td class="py-3.5 px-space-md font-code-metric text-on-surface font-semibold">#DK-65094</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm min-w-[180px]">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Portrait photography of young female Vietnamese student Do Thu Hang gentle friendly smile student university portal photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCA3qRAczem5PhR7XqiBgKjOFog1aFnwK5rx8dv5Hz2gM2U5Zs8Py9mj6bws_87eBThh5z5CE-wkHgrpXQmCutp4EAs3_8RfftnI1svhB98sk8MCYDomqFIJhEL2q-Is66eQyMzmaEj2z8em8HAFeDB3Au9ytxd8eNbu5WZKTpuAf7qYG4t8SMyNHiiluj5jK9HkL1tR-xbyAwEiUYm7uq2LRwDWE3QHpAaQ_7jQvfnQl1trlyg27DffQ">
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate leading-tight group-hover:text-primary">Đỗ Thu Hằng</span>
+<span class="font-code-metric text-[11px] text-on-surface-variant">231150531230 • Cơ khí GT</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<span class="px-2 py-0.5 rounded-full text-[11px] font-label-sm font-semibold bg-surface-container text-primary">Điểm &gt; 26.0</span>
+</td>
+<td class="py-3.5 px-space-md text-on-surface">
+<div class="flex items-center gap-1 font-label-md text-label-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">apartment</span>
+<span class="">Tòa B01 • 8B</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center font-headline-sm text-headline-sm font-bold text-primary">7.8</td>
+<td class="py-3.5 px-space-md text-on-surface-variant text-[12px]">Hôm nay, 10:05</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1.5" onclick="event.stopPropagation()">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-[12px] font-label-md font-semibold transition-all flex items-center gap-1" onclick="handleDecision(this, 'approved', 'Đỗ Thu Hằng')" type="button">
+<span class="material-symbols-outlined text-[16px]">check</span>
+<span class="">Duyệt</span>
+</button>
+<button class="h-8 w-8 rounded-lg bg-surface-container-low text-error hover:bg-error-container transition-colors flex items-center justify-center" onclick="handleDecision(this, 'rejected', 'Đỗ Thu Hằng')" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+<button class="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/70 transition-colors cursor-pointer group" onclick="selectCandidate(6)">
+<td class="py-3.5 px-space-md font-code-metric text-on-surface font-semibold">#DK-65095</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm min-w-[180px]">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Portrait photography of young male Vietnamese freshman student Hoang Minh Tri energetic friendly university portrait style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFUh1ndDnmeKgGKxka-mwCbRr8kJnEaQembr79co5YXdEwT4am9v1zxalEzOImZLksnfEELYrU_1V-9FuSXFAXlgjdtGh3aPw8ugvLrfGCwJWrbE2U7CzW8YabPFLNLLhPI65yPklE4U1ecFY8nX8CNAWnuBXtOw7BySO_HxJJRpu3tXR_qwGDPbDx0mjxECRjMdh_PLty-cGE--H_8q6-ln1PMfr1vIKSzf62w1dzopDE3uNtaiZ1AA">
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate leading-tight group-hover:text-primary">Hoàng Minh Trí</span>
+<span class="font-code-metric text-[11px] text-on-surface-variant">231150531238 • Kỹ thuật MT</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<span class="px-2 py-0.5 rounded-full text-[11px] font-label-sm font-semibold bg-surface-container text-on-surface-variant">Khoảng cách &gt; 350km</span>
+</td>
+<td class="py-3.5 px-space-md text-on-surface">
+<div class="flex items-center gap-1 font-label-md text-label-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">apartment</span>
+<span class="">Tòa A02 • 8A</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center font-headline-sm text-headline-sm font-bold text-primary">7.5</td>
+<td class="py-3.5 px-space-md text-on-surface-variant text-[12px]">Hôm nay, 10:14</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1.5" onclick="event.stopPropagation()">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-[12px] font-label-md font-semibold transition-all flex items-center gap-1" onclick="handleDecision(this, 'approved', 'Hoàng Minh Trí')" type="button">
+<span class="material-symbols-outlined text-[16px]">check</span>
+<span class="">Duyệt</span>
+</button>
+<button class="h-8 w-8 rounded-lg bg-surface-container-low text-error hover:bg-error-container transition-colors flex items-center justify-center" onclick="handleDecision(this, 'rejected', 'Hoàng Minh Trí')" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+<button class="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="flex items-center justify-between p-space-md bg-surface-container-low/50 font-label-sm text-label-sm text-on-surface-variant">
+<span class="">Hiển thị <b class="text-on-surface">7</b> trong <b class="text-on-surface">86</b> đơn chờ duyệt</span>
+<div class="flex items-center gap-1">
+<button class="px-2.5 py-1 rounded bg-surface-container-lowest text-on-surface disabled:opacity-40" disabled="" type="button">Trang trước</button>
+<span class="px-2 py-1 font-semibold text-primary">1 / 13</span>
+<button class="px-2.5 py-1 rounded bg-surface-container-lowest text-on-surface hover:bg-surface-container" type="button">Trang sau</button>
+</div>
+</div>
+</div>
+
+</div>
+<div class="fixed bottom-6 right-6 px-space-md py-3 rounded-xl bg-primary text-on-primary shadow-xl flex items-center gap-space-sm transform translate-y-24 opacity-0 transition-all duration-200 z-50" id="toast">
+<span class="material-symbols-outlined text-[20px] text-secondary-container" id="toast-icon">check_circle</span>
+<span class="font-label-md text-label-sm" id="toast-msg">Đã duyệt thành công!</span>
+</div>
+</div>
+<script>
+  const candidates = [
+    { name: "Nguyễn Văn Đạt", id: "231150531201", major: "CNTT • K65 Khóa 2026", hometown: "Hà Tĩnh (Khu vực 1)", score: "27.65 điểm", proof: "Giấy chứng nhận Hộ nghèo 2026 (PDF)", room: "Tòa A01 • Phòng 8C", scoreDx: "9.5" },
+    { name: "Trần Thị Mai", id: "231150531205", major: "Cầu Đường • K65 Khóa 2026", hometown: "Quảng Bình (Khu vực 1)", score: "26.40 điểm", proof: "Chứng nhận Con thương binh (PDF)", room: "Tòa B02 • Phòng 6D", scoreDx: "9.0" },
+    { name: "Lê Hoàng Nam", id: "231150531210", major: "Logistics • K65 Khóa 2026", hometown: "Đắk Lắk (Khu vực 2)", score: "28.10 điểm", proof: "Bảng điểm tuyển sinh quốc gia (PDF)", room: "Tòa A01 • Phòng 4B", scoreDx: "8.8" },
+    { name: "Phạm Quỳnh Anh", id: "231150531218", major: "Kinh tế VT • K65 Khóa 2026", hometown: "Gia Lai (Khu vực 1-Vùng sâu)", score: "25.80 điểm", proof: "Xác nhận vùng đặc biệt khó khăn", room: "Tòa B02 • Phòng 8A", scoreDx: "8.5" },
+    { name: "Vũ Tuấn Kiệt", id: "231150531222", major: "Tự động hóa • K65 Khóa 2026", hometown: "Bình Định (Khu vực 2)", score: "26.90 điểm", proof: "Sổ chứng nhận cận nghèo địa phương", room: "Tòa A02 • Phòng 6B", scoreDx: "8.0" },
+    { name: "Đỗ Thu Hằng", id: "231150531230", major: "Cơ khí GT • K65 Khóa 2026", hometown: "Ninh Thuận (Khu vực 2)", score: "26.25 điểm", proof: "Chứng nhận thành tích học tập THPT", room: "Tòa B01 • Phòng 8B", scoreDx: "7.8" },
+    { name: "Hoàng Minh Trí", id: "231150531238", major: "Kỹ thuật MT • K65 Khóa 2026", hometown: "Khánh Hòa (&gt;380km)", score: "25.10 điểm", proof: "Hộ khẩu thường trú chứng thực", room: "Tòa A02 • Phòng 8A", scoreDx: "7.5" }
+  ];
+
+  let currentCandidateIndex = 0;
+
+  function selectCandidate(index) {
+    currentCandidateIndex = index;
+    const c = candidates[index];
+    if (!c) return;
+
+    document.getElementById("preview-name").textContent = c.name;
+    document.getElementById("preview-id").textContent = "MSSV: " + c.id;
+    document.getElementById("preview-major").textContent = c.major;
+    document.getElementById("preview-hometown").textContent = c.hometown;
+    document.getElementById("preview-score").textContent = c.score;
+    document.getElementById("preview-proof").innerHTML = '<span class="material-symbols-outlined text-[15px] text-secondary">verified</span> ' + c.proof;
+    document.getElementById("preview-room").textContent = c.room;
+
+    const rows = document.querySelectorAll("#applicant-rows tr");
+    rows.forEach((r, idx) => {
+      if (idx === index) {
+        r.classList.add("bg-surface-container/60");
+      } else {
+        r.classList.remove("bg-surface-container/60");
+      }
+    });
+  }
+
+  function showToast(message, isError = false) {
+    const toast = document.getElementById("toast");
+    const msg = document.getElementById("toast-msg");
+    const icon = document.getElementById("toast-icon");
+    msg.textContent = message;
+    if (isError) {
+      toast.classList.remove("bg-primary");
+      toast.classList.add("bg-error");
+      icon.textContent = "error";
+      icon.classList.remove("text-secondary-container");
+      icon.classList.add("text-on-error");
+    } else {
+      toast.classList.remove("bg-error");
+      toast.classList.add("bg-primary");
+      icon.textContent = "check_circle";
+      icon.classList.remove("text-on-error");
+      icon.classList.add("text-secondary-container");
+    }
+    toast.classList.remove("translate-y-24", "opacity-0");
+    setTimeout(() => {
+      toast.classList.add("translate-y-24", "opacity-0");
+    }, 2400);
+  }
+
+  function handleDecision(btn, type, name) {
+    const row = btn.closest("tr");
+    if (type === "approved") {
+      row.style.opacity = "0.4";
+      row.style.pointerEvents = "none";
+      showToast("Đã duyệt 1-chạm: " + name + " (Tạo hợp đồng)");
+    } else {
+      row.style.opacity = "0.4";
+      row.style.pointerEvents = "none";
+      showToast("Đã từ chối đơn của " + name, true);
+    }
+  }
+
+  function previewApprove() {
+    const current = candidates[currentCandidateIndex];
+    if (current) {
+      showToast("Đã duyệt & xếp chỗ cho " + current.name);
+    }
+  }
+
+  function previewReject() {
+    const current = candidates[currentCandidateIndex];
+    if (current) {
+      showToast("Đã chuyển từ chối cho " + current.name, true);
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "a" || e.key === "A") {
+      previewApprove();
+    } else if (e.key === "x" || e.key === "X") {
+      previewReject();
+    }
+  });
+
+  selectCandidate(0);
+</script></main></div>
+
+
+
+
+
+</body></html>

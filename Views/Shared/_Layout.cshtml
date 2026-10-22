@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] ?? "Hệ thống Quản lý Ký túc xá UTC2 - Phân hiệu TP.HCM")</title>
+
+    <!-- Preload fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Be Vietnam Pro"', 'Inter', 'sans-serif'],
+                        headline: ['"Be Vietnam Pro"', 'sans-serif']
+                    },
+                    colors: {
+                        primary: '#00163a',
+                        'primary-container': '#0b2a5b',
+                        'primary-hover': '#143f8c',
+                        secondary: '#375ba9',
+                        'brand-dark': '#071a38',
+                        'brand-bg': '#0b1523',
+                        'brand-sidebar': '#081b33'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom KTX Theme Styles -->
+    <link rel="stylesheet" href="~/css/ktx-theme.css" asp-append-version="true" />
+
+    <!-- Dark mode hydration before render -->
+    <script>
+        if (localStorage.getItem('utc2_dorm_theme') === 'dark' || (!('utc2_dorm_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+</head>
+<body class="h-full bg-[#F4F5F7] dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] transition-colors duration-200">
+    @RenderBody()
+
+    <!-- Core App JS -->
+    <script src="~/js/ktx-app.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

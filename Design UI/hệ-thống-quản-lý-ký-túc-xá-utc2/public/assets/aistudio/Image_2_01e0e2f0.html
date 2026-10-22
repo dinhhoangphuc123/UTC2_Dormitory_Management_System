@@ -1,0 +1,343 @@
+<!DOCTYPE html><html lang="vi" class="h-full" style=""><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập - Hệ thống Quản lý Ký túc xá UTC2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Be Vietnam Pro"', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              DEFAULT: '#0B2A5B',
+              hover: '#143F8C',
+              soft: '#E8EEF8',
+              dark: '#071A38'
+            },
+            darkbg: '#0B0F1A',
+            darkcard: '#121826',
+            darkborder: '#232B3B'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-feature-settings: "cv02", "cv03", "cv04", "cv11"; }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .fade-up {
+      animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="h-full bg-[#F4F5F7] text-[#0B0F1A] dark:bg-[#0B0F1A] dark:text-[#E8EAF0] antialiased transition-colors duration-200">
+
+  <div class="min-h-full flex flex-col lg:flex-row">
+    
+    <!-- CỘT TRÁI (Khoảng 55%): Hình ảnh KTX, Gradient thương hiệu, Thông điệp và Điểm nổi bật -->
+    <div class="relative lg:w-[55%] min-h-[420px] lg:min-h-screen flex flex-col justify-between p-8 sm:p-12 lg:p-16 overflow-hidden bg-[#071A38]">
+      <!-- Background Image with Overlay -->
+      <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3dvVjk-VBybNNm2JxsMrQaZ6Xla-sc1rVEyAFG2H0jv9xDxwSH34iwwPfDDS5Jt2EcCbrNtjgifb_LUustJ5LLX-wWRxs5bE0pnmTNgzO6h2K7DI50Bd-B6AvG-rKGcoepNHgfiDO_KueLGSz5lU3Y3z9RCSJ4ehNXg7H2IRFbKzQfHe05BeiyY93w2dUCTFP3PpgR201q3ZUKv89imHbo0QV9GTn6hj2O_WjM7JszDgBpr67wdIlpA" alt="KTX UTC2 Campus" class="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-1000 ease-out">
+      
+      <!-- Linear Gradient Overlay: Từ đen #0B0F1A sang xanh dương đậm UTC2 #0B2A5B -->
+      <div class="absolute inset-0 bg-gradient-to-t from-[#0B0F1A] via-[#0B2A5B]/85 to-[#071A38]/90 backdrop-blur-[2px]"></div>
+      
+      <!-- Subtle Pattern Grid -->
+      <div class="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] opacity-10"></div>
+
+      <!-- Header Bên Trái: Logo và Tên phân hiệu -->
+      <div class="relative z-10 flex items-center justify-between"><div class="flex items-center space-x-3.5 min-w-0">
+          <div class="w-12 h-12 shrink-0 rounded-full bg-white p-0.5 shadow-lg flex items-center justify-center overflow-hidden border border-white/40"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGYdvcqp3rSyDsU3ZgkBsQXIR7k3bUm9ejInncJAQuJ5gd2szuChbhMQ8fpFYG-oGVlt4qrvEcRF-RIau-_yaHGxDM6i6_INXHLsIyhPpgKVvhTNH4SjGGjPeIe3ZiKRHgw-gDN84jhw0TVx8xGLpikBNfkw9R369xGJVkTBoeHrhqvmnwsKqyf9cPl3WTH1AimnMi2n_ipdXle85Quk5jLo-pekss71Hv9Am80tdBvoQv7FOOvx9QwPMpyqeVw8TUTLI" alt="Logo UTC2" class="w-full h-full object-contain rounded-full"></div>
+          <div class="whitespace-nowrap">
+            <h1 class="text-xl font-bold tracking-normal text-white flex items-center gap-2 leading-snug mb-1">
+              <span class="">KTX UTC2</span>
+              <span class="text-[11px] font-semibold uppercase tracking-wider bg-white/15 px-2 py-0.5 rounded-full border border-white/20">Portal</span>
+            </h1>
+            <p class="text-xs text-blue-200/80 font-medium tracking-normal">Ký túc xá · Phân hiệu TP.HCM</p>
+          </div>
+        </div>
+
+        <!-- Dark mode toggle mini -->
+        <button id="themeToggleBtn" aria-label="Đổi chế độ sáng tối" class="relative z-10 shrink-0 w-9 h-9 rounded-lg bg-white/10 border border-white/15 text-white/90 hover:bg-white/20 transition flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="sun" aria-hidden="true" class="lucide lucide-sun w-4 h-4 hidden dark:block"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="moon" aria-hidden="true" class="lucide lucide-moon w-4 h-4 block dark:hidden"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg>
+        </button></div>
+
+      <!-- Trung tâm: Tiêu đề lớn & Giá trị cốt lõi -->
+      <div class="relative z-10 my-auto py-12 max-w-xl fade-up"><div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs text-blue-200/90 font-medium mb-6">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="">Cổng thông tin Ký túc xá trực tuyến</span>
+        </div>
+        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-normal text-white mb-6" style="line-height: 1.45;"><span class="block pb-1.5">Hệ thống Quản lý</span><span class="block">Ký túc xá</span></h2>
+        <p class="text-base sm:text-lg text-blue-200/90 font-medium tracking-wide max-w-lg">
+          Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh
+        </p></div>
+
+      <!-- Footer Bên Trái -->
+      <div class="relative z-10 flex flex-wrap items-center justify-between gap-4 text-xs text-blue-200/60 pt-6"><div class="text-blue-200/70 text-xs font-normal">© Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh</div><div class="text-blue-200/50 text-[11px]">Hệ thống Quản lý Ký túc xá v2.4</div></div>
+    </div>
+
+    <!-- CỘT PHẢI (Khoảng 45%): Form Đăng nhập & Tài khoản Demo -->
+    <div class="lg:w-[45%] flex flex-col justify-center px-6 sm:px-12 xl:px-16 py-12 bg-white dark:bg-[#121826] transition-colors duration-200">
+      <div class="w-full max-w-md mx-auto">
+
+        <!-- Header Form -->
+        <div class="mb-8"><h2 class="text-2xl sm:text-3xl font-bold tracking-normal leading-normal text-[#0B0F1A] dark:text-white">Đăng nhập</h2></div>
+
+        <!-- Form Đăng nhập -->
+        <form id="loginForm" class="space-y-5" novalidate="" onsubmit="return false;">
+          
+          <!-- Thông báo lỗi chung (ẩn mặc định) -->
+          <div id="generalAlert" class="hidden p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 text-xs flex items-center gap-2.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-circle" aria-hidden="true" class="lucide lucide-alert-circle w-4 h-4 shrink-0 text-red-600"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+            <span id="generalAlertText" class="">Tên đăng nhập hoặc mật khẩu không chính xác.</span>
+          </div>
+
+          <!-- Ô Tên đăng nhập -->
+          <div>
+            <label for="usernameInput" class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">
+              Tên đăng nhập / Mã số
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#98A2B3]">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="user" aria-hidden="true" class="lucide lucide-user w-4 h-4"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              </div>
+              <input type="text" id="usernameInput" name="username" autocomplete="username" placeholder="Nhập mã nhân viên hoặc MSSV (vd: ql_an)" class="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] dark:focus:ring-[#4C7DD9] focus:border-transparent transition text-[#0B0F1A] dark:text-[#E8EAF0] placeholder:text-[#98A2B3]">
+            </div>
+            <p id="usernameError" class="hidden mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-triangle" aria-hidden="true" class="lucide lucide-alert-triangle w-3.5 h-3.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg> Vui lòng nhập tên đăng nhập
+            </p>
+          </div>
+
+          <!-- Ô Mật khẩu -->
+          <div>
+            <label for="passwordInput" class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">
+              Mật khẩu
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#98A2B3]">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="key" aria-hidden="true" class="lucide lucide-key w-4 h-4"><path d="m2 21 9.6-9.6"></path><path d="m7.5 15.5 2.3 2.3a1 1 0 0 1 0 1.4l-2.1 2.1a1 1 0 0 1-1.4 0L4 19"></path><circle cx="15.5" cy="7.5" r="5.5"></circle></svg>
+              </div>
+              <input type="password" id="passwordInput" name="password" autocomplete="current-password" placeholder="••••••••" class="w-full pl-10 pr-11 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] dark:focus:ring-[#4C7DD9] focus:border-transparent transition text-[#0B0F1A] dark:text-[#E8EAF0] placeholder:text-[#98A2B3]">
+              <button type="button" id="togglePasswordBtn" aria-label="Hiện hoặc ẩn mật khẩu" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#98A2B3] hover:text-[#0B2A5B] dark:hover:text-[#4C7DD9] transition">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="eye" aria-hidden="true" id="eyeIcon" class="lucide lucide-eye w-4 h-4"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </div>
+            <p id="passwordError" class="hidden mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-triangle" aria-hidden="true" class="lucide lucide-alert-triangle w-3.5 h-3.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg> Vui lòng nhập mật khẩu
+            </p>
+          </div>
+
+          <!-- Hàng Ghi nhớ & Quên mật khẩu -->
+          <div class="flex items-center justify-between pt-1">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="rememberCheckbox" checked="" class="w-4 h-4 rounded border-[#E4E7EC] text-[#0B2A5B] focus:ring-[#0B2A5B] dark:border-[#232B3B] dark:bg-[#0B0F1A]">
+              <span class="text-xs text-[#667085] dark:text-slate-400 font-medium">Ghi nhớ đăng nhập</span>
+            </label>
+            <a href="javascript:void(0)" onclick="alert('Vui lòng liên hệ Văn phòng Quản lý KTX UTC2 (Phòng 102 - Tòa A) hoặc hotline 028.3896.xxxx để cấp lại mật khẩu.')" class="text-xs font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">
+              Quên mật khẩu?
+            </a>
+          </div>
+
+          <!-- Nút Đăng nhập Chính -->
+          <button type="submit" id="loginSubmitBtn" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] active:scale-[0.99] text-white font-semibold text-sm shadow-sm transition flex items-center justify-center gap-2">
+            <span id="btnText" class="">Đăng nhập</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" id="btnIcon" class="lucide lucide-arrow-right w-4 h-4"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            <svg id="btnSpinner" class="hidden animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+          </button>
+        </form>
+
+        <!-- Phân cách Tài khoản Demo -->
+        <div class="relative my-8">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-[#E4E7EC] dark:border-[#232B3B]"></div>
+          </div>
+          <div class="relative flex justify-center text-xs uppercase">
+            <span class="bg-white dark:bg-[#121826] px-3 text-[#98A2B3] font-semibold tracking-wider">
+              Tài khoản demo nhanh
+            </span>
+          </div>
+        </div>
+
+        <!-- 4 Nút Demo Vai Trò -->
+        <div class="flex flex-wrap items-center justify-center gap-2"><button type="button" onclick="setDemoAccount('ql_an', 'quanly123', 'Quản lý')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#0B2A5B] text-white hover:bg-[#143F8C] transition shadow-sm">Quản lý KTX</button><button type="button" onclick="setDemoAccount('kt_binh', 'ketoan123', 'Kế toán')" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E4E7EC] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] hover:border-[#0B2A5B] dark:hover:border-[#4C7DD9] transition">Kế toán</button><button type="button" onclick="setDemoAccount('sv_minh', 'sinhvien123', 'Sinh viên')" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E4E7EC] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] hover:border-[#0B2A5B] dark:hover:border-[#4C7DD9] transition">Sinh viên</button><button type="button" onclick="setDemoAccount('admin', 'admin123', 'Admin')" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E4E7EC] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] hover:border-[#0B2A5B] dark:hover:border-[#4C7DD9] transition">Admin</button></div>
+
+        <div class="mt-8 text-center"><p class="text-xs text-[#667085] dark:text-slate-400">Chưa có tài khoản? <a href="javascript:void(0)" onclick="alert('Sinh viên theo dõi thông báo đăng ký phòng tại cổng thông tin UTC2.')" class="font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Đăng ký nội trú</a></p></div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // Khởi tạo icons Lucide
+    lucide.createIcons();
+
+    // Dark Mode Sync
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    function applyTheme() {
+      const isDark = localStorage.getItem('utc2_dorm_theme') === 'dark' || 
+        (!('utc2_dorm_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    applyTheme();
+
+    themeToggleBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('utc2_dorm_theme', isDark ? 'dark' : 'light');
+      lucide.createIcons();
+    });
+
+    // Hiện / ẩn mật khẩu
+    const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+    const passwordInput = document.getElementById('passwordInput');
+    const eyeIcon = document.getElementById('eyeIcon');
+    let isPasswordVisible = false;
+
+    togglePasswordBtn.addEventListener('click', () => {
+      isPasswordVisible = !isPasswordVisible;
+      passwordInput.type = isPasswordVisible ? 'text' : 'password';
+      eyeIcon.setAttribute('data-lucide', isPasswordVisible ? 'eye-off' : 'eye');
+      lucide.createIcons();
+    });
+
+    // Auto-fill Demo
+    function setDemoAccount(username, password, roleName) {
+      document.getElementById('usernameInput').value = username;
+      document.getElementById('passwordInput').value = password;
+      clearErrors();
+      showToast('Đã điền tài khoản: ' + roleName, 'info');
+    }
+
+    // Toast helper
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-red-600 text-white',
+        info: 'bg-[#0B2A5B] text-white'
+      };
+      toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 transform transition-all duration-300 pointer-events-auto fade-up`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+
+    function clearErrors() {
+      document.getElementById('usernameError').classList.add('hidden');
+      document.getElementById('passwordError').classList.add('hidden');
+      document.getElementById('generalAlert').classList.add('hidden');
+    }
+
+    // Xử lý Login Submit
+    const loginForm = document.getElementById('loginForm');
+    const usernameInput = document.getElementById('usernameInput');
+    const btnText = document.getElementById('btnText');
+    const btnIcon = document.getElementById('btnIcon');
+    const btnSpinner = document.getElementById('btnSpinner');
+    const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      clearErrors();
+
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value.trim();
+      let hasError = false;
+
+      if (!username) {
+        document.getElementById('usernameError').classList.remove('hidden');
+        hasError = true;
+      }
+      if (!password) {
+        document.getElementById('passwordError').classList.remove('hidden');
+        hasError = true;
+      }
+
+      if (hasError) return;
+
+      // Giả lập Loading State
+      btnText.textContent = 'Đang xác thực...';
+      btnIcon.classList.add('hidden');
+      btnSpinner.classList.remove('hidden');
+      loginSubmitBtn.disabled = true;
+
+      setTimeout(() => {
+        // Danh sách tài khoản hợp lệ
+        const validUsers = {
+          'admin': { name: 'Nguyễn Hoàng Admin', role: 'Quản trị viên', avatar: 'AD' },
+          'ql_an': { name: 'Nguyễn Văn An', role: 'Quản lý', avatar: 'VA' },
+          'kt_binh': { name: 'Lê Thị Bình', role: 'Kế toán', avatar: 'TB' },
+          'sv_minh': { name: 'Trần Nhật Minh', role: 'Sinh viên', avatar: 'NM' }
+        };
+
+        if (validUsers[username] && password.length >= 3) {
+          // Lưu session
+          localStorage.setItem('utc2_current_user', JSON.stringify(validUsers[username]));
+          showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
+          
+          setTimeout(() => {
+            // Chuyển hướng sang màn hình Dashboard
+            window.location.hash = 'dashboard';
+            // Trigger switch view nếu tích hợp 1 page hoặc đổi sang dashboard view
+            if (window.parent && window.parent.switchToDashboard) {
+              window.parent.switchToDashboard();
+            } else {
+              showToast('Đã đăng nhập vai trò: ' + validUsers[username].role, 'success');
+            }
+          }, 800);
+        } else {
+          document.getElementById('generalAlertText').textContent = 'Tài khoản hoặc mật khẩu không đúng. Vui lòng thử lại hoặc bấm vào nút Demo bên dưới.';
+          document.getElementById('generalAlert').classList.remove('hidden');
+          btnText.textContent = 'Đăng nhập';
+          btnIcon.classList.remove('hidden');
+          btnSpinner.classList.add('hidden');
+          loginSubmitBtn.disabled = false;
+        }
+      }, 700);
+    });
+
+    // Mặc định điền sẵn tài khoản Quản lý cho tiện trải nghiệm
+    window.addEventListener('DOMContentLoaded', () => {
+      setDemoAccount('ql_an', 'quanly123', 'Nguyễn Văn An (Quản lý)');
+    });
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+</body></html>
