@@ -38,6 +38,8 @@ window.KtxExtendedViews = (function () {
         ticketCategory: 'ALL',
         ticketPriority: 'ALL',
         violationSearch: '',
+        violationStatus: 'ALL',
+        violationPenaltyType: 'ALL',
         violationBuilding: 'ALL',
         violationPenalty: 'ALL',
         violationType: 'ALL',
@@ -48,6 +50,66 @@ window.KtxExtendedViews = (function () {
         reportSemester: 'Năm học 2026-2027 · HK1',
         reportScope: 'ALL'
     };
+
+    function renderMetricCard({ label, value, unit, icon, tone = 'blue', footer, footerRight = '', onclick = '' }) {
+        const tones = {
+            blue: {
+                iconBg: 'bg-blue-50 dark:bg-blue-950/40',
+                iconText: 'text-[#0b2a5b] dark:text-blue-400',
+                valueText: 'text-[#0b2a5b] dark:text-blue-300',
+                footerText: 'text-[#375ba9] dark:text-blue-400'
+            },
+            amber: {
+                iconBg: 'bg-amber-50 dark:bg-amber-950/40',
+                iconText: 'text-amber-600 dark:text-amber-400',
+                valueText: 'text-amber-600 dark:text-amber-400',
+                footerText: 'text-amber-700 dark:text-amber-400'
+            },
+            red: {
+                iconBg: 'bg-red-50 dark:bg-red-950/40',
+                iconText: 'text-red-600 dark:text-red-400',
+                valueText: 'text-red-600 dark:text-red-400',
+                footerText: 'text-red-600 dark:text-red-400'
+            },
+            green: {
+                iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+                iconText: 'text-emerald-600 dark:text-emerald-400',
+                valueText: 'text-emerald-600 dark:text-emerald-400',
+                footerText: 'text-emerald-700 dark:text-emerald-400'
+            },
+            slate: {
+                iconBg: 'bg-slate-100 dark:bg-slate-800',
+                iconText: 'text-slate-600 dark:text-slate-300',
+                valueText: 'text-slate-900 dark:text-white',
+                footerText: 'text-slate-600 dark:text-slate-300'
+            }
+        };
+        const colors = tones[tone] || tones.blue;
+        const clickable = onclick ? 'cursor-pointer' : '';
+        const action = onclick ? `onclick="${onclick}"` : '';
+
+        return `
+            <div ${action} class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all ${clickable}">
+                <div class="flex items-center justify-between">
+                    <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">${label}</span>
+                    <span class="w-8 h-8 rounded-lg ${colors.iconBg} ${colors.iconText} flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined text-[18px]">${icon}</span>
+                    </span>
+                </div>
+                <div class="my-3 flex items-baseline gap-2 min-w-0">
+                    <span class="text-3xl lg:text-4xl font-bold ${colors.valueText} tracking-tight leading-tight break-words">${value}</span>
+                    ${unit ? `<span class="text-sm font-normal text-slate-500 dark:text-slate-400">${unit}</span>` : ''}
+                </div>
+                <div class="text-xs flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                    <div class="flex min-w-0 items-center gap-2">
+                        <span class="${colors.footerText} font-semibold">${footer}</span>
+                        ${footerRight ? `<span class="text-red-600 dark:text-red-400 font-semibold">${footerRight}</span>` : ''}
+                    </div>
+                    <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                </div>
+            </div>
+        `;
+    }
 
     function hasView(tabId) {
         return [
@@ -130,28 +192,25 @@ window.KtxExtendedViews = (function () {
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
                 <!-- Header Title & Quick Action -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="page-title-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">school</span>
-                            <span>Quản lý học vụ & Sinh viên nội trú</span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Lớp & Khoa Viện</h2>
+                        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Lớp & Khoa Viện</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý lớp học, khoa viện và thông tin sinh viên nội trú</p>
                     </div>
-                    <div class="flex items-center gap-2.5">
+                    <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.exportClassesCsv()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">
                             <span class="material-symbols-outlined text-[16px]">download</span>
                             <span>Xuất CSV</span>
                         </button>
                         <button type="button" onclick="KtxExtendedViews.openAddClassModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition-all">
                             <span class="material-symbols-outlined text-[16px]">add</span>
-                            <span>+ Thêm Lớp Mới</span>
+                            <span>Thêm Lớp Mới</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG SỐ LỚP HỌC</span>
@@ -226,12 +285,12 @@ window.KtxExtendedViews = (function () {
                 </div>
 
                 <!-- Filter Bar -->
-                <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                    <div class="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <div class="page-filter-bar flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
+                    <div class="page-filter-search flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
                         <input type="text" placeholder="Tìm theo mã lớp, tên lớp, cố vấn học tập..." value="${extState.classSearch}" oninput="KtxExtendedViews.filterClassesSearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="page-filter-controls flex items-center gap-2">
                         <select onchange="KtxExtendedViews.filterClassesFaculty(this.value)" class="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                             <option value="ALL">Khoa: Tất cả</option>
                             <option value="cntt" ${extState.classFaculty === 'cntt' ? 'selected' : ''}>Khoa CNTT</option>
@@ -485,15 +544,12 @@ window.KtxExtendedViews = (function () {
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
                 <!-- Header Title & Actions -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="page-title-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">bolt</span>
-                            <span>Chỉ số công tơ & Dịch vụ nội trú</span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Điện nước & Dịch vụ</h2>
+                        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Điện nước & Dịch vụ</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theo dõi chỉ số điện nước và các dịch vụ trong khu nội trú</p>
                     </div>
-                    <div class="flex items-center gap-2.5">
+                    <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.exportUtilitiesCsv()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">
                             <span class="material-symbols-outlined text-[16px]">download</span>
                             <span>Xuất Báo Cáo</span>
@@ -502,7 +558,7 @@ window.KtxExtendedViews = (function () {
                 </div>
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div onclick="KtxExtendedViews.filterUtilityStatus('RECORDED')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐÃ CHỐT CHỈ SỐ</span>
@@ -535,7 +591,7 @@ window.KtxExtendedViews = (function () {
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
                             <span>Hạn chót ngày 25 hàng tháng</span>
-                            <span>Nhắc nhân viên →</span>
+                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
@@ -577,12 +633,12 @@ window.KtxExtendedViews = (function () {
                 </div>
 
                 <!-- Filters -->
-                <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                    <div class="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <div class="page-filter-bar flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
+                    <div class="page-filter-search flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
                         <input type="text" placeholder="Tìm kiếm theo số phòng (VD: A01-201)..." value="${extState.utilitySearch}" oninput="KtxExtendedViews.filterUtilitySearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="page-filter-controls flex items-center gap-2">
                         <select onchange="KtxExtendedViews.filterUtilityBuilding(this.value)" class="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                             <option value="ALL">Tòa: Tất cả</option>
                             <option value="A01" ${extState.utilityBuilding === 'A01' ? 'selected' : ''}>Tòa A01</option>
@@ -807,53 +863,38 @@ window.KtxExtendedViews = (function () {
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
                 <!-- Header Title & Action Buttons -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="page-title-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">receipt_long</span>
-                            <span>Tài vụ, Công nợ & Cổng thanh toán</span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Hóa đơn & Thu phí</h2>
+                        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Hóa đơn & Thu phí</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theo dõi khoản thu, tình trạng thanh toán và công nợ nội trú</p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="page-title-actions flex items-center gap-2">
                         <button type="button" onclick="KtxExtendedViews.sendReminderNotifications()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition">
                             <span class="material-symbols-outlined text-[16px]">notifications_active</span>
                             <span>Nhắc nợ (${overdueCount})</span>
                         </button>
                         <button type="button" onclick="KtxExtendedViews.openCreateInvoiceModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">add_card</span>
-                            <span>+ Lập Hóa Đơn</span>
+                            <span>Lập Hóa Đơn</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- KPI Cards -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Thực thu đã thu</div>
-                        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">${(totalPaid + 400000000).toLocaleString('vi-VN')} đ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Chờ sinh viên nộp</div>
-                        <div class="text-2xl font-bold text-amber-500 mt-1">${totalPending.toLocaleString('vi-VN')} đ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Công nợ quá hạn</div>
-                        <div class="text-2xl font-bold text-rose-600 mt-1">${(totalOverdue + 210000000).toLocaleString('vi-VN')} đ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Cổng tích hợp</div>
-                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-2">VNPAY QR · VietinBank · Tiền mặt</div>
-                    </div>
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    ${renderMetricCard({ label: 'Thực thu đã thu', value: (totalPaid + 400000000).toLocaleString('vi-VN'), unit: 'đ', icon: 'payments', tone: 'blue', footer: 'Tổng tiền đã thu' })}
+                    ${renderMetricCard({ label: 'Chờ sinh viên nộp', value: totalPending.toLocaleString('vi-VN'), unit: 'đ', icon: 'schedule', tone: 'amber', footer: 'Đang chờ thanh toán' })}
+                    ${renderMetricCard({ label: 'Công nợ quá hạn', value: (totalOverdue + 210000000).toLocaleString('vi-VN'), unit: 'đ', icon: 'account_balance_wallet', tone: 'red', footer: `Cần nhắc nợ ${overdueCount} hóa đơn` })}
+                    ${renderMetricCard({ label: 'Cổng tích hợp', value: '03', unit: 'cổng', icon: 'credit_card', tone: 'slate', footer: 'VNPAY QR · VietinBank · Tiền mặt' })}
                 </div>
 
                 <!-- Filter Bar -->
-                <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                    <div class="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <div class="page-filter-bar flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
+                    <div class="page-filter-search flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
                         <input type="text" placeholder="Tìm kiếm theo mã HĐ, tên SV, MSSV, phòng..." value="${extState.invoiceSearch}" oninput="KtxExtendedViews.filterInvoiceSearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="page-filter-controls flex items-center gap-2">
                         <select onchange="KtxExtendedViews.filterInvoiceCategory(this.value)" class="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                             <option value="all">Khoản thu: Tất cả</option>
                             <option value="tonghop" ${extState.invoiceCategory === 'tonghop' ? 'selected' : ''}>Tổng hợp</option>
@@ -1115,90 +1156,38 @@ window.KtxExtendedViews = (function () {
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
                 <!-- Header Title & Action -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="page-title-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">build</span>
-                            <span>Vận hành kỹ thuật · Phân hiệu TP.HCM</span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Sửa chữa &amp; Bảo trì Cơ sở vật chất</h2>
+                        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Sửa chữa &amp; Bảo trì Cơ sở vật chất</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tiếp nhận, phân công và theo dõi tiến độ yêu cầu sửa chữa</p>
                     </div>
-                    <div class="flex items-center gap-2.5">
+                    <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.openAssignTicketModalFromList()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">
                             <span class="material-symbols-outlined text-[16px]">person_add</span>
                             <span>Phân công kỹ thuật</span>
                         </button>
                         <button type="button" onclick="KtxExtendedViews.openCreateTicketModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">add_task</span>
-                            <span>+ Tạo phiếu báo hỏng</span>
+                            <span>Tạo phiếu báo hỏng</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- 4 KPI Metric Cards (Design Standard) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between relative overflow-hidden group hover:border-slate-300 dark:hover:border-slate-700 transition-all">
-                        <div class="absolute right-3 top-3 text-slate-100 dark:text-slate-800 pointer-events-none">
-                            <span class="material-symbols-outlined text-5xl opacity-50">assignment</span>
-                        </div>
-                        <div class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG YÊU CẦU</div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">${totalCount} <span class="text-sm font-normal text-slate-500">phiếu</span></div>
-                        </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-                            <div class="bg-[#00163a] h-full rounded-full" style="width: 100%"></div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between relative overflow-hidden group hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer" onclick="KtxExtendedViews.setTicketTab('PENDING')">
-                        <div class="absolute right-3 top-3 text-amber-100 dark:text-amber-950 pointer-events-none">
-                            <span class="material-symbols-outlined text-5xl opacity-50 text-amber-500">pending_actions</span>
-                        </div>
-                        <div class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">CHỜ TIẾP NHẬN</div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">${pendingCount} <span class="text-sm font-normal text-slate-500">phiếu</span></div>
-                        </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-                            <div class="bg-amber-600 h-full rounded-full" style="width: ${totalCount > 0 ? Math.round((pendingCount/totalCount)*100) : 0}%"></div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between relative overflow-hidden group hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer" onclick="KtxExtendedViews.setTicketTab('IN_PROGRESS')">
-                        <div class="absolute right-3 top-3 text-blue-100 dark:text-blue-950 pointer-events-none">
-                            <span class="material-symbols-outlined text-5xl opacity-50 text-blue-500">handyman</span>
-                        </div>
-                        <div class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐANG XỬ LÝ / SỬA</div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-blue-600 dark:text-blue-400 tracking-tight">${inProgressCount} <span class="text-sm font-normal text-slate-500">phiếu</span></div>
-                        </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-                            <div class="bg-blue-600 h-full rounded-full" style="width: ${totalCount > 0 ? Math.round((inProgressCount/totalCount)*100) : 0}%"></div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between relative overflow-hidden group hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer" onclick="KtxExtendedViews.setTicketTab('COMPLETED')">
-                        <div class="absolute right-3 top-3 text-emerald-100 dark:text-emerald-950 pointer-events-none">
-                            <span class="material-symbols-outlined text-5xl opacity-50 text-emerald-600">task_alt</span>
-                        </div>
-                        <div class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐÃ HOÀN THÀNH</div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight">${completedCount} <span class="text-sm font-normal text-slate-500">phiếu</span></div>
-                        </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-                            <div class="bg-emerald-600 h-full rounded-full" style="width: ${totalCount > 0 ? Math.round((completedCount/totalCount)*100) : 0}%"></div>
-                        </div>
-                    </div>
+                <!-- 4 KPI Metric Cards -->
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    ${renderMetricCard({ label: 'Tổng yêu cầu', value: totalCount, unit: 'phiếu', icon: 'assignment', tone: 'blue', footer: 'Tất cả yêu cầu sửa chữa', onclick: "KtxExtendedViews.setTicketTab('ALL')" })}
+                    ${renderMetricCard({ label: 'Chờ tiếp nhận', value: pendingCount, unit: 'phiếu', icon: 'pending_actions', tone: 'amber', footer: 'Xem yêu cầu chờ xử lý', onclick: "KtxExtendedViews.setTicketTab('PENDING')" })}
+                    ${renderMetricCard({ label: 'Đang xử lý / sửa', value: inProgressCount, unit: 'phiếu', icon: 'handyman', tone: 'blue', footer: 'Xem yêu cầu đang sửa', onclick: "KtxExtendedViews.setTicketTab('IN_PROGRESS')" })}
+                    ${renderMetricCard({ label: 'Đã hoàn thành', value: completedCount, unit: 'phiếu', icon: 'task_alt', tone: 'green', footer: 'Xem yêu cầu đã hoàn tất', onclick: "KtxExtendedViews.setTicketTab('COMPLETED')" })}
                 </div>
 
                 <!-- Filter & Search Strip -->
-                <div class="p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs space-y-3">
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                        <div class="md:col-span-4 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <div class="flex flex-nowrap items-center gap-2 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs overflow-x-auto">
+                        <div class="flex-1 min-w-[200px] flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                             <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
                             <input type="text" placeholder="Mã phiếu, số phòng, người gửi..." value="${extState.ticketSearch}" oninput="KtxExtendedViews.filterTicketSearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                         </div>
-                        <div class="md:col-span-2">
-                            <select onchange="KtxExtendedViews.filterTicketBuilding(this.value)" class="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
+                            <select onchange="KtxExtendedViews.filterTicketBuilding(this.value)" class="h-10 w-36 shrink-0 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                                 <option value="ALL">Tất cả Tòa</option>
                                 <option value="A1"  ${extState.ticketBuilding === 'A1'  ? 'selected' : ''}>Tòa KTX A1</option>
                                 <option value="A2"  ${extState.ticketBuilding === 'A2'  ? 'selected' : ''}>Tòa KTX A2</option>
@@ -1206,9 +1195,7 @@ window.KtxExtendedViews = (function () {
                                 <option value="B2"  ${extState.ticketBuilding === 'B2'  ? 'selected' : ''}>Tòa KTX B2</option>
                                 <option value="C1"  ${extState.ticketBuilding === 'C1'  ? 'selected' : ''}>Tòa KTX C1</option>
                             </select>
-                        </div>
-                        <div class="md:col-span-3">
-                            <select onchange="KtxExtendedViews.filterTicketCategory(this.value)" class="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
+                            <select onchange="KtxExtendedViews.filterTicketCategory(this.value)" class="h-10 w-52 shrink-0 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                                 <option value="ALL">Tất cả Hạng mục</option>
                                 <option value="Điện dân dụng"    ${extState.ticketCategory === 'Điện dân dụng'    ? 'selected' : ''}>Điện dân dụng</option>
                                 <option value="Nước / Vệ sinh"  ${extState.ticketCategory === 'Nước / Vệ sinh'  ? 'selected' : ''}>Nước / Vệ sinh</option>
@@ -1216,34 +1203,26 @@ window.KtxExtendedViews = (function () {
                                 <option value="Đồ gỗ / Giường tủ" ${extState.ticketCategory === 'Đồ gỗ / Giường tủ' ? 'selected' : ''}>Đồ gỗ / Giường tủ</option>
                                 <option value="Thiết bị mạng"   ${extState.ticketCategory === 'Thiết bị mạng'   ? 'selected' : ''}>Thiết bị mạng</option>
                             </select>
-                        </div>
-                        <div class="md:col-span-2">
-                            <select onchange="KtxExtendedViews.filterTicketPriority(this.value)" class="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
+                            <select onchange="KtxExtendedViews.filterTicketPriority(this.value)" class="h-10 w-36 shrink-0 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                                 <option value="ALL">Độ ưu tiên</option>
                                 <option value="Khẩn cấp"   ${extState.ticketPriority === 'Khẩn cấp'   ? 'selected' : ''}>Khẩn cấp</option>
                                 <option value="Bình thường" ${extState.ticketPriority === 'Bình thường' ? 'selected' : ''}>Bình thường</option>
                             </select>
-                        </div>
-                        <div class="md:col-span-1 flex justify-end">
-                            <button onclick="KtxExtendedViews.resetTicketFilters()" class="h-9 w-full flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-800 text-slate-500 transition" title="Xóa bộ lọc">
+                            <button onclick="KtxExtendedViews.resetTicketFilters()" class="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-800 text-slate-500 transition" title="Xóa bộ lọc">
                                 <span class="material-symbols-outlined text-[18px]">filter_alt_off</span>
                             </button>
-                        </div>
-                    </div>
 
-                    <!-- Status Tabs -->
-                    <div class="flex items-center gap-1.5 text-xs font-semibold overflow-x-auto">
-                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider shrink-0 mr-1">Trạng thái:</span>
-                        <button onclick="KtxExtendedViews.setTicketTab('ALL')" class="px-3 py-1.5 rounded-lg shrink-0 transition-colors ${extState.ticketTab === 'ALL' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
+                    <div class="flex items-center gap-1.5 text-xs font-semibold shrink-0">
+                        <button onclick="KtxExtendedViews.setTicketTab('ALL')" class="px-3 py-2 rounded-xl shrink-0 transition-colors ${extState.ticketTab === 'ALL' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
                             Tất cả (${totalCount})
                         </button>
-                        <button onclick="KtxExtendedViews.setTicketTab('PENDING')" class="px-3 py-1.5 rounded-lg shrink-0 transition-colors ${extState.ticketTab === 'PENDING' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
+                        <button onclick="KtxExtendedViews.setTicketTab('PENDING')" class="px-3 py-2 rounded-xl shrink-0 transition-colors ${extState.ticketTab === 'PENDING' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
                             Chờ duyệt (${pendingCount})
                         </button>
-                        <button onclick="KtxExtendedViews.setTicketTab('IN_PROGRESS')" class="px-3 py-1.5 rounded-lg shrink-0 transition-colors ${extState.ticketTab === 'IN_PROGRESS' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
+                        <button onclick="KtxExtendedViews.setTicketTab('IN_PROGRESS')" class="px-3 py-2 rounded-xl shrink-0 transition-colors ${extState.ticketTab === 'IN_PROGRESS' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
                             Đang sửa (${inProgressCount})
                         </button>
-                        <button onclick="KtxExtendedViews.setTicketTab('COMPLETED')" class="px-3 py-1.5 rounded-lg shrink-0 transition-colors ${extState.ticketTab === 'COMPLETED' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
+                        <button onclick="KtxExtendedViews.setTicketTab('COMPLETED')" class="px-3 py-2 rounded-xl shrink-0 transition-colors ${extState.ticketTab === 'COMPLETED' ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}">
                             Hoàn tất (${completedCount})
                         </button>
                     </div>
@@ -1575,54 +1554,54 @@ window.KtxExtendedViews = (function () {
                 v.studentId.toLowerCase().includes(extState.violationSearch.toLowerCase()) ||
                 v.studentName.toLowerCase().includes(extState.violationSearch.toLowerCase()) ||
                 v.room.toLowerCase().includes(extState.violationSearch.toLowerCase());
-            return matchSearch;
+            const matchStatus = extState.violationStatus === 'ALL' || v.status === extState.violationStatus;
+            const matchPenalty = extState.violationPenaltyType === 'ALL' || v.penaltyType === extState.violationPenaltyType;
+            return matchSearch && matchStatus && matchPenalty;
         });
 
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
                 <!-- Header Title & Action -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="page-title-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">gavel</span>
-                            <span>Nội quy KTX, Biên bản & Quyết định kỷ luật</span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Vi Phạm & Kỷ Luật</h2>
+                        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Vi Phạm & Kỷ Luật</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý biên bản, hình thức xử lý và tình trạng kỷ luật</p>
                     </div>
-                    <div class="flex items-center gap-2.5">
+                    <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.openCreateViolationModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">report_problem</span>
-                            <span>+ Lập Biên Bản Vi Phạm</span>
+                            <span>Lập Biên Bản Vi Phạm</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- KPI Strip -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tổng biên bản học kỳ</div>
-                        <div class="text-2xl font-bold text-slate-900 dark:text-white mt-1">${extState.violations.length} vụ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Đã thi hành quyết định</div>
-                        <div class="text-2xl font-bold text-emerald-600 mt-1">${extState.violations.filter(v => v.status === 'Đã thi hành').length} vụ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Đang khiếu nại</div>
-                        <div class="text-2xl font-bold text-amber-500 mt-1">${extState.violations.filter(v => v.status === 'Đang khiếu nại').length} vụ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Hành vi phổ biến</div>
-                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-2">Nấu ăn phòng · Ồn quá giờ</div>
-                    </div>
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    ${renderMetricCard({ label: 'Tổng biên bản học kỳ', value: extState.violations.length, unit: 'vụ', icon: 'gavel', tone: 'blue', footer: 'Biên bản đã ghi nhận' })}
+                    ${renderMetricCard({ label: 'Đã thi hành quyết định', value: extState.violations.filter(v => v.status === 'Đã thi hành').length, unit: 'vụ', icon: 'task_alt', tone: 'green', footer: 'Hồ sơ đã được xử lý' })}
+                    ${renderMetricCard({ label: 'Đang khiếu nại', value: extState.violations.filter(v => v.status === 'Đang khiếu nại').length, unit: 'vụ', icon: 'pending_actions', tone: 'amber', footer: 'Hồ sơ chờ giải quyết' })}
+                    ${renderMetricCard({ label: 'Hành vi phổ biến', value: 'Nấu ăn phòng', unit: '', icon: 'warning', tone: 'red', footer: 'Ồn quá giờ', valueSize: 'text-xl' })}
                 </div>
 
                 <!-- Filter Bar -->
-                <div class="flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                    <div class="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <div class="page-filter-bar flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
+                    <div class="page-filter-search flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
                         <input type="text" placeholder="Tìm theo mã biên bản, sinh viên, MSSV hoặc phòng..." value="${extState.violationSearch}" oninput="KtxExtendedViews.filterViolationSearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                     </div>
+                    <select aria-label="Lọc theo trạng thái" onchange="KtxExtendedViews.filterViolationStatus(this.value)" class="h-10 w-56 shrink-0 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
+                        <option value="ALL" ${extState.violationStatus === 'ALL' ? 'selected' : ''}>Trạng thái: Tất cả</option>
+                        <option value="Chờ duyệt" ${extState.violationStatus === 'Chờ duyệt' ? 'selected' : ''}>Chờ duyệt</option>
+                        <option value="Đang khiếu nại" ${extState.violationStatus === 'Đang khiếu nại' ? 'selected' : ''}>Đang khiếu nại</option>
+                        <option value="Đã thi hành" ${extState.violationStatus === 'Đã thi hành' ? 'selected' : ''}>Đã thi hành</option>
+                    </select>
+                    <select aria-label="Lọc theo hình thức xử lý" onchange="KtxExtendedViews.filterViolationPenaltyType(this.value)" class="h-10 w-56 shrink-0 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
+                        <option value="ALL" ${extState.violationPenaltyType === 'ALL' ? 'selected' : ''}>Hình thức xử lý: Tất cả</option>
+                        <option value="remind" ${extState.violationPenaltyType === 'remind' ? 'selected' : ''}>Nhắc nhở</option>
+                        <option value="reprimand" ${extState.violationPenaltyType === 'reprimand' ? 'selected' : ''}>Khiển trách</option>
+                        <option value="warning" ${extState.violationPenaltyType === 'warning' ? 'selected' : ''}>Cảnh cáo</option>
+                        <option value="expel" ${extState.violationPenaltyType === 'expel' ? 'selected' : ''}>Buộc rời KTX</option>
+                    </select>
                 </div>
 
                 <!-- Table -->
@@ -1678,6 +1657,8 @@ window.KtxExtendedViews = (function () {
     }
 
     function filterViolationSearch(v) { extState.violationSearch = v; reRender(); }
+    function filterViolationStatus(status) { extState.violationStatus = status; reRender(); }
+    function filterViolationPenaltyType(penaltyType) { extState.violationPenaltyType = penaltyType; reRender(); }
 
     function openCreateViolationModal() {
         const modalContainer = document.getElementById('modalsContainer');
@@ -1810,54 +1791,50 @@ window.KtxExtendedViews = (function () {
                 s.code.toLowerCase().includes(extState.staffSearch.toLowerCase()) ||
                 s.email.toLowerCase().includes(extState.staffSearch.toLowerCase()) ||
                 s.phone.includes(extState.staffSearch);
-            return matchSearch;
+            const matchStatus = extState.staffStatus === 'ALL' || s.status === extState.staffStatus;
+            const matchRole = extState.staffRole === 'ALL' || s.role === extState.staffRole;
+            return matchSearch && matchStatus && matchRole;
         });
 
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
                 <!-- Header Title & Action -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="page-title-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">manage_accounts</span>
-                            <span>Danh bạ nhân sự, Phân quyền & Tài khoản BQL</span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Nhân Viên & Tài Khoản</h2>
+                        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Nhân Viên & Tài Khoản</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý nhân sự, vai trò và quyền truy cập hệ thống</p>
                     </div>
-                    <div class="flex items-center gap-2.5">
+                    <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.openAddStaffModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">person_add</span>
-                            <span>+ Thêm Nhân Viên Mới</span>
+                            <span>Thêm Nhân Viên Mới</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- KPI Strip -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tổng nhân sự KTX</div>
-                        <div class="text-2xl font-bold text-slate-900 dark:text-white mt-1">${extState.staff.length} cán bộ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Đang hoạt động</div>
-                        <div class="text-2xl font-bold text-emerald-600 mt-1">${extState.staff.filter(s => s.status === 'active').length} tài khoản</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tạm khóa / Đình chỉ</div>
-                        <div class="text-2xl font-bold text-slate-400 mt-1">${extState.staff.filter(s => s.status === 'locked').length} tài khoản</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Phân quyền vai trò</div>
-                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-2">Admin · Ban Quản lý · Kỹ thuật · Kế toán</div>
-                    </div>
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    ${renderMetricCard({ label: 'Tổng nhân sự KTX', value: extState.staff.length, unit: 'cán bộ', icon: 'groups', tone: 'blue', footer: 'Nhân sự trong hệ thống' })}
+                    ${renderMetricCard({ label: 'Đang hoạt động', value: extState.staff.filter(s => s.status === 'active').length, unit: 'tài khoản', icon: 'verified_user', tone: 'green', footer: 'Tài khoản đang sử dụng' })}
+                    ${renderMetricCard({ label: 'Tạm khóa / Đình chỉ', value: extState.staff.filter(s => s.status === 'locked').length, unit: 'tài khoản', icon: 'lock', tone: 'red', footer: 'Tài khoản đang bị khóa' })}
+                    ${renderMetricCard({ label: 'Phân quyền vai trò', value: '04', unit: 'vai trò', icon: 'admin_panel_settings', tone: 'amber', footer: 'Admin · BQL · Kỹ thuật · Kế toán' })}
                 </div>
 
                 <!-- Filter Bar -->
-                <div class="flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                    <div class="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <div class="page-filter-bar flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
+                    <div class="page-filter-search flex-1 min-w-0 max-w-3xl flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
                         <input type="text" placeholder="Tìm theo tên cán bộ, mã nhân viên, SĐT hoặc email..." value="${extState.staffSearch}" oninput="KtxExtendedViews.filterStaffSearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                     </div>
+                    <select aria-label="Lọc theo trạng thái" onchange="KtxExtendedViews.filterStaffStatus(this.value)" class="h-10 w-48 shrink-0 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
+                        <option value="ALL" ${extState.staffStatus === 'ALL' ? 'selected' : ''}>Trạng thái: Tất cả</option>
+                        <option value="active" ${extState.staffStatus === 'active' ? 'selected' : ''}>Hoạt động</option>
+                        <option value="locked" ${extState.staffStatus === 'locked' ? 'selected' : ''}>Đã khóa</option>
+                    </select>
+                    <select aria-label="Lọc theo vai trò" onchange="KtxExtendedViews.filterStaffRole(this.value)" class="h-10 w-48 shrink-0 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
+                        <option value="ALL" ${extState.staffRole === 'ALL' ? 'selected' : ''}>Vai trò: Tất cả</option>
+                        ${[...new Set(extState.staff.map(staff => staff.role).filter(Boolean))].map(role => `<option value="${role}" ${extState.staffRole === role ? 'selected' : ''}>${role}</option>`).join('')}
+                    </select>
                 </div>
 
                 <!-- Table -->
@@ -1922,6 +1899,8 @@ window.KtxExtendedViews = (function () {
     }
 
     function filterStaffSearch(v) { extState.staffSearch = v; reRender(); }
+    function filterStaffStatus(status) { extState.staffStatus = status; reRender(); }
+    function filterStaffRole(role) { extState.staffRole = role; reRender(); }
 
     async function toggleStaffStatus(id) {
         try {
@@ -2065,15 +2044,12 @@ window.KtxExtendedViews = (function () {
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
                 <!-- Header Title & Action -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="page-title-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">bar_chart</span>
-                            <span>Phân tích dữ liệu & Báo cáo tổng kết</span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Báo Cáo Thống Kê</h2>
+                        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Báo Cáo Thống Kê</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tổng hợp số liệu lưu trú, công suất phòng và doanh thu</p>
                     </div>
-                    <div class="flex items-center gap-2.5">
+                    <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.exportReportsCsv()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">
                             <span class="material-symbols-outlined text-[16px]">table_view</span>
                             <span>Xuất Excel CSV</span>
@@ -2086,27 +2062,11 @@ window.KtxExtendedViews = (function () {
                 </div>
 
                 <!-- KPI Metric Cards -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tổng chỗ ở quy hoạch</div>
-                        <div class="text-2xl font-bold text-slate-900 dark:text-white mt-1">${r.totalBeds.toLocaleString('vi-VN')} giường</div>
-                        <div class="text-[11px] text-slate-500 mt-0.5">${r.totalRooms} phòng lưu trú</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Sinh viên đang ở</div>
-                        <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">${r.occupiedBeds.toLocaleString('vi-VN')} SV</div>
-                        <div class="text-[11px] text-slate-500 mt-0.5">Còn trống: ${r.vacantBeds} chỗ</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tỷ lệ lấp đầy bình quân</div>
-                        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">${r.occupancyRate}%</div>
-                        <div class="text-[11px] text-slate-500 mt-0.5">Mục tiêu: > 90%</div>
-                    </div>
-                    <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
-                        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Doanh thu dự kiến kỳ</div>
-                        <div class="text-2xl font-bold text-slate-900 dark:text-white mt-1">${r.totalRevenue.toLocaleString('vi-VN')} đ</div>
-                        <div class="text-[11px] text-slate-500 mt-0.5">Tiền phòng + Tiện ích</div>
-                    </div>
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    ${renderMetricCard({ label: 'Tổng chỗ ở quy hoạch', value: r.totalBeds.toLocaleString('vi-VN'), unit: 'giường', icon: 'bed', tone: 'blue', footer: `${r.totalRooms} phòng lưu trú` })}
+                    ${renderMetricCard({ label: 'Sinh viên đang ở', value: r.occupiedBeds.toLocaleString('vi-VN'), unit: 'SV', icon: 'groups', tone: 'blue', footer: `Còn trống: ${r.vacantBeds} chỗ` })}
+                    ${renderMetricCard({ label: 'Tỷ lệ lấp đầy bình quân', value: r.occupancyRate, unit: '%', icon: 'analytics', tone: 'green', footer: 'Mục tiêu: trên 90%' })}
+                    ${renderMetricCard({ label: 'Doanh thu dự kiến kỳ', value: r.totalRevenue.toLocaleString('vi-VN'), unit: 'đ', icon: 'payments', tone: 'slate', footer: 'Tiền phòng + Tiện ích' })}
                 </div>
 
                 <!-- Building Operations Matrix Table -->
@@ -2234,11 +2194,15 @@ window.KtxExtendedViews = (function () {
         completeTicket,
         // Violation methods
         filterViolationSearch,
+        filterViolationStatus,
+        filterViolationPenaltyType,
         openCreateViolationModal,
         submitCreateViolation,
         closeViolation,
         // Staff methods
         filterStaffSearch,
+        filterStaffStatus,
+        filterStaffRole,
         toggleStaffStatus,
         openAddStaffModal,
         submitAddStaff,
@@ -2247,4 +2211,3 @@ window.KtxExtendedViews = (function () {
         closeModal
     };
 })();
-

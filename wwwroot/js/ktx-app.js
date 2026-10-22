@@ -24,6 +24,7 @@ const KtxApp = (function () {
         // Active filters
         admissionsTab: 'pending',
         admissionsPriority: '',
+        admissionsSearch: '',
         admissionsCohort: 'k65',
         admissionsGender: 'all',
 
@@ -37,8 +38,10 @@ const KtxApp = (function () {
         studentsSearch: '',
 
         roomsViewMode: 'roster',
-        roomsBuilding: 'Tòa A01',
-        roomsFloor: 'Tầng 1',
+        roomsBuilding: 'all',
+        roomsFloor: 'all',
+        roomsRoomNumber: 'all',
+        isRoomsRoomMenuOpen: false,
         roomsCohort: 'Khóa K64',
         roomsMajor: 'CNTT',
         roomsStatus: 'Đang ở',
@@ -364,8 +367,8 @@ const KtxApp = (function () {
                     <!-- Header Logo -->
                     <div class="h-16 px-4 flex items-center justify-between border-b border-white/5 shrink-0">
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="w-8 h-8 rounded bg-[#13325c] flex items-center justify-center shrink-0 border border-blue-400/20 shadow-xs">
-                                <span class="material-symbols-outlined text-blue-400 text-[18px]">apartment</span>
+                            <div class="w-8 h-8 flex items-center justify-center shrink-0">
+                                <img src="/images/utc2-logo.png" alt="Logo Trường Đại học Giao thông Vận tải" class="w-full h-full object-contain" />
                             </div>
                             <div class="flex flex-col min-w-0">
                                 <span class="font-bold text-sm text-white tracking-wide truncate leading-tight">KTX UTC2</span>
@@ -426,28 +429,27 @@ const KtxApp = (function () {
         if (!container || !state.currentUser) return;
 
         container.innerHTML = `
-            <header class="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white/90 dark:bg-[#121826]/90 backdrop-blur-xl border-b border-[#E4E7EC] dark:border-[#232B3B] z-40 flex items-center justify-between px-4 lg:px-8 shadow-xs transition-colors">
+            <header class="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white/90 dark:bg-[#121826]/90 backdrop-blur-xl border-b border-[#E4E7EC] dark:border-[#232B3B] z-40 flex items-center gap-3 px-4 lg:px-8 shadow-xs transition-colors">
                 <!-- Left: Mobile hamburger & Search bar -->
-                <div class="flex items-center gap-3 flex-1 max-w-xl">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
                     <button type="button" onclick="KtxApp.toggleMobileMenu()" class="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <span class="material-symbols-outlined text-[22px]">menu</span>
                     </button>
 
                     <!-- Global Search Bar -->
-                    <div onclick="KtxApp.openSearch()" class="flex items-center gap-2.5 w-full max-w-md h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
+                    <div onclick="KtxApp.openSearch()" class="flex items-center gap-2.5 flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
                         <span class="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors">search</span>
                         <span class="text-[13px] text-slate-400 dark:text-slate-400 truncate flex-1 select-none">Tìm kiếm (phòng, SV, hợp đồng...)</span>
-                        <kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-[10px] font-semibold bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-md border border-slate-200 dark:border-slate-700 shadow-2xs">⌘K</kbd>
                     </div>
                 </div>
 
                 <!-- Right: Semester, Dark mode, Notifications, Profile -->
-                <div class="flex items-center gap-2 sm:gap-3 shrink-0 ml-3">
+                <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 ml-3">
                     <!-- Semester Selector -->
-                    <div class="relative">
-                        <button type="button" onclick="KtxApp.toggleSemesterMenu()" class="hidden md:flex items-center gap-1.5 h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-2xs">
+                    <div class="relative hidden md:block flex-1 min-w-0">
+                        <button type="button" onclick="KtxApp.toggleSemesterMenu()" class="flex w-full items-center justify-between gap-1.5 h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-2xs">
                             <span class="material-symbols-outlined text-[17px] text-[#0B2A5B] dark:text-blue-400">calendar_today</span>
-                            <span class="truncate max-w-[160px]">${state.selectedSemester}</span>
+                            <span class="truncate flex-1 text-left">${state.selectedSemester}</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400">expand_more</span>
                         </button>
                     </div>
@@ -521,16 +523,15 @@ const KtxApp = (function () {
         return `
             <div class="min-h-screen flex flex-col lg:flex-row bg-[#F4F5F7] dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] transition-colors duration-200">
                 <!-- CỘT TRÁI (55%): Hình ảnh KTX, Gradient thương hiệu -->
-                <div class="relative lg:w-[55%] min-h-[420px] lg:min-h-screen flex flex-col justify-between p-8 sm:p-12 lg:p-16 overflow-hidden bg-[#071A38]">
-                    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3dvVjk-VBybNNm2JxsMrQaZ6Xla-sc1rVEyAFG2H0jv9xDxwSH34iwwPfDDS5Jt2EcCbrNtjgifb_LUustJ5LLX-wWRxs5bE0pnmTNgzO6h2K7DI50Bd-B6AvG-rKGcoepNHgfiDO_KueLGSz5lU3Y3z9RCSJ4ehNXg7H2IRFbKzQfHe05BeiyY93w2dUCTFP3PpgR201q3ZUKv89imHbo0QV9GTn6hj2O_WjM7JszDgBpr67wdIlpA" alt="Campus KTX UTC2" class="absolute inset-0 w-full h-full object-cover object-center scale-105" />
-                    <div class="absolute inset-0 bg-gradient-to-t from-[#0B0F1A] via-[#0B2A5B]/85 to-[#071A38]/90 backdrop-blur-[2px]"></div>
-                    <div class="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] opacity-10"></div>
+                <div class="relative lg:w-[55%] min-h-[420px] lg:min-h-screen flex flex-col justify-between p-8 sm:p-12 lg:p-16 overflow-hidden bg-[#081F45]" style="background-color:#081F45">
+                    <img src="/images/login-campus.png" alt="" aria-hidden="true" class="absolute inset-0 z-0 w-full h-full object-cover object-center opacity-45" />
+                    <div class="absolute inset-0 z-[1] bg-[#081F45]/45"></div>
 
                     <!-- Header Bên Trái: Logo UTC2 -->
                     <div class="relative z-10 flex items-center justify-between">
                         <div class="flex items-center space-x-3.5 min-w-0">
-                            <div class="w-12 h-12 shrink-0 rounded-full bg-white p-0.5 shadow-lg flex items-center justify-center overflow-hidden border border-white/40">
-                                <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGYdvcqp3rSyDsU3ZgkBsQXIR7k3bUm9ejInncJAQuJ5gd2szuChbhMQ8fpFYG-oGVlt4qrvEcRF-RIau-_yaHGxDM6i6_INXHLsIyhPpgKVvhTNH4SjGGjPeIe3ZiKRHgw-gDN84jhw0TVx8xGLpikBNfkw9R369xGJVkTBoeHrhqvmnwsKqyf9cPl3WTH1AimnMi2n_ipdXle85Quk5jLo-pekss71Hv9Am80tdBvoQv7FOOvx9QwPMpyqeVw8TUTLI" alt="Logo UTC2" class="w-full h-full object-contain rounded-full" />
+                            <div class="w-12 h-12 shrink-0 flex items-center justify-center">
+                                <img src="/images/utc2-logo.png" alt="Logo Trường Đại học Giao thông Vận tải" class="w-full h-full object-contain rounded-full" />
                             </div>
                             <div class="whitespace-nowrap">
                                 <h1 class="text-xl font-bold text-white flex items-center gap-2 mb-0.5">
@@ -564,7 +565,6 @@ const KtxApp = (function () {
                     <!-- Footer Bên Trái -->
                     <div class="relative z-10 flex flex-wrap items-center justify-between gap-4 text-xs text-blue-200/60 pt-6 border-t border-white/10">
                         <div class="text-blue-200/70">© Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh</div>
-                        <div class="text-blue-200/50 text-[11px]">Hệ thống Quản lý Ký túc xá v2.4 (ASP.NET Core C#)</div>
                     </div>
                 </div>
 
@@ -604,7 +604,7 @@ const KtxApp = (function () {
                                 <button type="button" onclick="alert('Vui lòng liên hệ Văn phòng Quản lý KTX UTC2 (Phòng 102 - Tòa A) hoặc hotline 028.3896.6780 để cấp lại mật khẩu.')" class="text-xs font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Quên mật khẩu?</button>
                             </div>
 
-                            <button type="submit" id="loginSubmitBtn" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] active:scale-[0.99] text-white font-semibold text-sm shadow-sm transition flex items-center justify-center gap-2">
+                            <button type="submit" id="loginSubmitBtn" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] active:scale-[0.99] text-white font-semibold text-sm shadow-sm transition flex items-center justify-center gap-2" style="background-color:#0B2A5B">
                                 <span>Đăng nhập</span>
                                 <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
                             </button>
@@ -757,18 +757,18 @@ const KtxApp = (function () {
         return `
             <div class="flex flex-col w-full space-y-6">
                 <!-- 1. Hero Welcome Banner -->
-                <section class="bg-[#0b2a5b] dark:bg-[#071A38] text-white rounded-2xl p-6 lg:p-7 shadow-sm relative overflow-hidden">
-                    <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="space-y-1">
+                <section class="page-title-banner relative overflow-hidden">
+                    <div class="dashboard-title-content relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
                             <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-white font-headline">Tổng quan KTX</h1>
-                            <p class="text-blue-200/80 text-xs">Hệ thống quản lý thời gian thực Ký túc xá Phân hiệu UTC2 TP.HCM (C# .NET Core + SQL Server)</p>
+                            <p class="text-blue-200/80 text-xs">Hệ thống quản lý thời gian thực Ký túc xá Phân hiệu UTC2 TP.HCM</p>
                         </div>
-                        <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
+                        <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
                             <button type="button" onclick="KtxApp.openNewContractModal()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-xs hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1.5">
                                 <span class="material-symbols-outlined text-[18px]">post_add</span>
                                 <span>Lập hợp đồng mới</span>
                             </button>
-                            <button type="button" onclick="KtxApp.exportReport()" class="h-10 px-4 rounded-xl bg-[#00163a] text-white font-semibold text-xs hover:bg-white/10 transition-colors flex items-center gap-1.5 border border-white/20">
+                            <button type="button" onclick="KtxApp.exportReport()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-xs hover:bg-blue-50 transition-colors flex items-center gap-1.5 border border-white">
                                 <span class="material-symbols-outlined text-[18px]">ios_share</span>
                                 <span>Báo cáo nhanh</span>
                             </button>
@@ -777,7 +777,7 @@ const KtxApp = (function () {
                 </section>
 
                 <!-- 2. Hàng 4 Chỉ số KPI Cốt Lõi -->
-                <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <section class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <!-- KPI 1 -->
                     <div onclick="KtxApp.navigate('sinh-vien')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
@@ -811,8 +811,11 @@ const KtxApp = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Đã thu ${d.collectedPercent}%</span>
-                            <span class="text-red-600 dark:text-red-400 font-semibold">Nợ ${formatVND(d.debtAmount, true)}</span>
+                            <div class="flex min-w-0 items-center gap-2">
+                                <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Đã thu ${d.collectedPercent}%</span>
+                                <span class="text-red-600 dark:text-red-400 font-semibold">Nợ ${formatVND(d.debtAmount, true)}</span>
+                            </div>
+                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
@@ -829,8 +832,9 @@ const KtxApp = (function () {
                                 ${d.pendingApplicationsCount} <span class="text-sm font-normal text-slate-500">hồ sơ</span>
                             </div>
                         </div>
-                        <div class="text-xs text-[#375ba9] dark:text-blue-400 flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
-                            <span>Ưu tiên xét duyệt →</span>
+                        <div class="text-xs text-[#375ba9] dark:text-blue-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
+                            <span>Ưu tiên xét duyệt</span>
+                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
@@ -847,8 +851,9 @@ const KtxApp = (function () {
                                 ${d.repairRequestsCount} <span class="text-sm font-normal text-slate-500">yêu cầu</span>
                             </div>
                         </div>
-                        <div class="text-xs text-red-600 dark:text-red-400 flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
-                            <span>Điều phối kỹ thuật →</span>
+                        <div class="text-xs text-red-600 dark:text-red-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
+                            <span>Điều phối kỹ thuật</span>
+                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
                 </section>
@@ -945,7 +950,7 @@ const KtxApp = (function () {
                                             </div>
                                         </div>
 
-                                        <button type="button" ${task.completed ? 'disabled' : ''} onclick="KtxApp.actionTask('${task.id}', '${task.type}')" class="h-7 px-3 rounded-lg text-xs font-semibold shrink-0 transition-colors ${
+                                        <button type="button" ${task.completed ? 'disabled' : ''} onclick="KtxApp.actionTask('${task.id}', '${task.type}')" class="h-9 w-[92px] shrink-0 inline-flex items-center justify-center rounded-lg text-xs font-semibold text-center transition-colors ${
                                             task.tagType === 'error' ? 'bg-red-600 text-white hover:bg-red-700' :
                                             task.tagType === 'warning' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' :
                                             'bg-[#0B2A5B] text-white hover:bg-[#143F8C]'
@@ -977,15 +982,23 @@ const KtxApp = (function () {
             filtered = filtered.filter(a => a.priorityCategory.toLowerCase().includes(state.admissionsPriority.toLowerCase()));
         }
 
+        if (state.admissionsSearch.trim()) {
+            const query = state.admissionsSearch.trim().toLowerCase();
+            filtered = filtered.filter(a =>
+                [a.applicationCode, a.studentName, a.mssv, a.major, a.priorityCategory, a.roomPreference]
+                    .some(value => String(value || '').toLowerCase().includes(query))
+            );
+        }
+
         return `
             <div class="flex flex-col w-full space-y-6">
                 <!-- Header -->
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="page-title-banner flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div>
                         <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Đợt & Đơn đăng ký</h1>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Xét duyệt hồ sơ nhập túc xá tân sinh viên K65 và sinh viên tái đăng ký nội trú</p>
                     </div>
-                    <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
+                    <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
                         <button type="button" onclick="KtxApp.exportReport('Đơn tuyển sinh K65')" class="h-10 px-4 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-[18px] text-slate-500">file_download</span>
                             <span>Xuất danh sách</span>
@@ -998,7 +1011,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG HỒ SƠ ĐĂNG KÝ</span>
@@ -1049,7 +1062,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
                             <span>Thời gian xử lý TB &lt; 2.5h</span>
-                            <span>Ưu tiên xét duyệt →</span>
+                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
@@ -1073,7 +1086,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- Tabs & Filter Bar -->
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-3 bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
+                <div class="page-filter-bar flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-3 bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
                     <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
                         <button type="button" onclick="KtxApp.setAdmissionsTab('pending')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
                             state.admissionsTab === 'pending' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -1098,8 +1111,13 @@ const KtxApp = (function () {
                         }">Tất cả (420)</button>
                     </div>
 
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <select onchange="KtxApp.setAdmissionsPriority(this.value)" class="h-9 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
+                    <div class="page-filter-search flex-1 flex items-center gap-2 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B]">
+                        <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
+                        <input type="text" value="${state.admissionsSearch}" oninput="KtxApp.setAdmissionsSearch(this.value)" placeholder="Tìm mã đơn, tên sinh viên, MSSV..." class="min-w-0 flex-1 bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
+                    </div>
+
+                    <div class="flex items-center gap-2 flex-wrap shrink-0">
+                        <select onchange="KtxApp.setAdmissionsPriority(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
                             <option value="">Diện: Tất cả</option>
                             <option value="chính sách">Chính sách</option>
                             <option value="hộ nghèo">Hộ nghèo</option>
@@ -1194,12 +1212,12 @@ const KtxApp = (function () {
         return `
             <div class="flex flex-col w-full space-y-6">
                 <!-- Header -->
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="page-title-banner flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Quản lý Hợp đồng</h1>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theo dõi thời hạn lưu trú, tiền cọc bảo lãnh và gia hạn tự động</p>
                     </div>
-                    <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
+                    <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
                         <button type="button" onclick="KtxApp.showToast('Đang quét và gửi thông báo gia hạn hàng loạt cho 45 hợp đồng sắp hết hạn!', 'info')" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-slate-100 dark:bg-[#1E293B] hover:bg-slate-200 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700">
                             <span class="material-symbols-outlined text-[18px] text-[#375ba9] dark:text-blue-400">update</span>
                             <span>Gia hạn hàng loạt</span>
@@ -1212,7 +1230,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div onclick="KtxApp.setContractsTab('valid')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">HỢP ĐỒNG ĐANG HIỆU LỰC</span>
@@ -1245,7 +1263,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
                             <span>Ưu tiên gia hạn ngay</span>
-                            <span>Gia hạn tự động →</span>
+                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
@@ -1287,7 +1305,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- Filters Strip -->
-                <div class="bg-white dark:bg-[#121826] rounded-2xl p-4 shadow-xs border border-slate-200/80 dark:border-[#232B3B] space-y-4">
+                <div class="page-filter-bar bg-white dark:bg-[#121826] rounded-2xl p-4 shadow-xs border border-slate-200/80 dark:border-[#232B3B] space-y-4">
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
                             <button type="button" onclick="KtxApp.setContractsTab('valid')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-2 ${
@@ -1313,8 +1331,8 @@ const KtxApp = (function () {
                             }">Tất cả</button>
                         </div>
 
-                        <div class="flex items-center gap-2.5 flex-wrap">
-                            <input type="text" oninput="KtxApp.setContractsSearch(this.value)" placeholder="Số HĐ hoặc tên/MSSV..." class="w-full sm:w-64 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs text-slate-800 dark:text-white focus:outline-none" />
+                        <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                            <input type="text" oninput="KtxApp.setContractsSearch(this.value)" placeholder="Số HĐ hoặc tên/MSSV..." class="flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs text-slate-800 dark:text-white focus:outline-none" />
                             <select onchange="KtxApp.setContractsBuilding(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                                 <option value="all">Tất cả Tòa</option>
                                 <option value="A">Khu Tòa A</option>
@@ -1420,16 +1438,12 @@ const KtxApp = (function () {
         return `
             <div class="flex flex-col w-full space-y-6">
                 <!-- Header -->
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="page-title-banner flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
-                            <span>Quản lý Nội trú</span>
-                            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
-                            <span class="text-[#0B2A5B] dark:text-blue-400 font-semibold">Hồ sơ Sinh viên</span>
-                        </div>
                         <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Hồ sơ Sinh viên</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý thông tin, tình trạng nội trú và hồ sơ sinh viên</p>
                     </div>
-                    <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
+                    <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
                         <button type="button" onclick="KtxApp.exportReport('Danh sách Sinh viên')" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700">
                             <span class="material-symbols-outlined text-[18px] text-slate-500">upload_file</span>
                             <span>Nhập Excel</span>
@@ -1442,7 +1456,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG SINH VIÊN NỘI TRÚ</span>
@@ -1517,10 +1531,10 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- Filters Strip -->
-                <div class="p-4 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
-                    <input type="text" oninput="KtxApp.setStudentsSearch(this.value)" placeholder="Tìm tên, MSSV, CCCD, số phòng..." class="w-full xl:w-80 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs text-slate-800 dark:text-white focus:outline-none" />
+                <div class="page-filter-bar p-4 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col xl:flex-row items-stretch xl:items-center gap-3">
+                    <input type="text" oninput="KtxApp.setStudentsSearch(this.value)" placeholder="Tìm tên, MSSV, CCCD, số phòng..." class="w-full xl:flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs text-slate-800 dark:text-white focus:outline-none" />
                     
-                    <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2 shrink-0">
                         <select onchange="KtxApp.setStudentsCohort(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                             <option value="">Tất cả Khóa</option>
                             <option value="k62">Khóa K62</option>
@@ -1608,21 +1622,31 @@ const KtxApp = (function () {
     function renderRoomsView() {
         const rooms = state.rooms || [];
         const isGrid = state.roomsViewMode === 'grid';
+        const buildings = [...new Set(rooms.map(room => room.buildingId).filter(Boolean))].sort();
+        const filteredByBuilding = state.roomsBuilding === 'all'
+            ? rooms
+            : rooms.filter(room => room.buildingId === state.roomsBuilding);
+        const floors = [...new Set(filteredByBuilding.map(room => String(room.floor)).filter(Boolean))]
+            .sort((a, b) => Number(a) - Number(b));
+        const filteredByFloor = state.roomsFloor === 'all'
+            ? filteredByBuilding
+            : filteredByBuilding.filter(room => String(room.floor) === state.roomsFloor);
+        const roomNumbers = [...new Set(filteredByFloor.map(room => room.roomNumber).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
+        const filteredRooms = state.roomsRoomNumber === 'all'
+            ? filteredByFloor
+            : filteredByFloor.filter(room => room.roomNumber === state.roomsRoomNumber);
+        const selectClass = 'h-10 min-w-[140px] px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer';
 
         return `
             <div class="flex flex-col w-full space-y-5">
                 <!-- Header -->
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-2xl bg-[#0B2A5B] dark:bg-blue-600 flex items-center justify-center text-white shadow-xs shrink-0">
-                            <span class="material-symbols-outlined text-[22px]">domain</span>
-                        </div>
-                        <div>
-                            <h1 class="text-xl lg:text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-headline">Sơ đồ Phòng & Giường</h1>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Phân hiệu TP.HCM · Quản lý buồng phòng & hồ sơ cư xá</p>
-                        </div>
+                <div class="page-title-banner flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Sơ đồ Phòng & Giường</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theo dõi phòng, giường trống và tình trạng bố trí sinh viên</p>
                     </div>
-                    <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
+                    <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
                         <button type="button" onclick="KtxApp.exportReport('Sơ đồ phòng KTX')" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-[#1E293B] text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 transition-all text-xs font-semibold border border-slate-200 dark:border-slate-700">
                             <span class="material-symbols-outlined text-[18px] text-[#375ba9] dark:text-blue-400">table_view</span>
                             <span>Xuất file Excel</span>
@@ -1635,7 +1659,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG PHÒNG LƯU TRÚ</span>
@@ -1704,29 +1728,53 @@ const KtxApp = (function () {
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
                             <span>Đang khắc phục sự cố</span>
-                            <span>Điều phối kỹ thuật →</span>
+                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Toggle Roster vs Grid View -->
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
-                    <div class="flex items-center p-1 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
+                <div class="flex flex-nowrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs overflow-x-auto">
+                    <div class="flex items-center p-1 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs shrink-0">
                         <button type="button" onclick="KtxApp.setRoomsViewMode('roster')" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             !isGrid ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
                         }">
                             <span class="material-symbols-outlined text-[17px]">badge</span>
-                            <span>Danh sách sinh viên theo phòng</span>
+                            <span>Danh sách theo phòng</span>
                         </button>
                         <button type="button" onclick="KtxApp.setRoomsViewMode('grid')" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             isGrid ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
                         }">
                             <span class="material-symbols-outlined text-[17px]">grid_view</span>
-                            <span>Sơ đồ buồng phòng (Grid)</span>
+                            <span>Sơ đồ buồng phòng</span>
                         </button>
                     </div>
 
-                    <div class="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
+                    <div class="flex flex-nowrap items-center gap-2 shrink-0">
+                        <select aria-label="Lọc theo tòa" onchange="KtxApp.setRoomsBuilding(this.value)" class="${selectClass}">
+                            <option value="all">Tòa: Tất cả</option>
+                            ${buildings.map(building => `<option value="${building}" ${state.roomsBuilding === building ? 'selected' : ''}>Tòa ${building}</option>`).join('')}
+                        </select>
+                        <select aria-label="Lọc theo tầng" onchange="KtxApp.setRoomsFloor(this.value)" class="${selectClass}">
+                            <option value="all">Tầng: Tất cả</option>
+                            ${floors.map(floor => `<option value="${floor}" ${state.roomsFloor === floor ? 'selected' : ''}>Tầng ${floor}</option>`).join('')}
+                        </select>
+                        <div class="relative">
+                            ${state.isRoomsRoomMenuOpen ? '<button type="button" aria-label="Đóng danh sách phòng" onclick="KtxApp.closeRoomsRoomMenu()" class="fixed inset-0 z-40 cursor-default"></button>' : ''}
+                            <button type="button" aria-label="Lọc theo phòng" aria-haspopup="listbox" aria-expanded="${state.isRoomsRoomMenuOpen}" onclick="KtxApp.toggleRoomsRoomMenu()" class="${selectClass} relative z-50 flex items-center justify-between gap-3 text-left">
+                                <span>${state.roomsRoomNumber === 'all' ? 'Phòng: Tất cả' : `Phòng ${state.roomsRoomNumber}`}</span>
+                                <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+                            </button>
+                            ${state.isRoomsRoomMenuOpen ? `
+                                <div role="listbox" aria-label="Chọn phòng" class="absolute top-full left-0 z-50 mt-1 max-h-60 w-full min-w-[160px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] py-1 shadow-lg">
+                                    <button type="button" role="option" aria-selected="${state.roomsRoomNumber === 'all'}" onclick="KtxApp.setRoomsRoomNumber('all')" class="w-full px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">Phòng: Tất cả</button>
+                                    ${roomNumbers.map(roomNumber => `<button type="button" role="option" aria-selected="${state.roomsRoomNumber === roomNumber}" onclick="KtxApp.setRoomsRoomNumber('${roomNumber}')" class="w-full px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">Phòng ${roomNumber}</button>`).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-nowrap items-center gap-4 text-xs text-slate-600 dark:text-slate-400 shrink-0">
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#375ba9]"></span> Đang ở (342)</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Giường trống (38)</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Bảo trì (4)</span>
@@ -1734,7 +1782,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- View Contents -->
-                ${isGrid ? renderRoomsGridView(rooms) : renderRoomsRosterView()}
+                ${isGrid ? renderRoomsGridView(filteredRooms) : renderRoomsRosterView()}
             </div>
         `;
     }
@@ -1800,7 +1848,11 @@ const KtxApp = (function () {
     }
 
     function renderRoomsRosterView() {
-        const students = state.students || [];
+        const students = (state.students || []).filter(student =>
+            (state.roomsBuilding === 'all' || student.buildingId === state.roomsBuilding) &&
+            (state.roomsFloor === 'all' || String(student.floor) === state.roomsFloor) &&
+            (state.roomsRoomNumber === 'all' || student.roomNumber === state.roomsRoomNumber)
+        );
         return `
             <div class="bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-hidden">
                 <div class="overflow-x-auto">
@@ -2474,6 +2526,7 @@ const KtxApp = (function () {
     // Filter updates
     function setAdmissionsTab(t) { state.admissionsTab = t; renderActiveView(); }
     function setAdmissionsPriority(p) { state.admissionsPriority = p; renderActiveView(); }
+    function setAdmissionsSearch(s) { state.admissionsSearch = s; renderActiveView(); }
 
     function setContractsTab(t) { state.contractsTab = t; renderActiveView(); }
     function setContractsBuilding(b) { state.contractsBuilding = b; renderActiveView(); }
@@ -2491,6 +2544,33 @@ const KtxApp = (function () {
     }
 
     function setRoomsViewMode(mode) { state.roomsViewMode = mode; renderActiveView(); }
+    function setRoomsBuilding(building) {
+        state.roomsBuilding = building;
+        state.roomsFloor = 'all';
+        state.roomsRoomNumber = 'all';
+        state.isRoomsRoomMenuOpen = false;
+        renderActiveView();
+    }
+    function setRoomsFloor(floor) {
+        state.roomsFloor = floor;
+        state.roomsRoomNumber = 'all';
+        state.isRoomsRoomMenuOpen = false;
+        renderActiveView();
+    }
+    function toggleRoomsRoomMenu() {
+        state.isRoomsRoomMenuOpen = !state.isRoomsRoomMenuOpen;
+        renderActiveView();
+    }
+    function closeRoomsRoomMenu() {
+        if (!state.isRoomsRoomMenuOpen) return;
+        state.isRoomsRoomMenuOpen = false;
+        renderActiveView();
+    }
+    function setRoomsRoomNumber(roomNumber) {
+        state.roomsRoomNumber = roomNumber;
+        state.isRoomsRoomMenuOpen = false;
+        renderActiveView();
+    }
 
     function exportReport(title = 'Báo cáo') {
         showToast(`Đã trích xuất ${title} KTX ra file Excel (.xlsx) thành công!`, 'success');
@@ -2533,6 +2613,7 @@ const KtxApp = (function () {
         actionTask,
         setAdmissionsTab,
         setAdmissionsPriority,
+        setAdmissionsSearch,
         inspectCandidate,
         approveApp,
         rejectApp,
@@ -2551,6 +2632,11 @@ const KtxApp = (function () {
         openStudentModal,
         openTransferModal,
         setRoomsViewMode,
+        setRoomsBuilding,
+        setRoomsFloor,
+        toggleRoomsRoomMenu,
+        closeRoomsRoomMenu,
+        setRoomsRoomNumber,
         inspectRoom,
         toggleBedMaintenance,
         closeModal,
@@ -2563,4 +2649,3 @@ const KtxApp = (function () {
 document.addEventListener('DOMContentLoaded', () => {
     KtxApp.init();
 });
-

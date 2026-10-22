@@ -149,4 +149,5 @@ D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\Quan_ly_.1829C
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\sys0qujdvz-{0}-zaqfq11w2u-zaqfq11w2u.gz
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\Quan_ly_Ky_tuc_xa.sourcelink.json
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\62cdy5mgq8-{0}-4yodj36y31-4yodj36y31.gz
-D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\c4wptv954s-{0}-ivzaf2jngh-ivzaf2jngh.gz
+D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
+D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\c4wptv954s-{0}-v4l6tk84hq-v4l6tk84hq.gz

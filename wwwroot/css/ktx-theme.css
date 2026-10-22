@@ -18,6 +18,117 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+.page-filter-bar {
+    box-sizing: border-box;
+    padding: 16px !important;
+}
+
+.page-filter-bar select,
+.page-filter-bar input:not([type="checkbox"]),
+.page-filter-bar .page-filter-search {
+    box-sizing: border-box;
+    min-height: 40px;
+}
+
+.page-filter-bar .page-filter-search {
+    min-width: 0;
+}
+
+.page-filter-bar .page-filter-search input {
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+}
+
+.page-filter-bar .page-filter-controls {
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.page-title-banner {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    height: 112px;
+    padding: 24px 28px;
+    border-radius: 16px;
+    background: #0b2a5b;
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 8%);
+    overflow: hidden;
+}
+
+.dashboard-title-content {
+    width: 100%;
+    align-self: stretch;
+}
+
+.page-title-banner h1,
+.page-title-banner h2 {
+    color: #fff !important;
+}
+
+.page-title-banner p,
+.page-title-banner > div:first-child > div:first-child {
+    color: #bfdbfe !important;
+}
+
+.page-title-banner > div:first-child .material-symbols-outlined {
+    color: #bfdbfe !important;
+}
+
+.page-title-banner .page-title-icon {
+    background: rgb(255 255 255 / 12%) !important;
+}
+
+.page-title-actions {
+    align-self: center;
+    align-items: center;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+.page-title-banner > div:last-child button {
+    box-sizing: border-box;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.page-title-banner > div:last-child button .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.dashboard-kpi-grid > * {
+    box-sizing: border-box;
+    height: 202px;
+    min-height: 202px;
+}
+
+.page-title-banner > div:last-child button:last-child {
+    border-color: #fff !important;
+    background-color: #fff !important;
+    color: #0b2a5b !important;
+}
+
+@media (max-width: 639px) {
+    .page-title-banner {
+        flex-direction: column;
+        align-items: stretch;
+        height: auto;
+        min-height: 104px;
+        padding: 18px;
+    }
+}
+
 .font-headline {
     font-family: 'Be Vietnam Pro', sans-serif;
 }
@@ -73,4 +184,3 @@ body {
 .animate-bounce-in {
     animation: bounceIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
-
