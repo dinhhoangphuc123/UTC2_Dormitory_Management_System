@@ -37,6 +37,13 @@ namespace Quan_ly_Ky_tuc_xa
             builder.Services.AddScoped<IHopDongService, HopDongService>();
             builder.Services.AddScoped<IDonDangKyService, DonDangKyService>();
             builder.Services.AddScoped<IPhongService, PhongService>();
+            builder.Services.AddScoped<ILopHocService, LopHocService>();
+            builder.Services.AddScoped<IDienNuocDichVuService, DienNuocDichVuService>();
+            builder.Services.AddScoped<IHoaDonService, HoaDonService>();
+            builder.Services.AddScoped<IYeuCauSuaChuaService, YeuCauSuaChuaService>();
+            builder.Services.AddScoped<IViPhamService, ViPhamService>();
+            builder.Services.AddScoped<INhanVienService, NhanVienService>();
+            builder.Services.AddScoped<IBaoCaoService, BaoCaoService>();
 
             // 3. MVC & Web APIs
             builder.Services.AddControllersWithViews()

@@ -32,6 +32,27 @@
     "ReturnTypes": []
   },
   {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.BaoCaoApiController",
+    "Method": "GetSummary",
+    "RelativePath": "api/baocao/summary",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "semester",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "scope",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
     "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.DashboardApiController",
     "Method": "GetSummary",
     "RelativePath": "api/dashboard/summary",
@@ -52,6 +73,53 @@
       {
         "Name": "taskId",
         "Type": "System.String",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.DienNuocApiController",
+    "Method": "GetAll",
+    "RelativePath": "api/diennuoc",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "building",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "floor",
+        "Type": "System.Nullable\u00601[[System.Int32, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+        "IsRequired": false
+      },
+      {
+        "Name": "status",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "search",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.DienNuocApiController",
+    "Method": "Record",
+    "RelativePath": "api/diennuoc/record",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.RecordUtilityDto",
         "IsRequired": true
       }
     ],
@@ -123,6 +191,79 @@
         "IsRequired": false
       }
     ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.HoaDonApiController",
+    "Method": "GetAll",
+    "RelativePath": "api/hoadon",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "building",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "category",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "status",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "search",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.HoaDonApiController",
+    "Method": "Create",
+    "RelativePath": "api/hoadon",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.CreateInvoiceDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.HoaDonApiController",
+    "Method": "ConfirmPayment",
+    "RelativePath": "api/hoadon/confirm-payment",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.ConfirmPaymentDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.HoaDonApiController",
+    "Method": "SendReminders",
+    "RelativePath": "api/hoadon/send-reminders",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
     "ReturnTypes": []
   },
   {
@@ -221,6 +362,111 @@
         "Name": "months",
         "Type": "System.Int32",
         "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.LopHocApiController",
+    "Method": "GetAll",
+    "RelativePath": "api/lophoc",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "faculty",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "cohort",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "search",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.LopHocApiController",
+    "Method": "Create",
+    "RelativePath": "api/lophoc",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.CreateClassDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.NhanVienApiController",
+    "Method": "GetAll",
+    "RelativePath": "api/nhanvien",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "department",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "role",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "status",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "search",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.NhanVienApiController",
+    "Method": "Create",
+    "RelativePath": "api/nhanvien",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.CreateStaffDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.NhanVienApiController",
+    "Method": "ToggleStatus",
+    "RelativePath": "api/nhanvien/{id}/toggle-status",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.String",
+        "IsRequired": true
       }
     ],
     "ReturnTypes": []
@@ -330,6 +576,153 @@
       {
         "Name": "req",
         "Type": "Quan_ly_Ky_tuc_xa.Controllers.Api.SinhVienApiController\u002BTransferRoomRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.SuaChuaApiController",
+    "Method": "GetAll",
+    "RelativePath": "api/suachua",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "building",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "category",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "priority",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "status",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "search",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.SuaChuaApiController",
+    "Method": "Create",
+    "RelativePath": "api/suachua",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.CreateTicketDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.SuaChuaApiController",
+    "Method": "Complete",
+    "RelativePath": "api/suachua/{id}/complete",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.String",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.SuaChuaApiController",
+    "Method": "Assign",
+    "RelativePath": "api/suachua/assign",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.AssignTicketDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.ViPhamApiController",
+    "Method": "GetAll",
+    "RelativePath": "api/vipham",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "building",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "penalty",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "violationType",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "search",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.ViPhamApiController",
+    "Method": "Create",
+    "RelativePath": "api/vipham",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "req",
+        "Type": "Quan_ly_Ky_tuc_xa.Models.DTOs.CreateViolationDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Quan_ly_Ky_tuc_xa.Controllers.Api.ViPhamApiController",
+    "Method": "Close",
+    "RelativePath": "api/vipham/{id}/close",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.String",
         "IsRequired": true
       }
     ],

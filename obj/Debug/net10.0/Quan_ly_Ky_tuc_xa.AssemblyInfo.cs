@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Quan_ly_Ky_tuc_xa")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+805617fbe76d1af3160b37e71791f81487eee0b2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3c689f37f7275ec3a7ddb51b6b9b51cc285fe07d")]
 [assembly: System.Reflection.AssemblyProductAttribute("Quan_ly_Ky_tuc_xa")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Quan_ly_Ky_tuc_xa")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

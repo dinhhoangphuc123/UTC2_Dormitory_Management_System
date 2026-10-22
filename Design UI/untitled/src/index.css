@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-primary: #00163a;
+    --color-primary-container: #0b2a5b;
+    --color-on-primary: #ffffff;
+    --color-on-primary-container: #7a93ca;
+    --color-secondary: #375ba9;
+    --color-secondary-container: #88a9fd;
+    --color-on-secondary: #ffffff;
+    --color-on-secondary-container: #0e3b88;
+    --color-surface: #f9f9ff;
+    --color-surface-dim: #d0daf2;
+    --color-surface-bright: #f9f9ff;
+    --color-surface-variant: #d9e3fb;
+    --color-surface-container-lowest: #ffffff;
+    --color-surface-container-low: #f0f3ff;
+    --color-surface-container: #e8eeff;
+    --color-surface-container-high: #dfe8ff;
+    --color-surface-container-highest: #d9e3fb;
+    --color-on-surface: #111c2d;
+    --color-on-surface-variant: #44474f;
+    --color-outline: #747780;
+    --color-outline-variant: #c4c6d0;
+    --color-error: #ba1a1a;
+    --color-error-container: #ffdad6;
+    --color-on-error-container: #93000a;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #111c2d;
+    background-color: #f9f9ff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c4c6d0;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #747780;
+  }
+}
+
+/* Material Symbols icon styling */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+
+/* Design System Typography */
+.font-display-hero {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.font-display-metric {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.font-headline-lg {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+.font-headline-md {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.font-headline-sm {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0em;
+}
+
+.font-body-lg {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: 0em;
+  font-weight: 400;
+}
+
+.font-body-md {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  letter-spacing: 0em;
+  font-weight: 400;
+}
+
+.font-body-sm {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.005em;
+  font-weight: 400;
+}
+
+.font-label-md {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  letter-spacing: 0em;
+  font-weight: 500;
+}
+
+.font-label-sm {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  font-weight: 500;
+}
+
+.font-code-metric {
+  font-family: 'Inter', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+
+/* Custom Spacing Helpers to align with user templates */
+.p-space-xs { padding: 0.25rem; }
+.p-space-sm { padding: 0.5rem; }
+.p-space-md { padding: 1rem; }
+.p-space-lg { padding: 1.5rem; }
+.p-space-xl { padding: 2rem; }
+.p-space-2xl { padding: 3rem; }
+
+.px-space-xs { padding-left: 0.25rem; padding-right: 0.25rem; }
+.px-space-sm { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-space-md { padding-left: 1rem; padding-right: 1rem; }
+.px-space-lg { padding-left: 1.5rem; padding-right: 1.5rem; }
+.px-space-xl { padding-left: 2rem; padding-right: 2rem; }
+
+.py-space-xs { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-space-sm { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-space-md { padding-top: 1rem; padding-bottom: 1rem; }
+.py-space-lg { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+
+.my-space-sm { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+.my-space-md { margin-top: 1rem; margin-bottom: 1rem; }
+.mb-space-xs { margin-bottom: 0.25rem; }
+.mb-space-sm { margin-bottom: 0.5rem; }
+.mb-space-md { margin-bottom: 1rem; }
+.mb-space-lg { margin-bottom: 1.5rem; }
+.mb-space-xl { margin-bottom: 2rem; }
+.mt-space-xs { margin-top: 0.25rem; }
+.mt-space-sm { margin-top: 0.5rem; }
+.mt-space-md { margin-top: 1rem; }
+.mt-space-lg { margin-top: 1.5rem; }
+.mt-space-xl { margin-top: 2rem; }
+
+.gap-space-xs { gap: 0.25rem; }
+.gap-space-sm { gap: 0.5rem; }
+.gap-space-md { gap: 1rem; }
+.gap-space-lg { gap: 1.5rem; }
+.gap-space-xl { gap: 2rem; }
+
+.space-y-space-xs > :not([hidden]) ~ :not([hidden]) { margin-top: 0.25rem; }
+.space-y-space-sm > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem; }
+.space-y-space-md > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
+.space-y-space-lg > :not([hidden]) ~ :not([hidden]) { margin-top: 1.5rem; }
+.space-y-space-xl > :not([hidden]) ~ :not([hidden]) { margin-top: 2rem; }
+
+.px-gutter { padding-left: 1.5rem; padding-right: 1.5rem; }
+.pb-space-2xl { padding-bottom: 3rem; }
+
+/* Palette Utility Colors */
+.bg-primary { background-color: #00163a; }
+.bg-primary-container { background-color: #0b2a5b; }
+.text-primary { color: #00163a; }
+.text-primary-fixed { color: #d8e2ff; }
+.text-on-primary { color: #ffffff; }
+.text-on-primary-container { color: #7a93ca; }
+
+.bg-secondary { background-color: #375ba9; }
+.bg-secondary-container { background-color: #88a9fd; }
+.text-secondary { color: #375ba9; }
+.text-on-secondary { color: #ffffff; }
+.text-on-secondary-container { color: #0e3b88; }
+
+.bg-surface { background-color: #f9f9ff; }
+.bg-surface-variant { background-color: #d9e3fb; }
+.bg-surface-bright { background-color: #f9f9ff; }
+.bg-surface-container-lowest { background-color: #ffffff; }
+.bg-surface-container-low { background-color: #f0f3ff; }
+.bg-surface-container { background-color: #e8eeff; }
+.bg-surface-container-high { background-color: #dfe8ff; }
+.bg-surface-container-highest { background-color: #d9e3fb; }
+
+.text-on-surface { color: #111c2d; }
+.text-on-surface-variant { color: #44474f; }
+.text-outline { color: #747780; }
+.text-outline-variant { color: #c4c6d0; }
+
+.bg-error { background-color: #ba1a1a; }
+.bg-error-container { background-color: #ffdad6; }
+.text-error { color: #ba1a1a; }
+.text-on-error { color: #ffffff; }
+.text-on-error-container { color: #93000a; }
+
+.bg-surface-tint { background-color: #455e91; }

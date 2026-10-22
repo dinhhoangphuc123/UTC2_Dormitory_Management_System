@@ -147,5 +147,6 @@ D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\bin\Debug\net10.0\runtimes\win-x
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\Quan_ly_Ky_tuc_xa.csproj.AssemblyReference.cache
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\Quan_ly_.1829CE65.Up2Date
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\sys0qujdvz-{0}-zaqfq11w2u-zaqfq11w2u.gz
-D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\62cdy5mgq8-{0}-7ok46qqhup-7ok46qqhup.gz
-D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
+D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\Quan_ly_Ky_tuc_xa.sourcelink.json
+D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\62cdy5mgq8-{0}-4yodj36y31-4yodj36y31.gz
+D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\obj\Debug\net10.0\compressed\c4wptv954s-{0}-ivzaf2jngh-ivzaf2jngh.gz

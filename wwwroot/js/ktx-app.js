@@ -714,6 +714,8 @@ const KtxApp = (function () {
         } else if (state.currentTab === 'phong-va-giuong') {
             await loadRooms();
             content.innerHTML = renderRoomsView();
+        } else if (window.KtxExtendedViews && window.KtxExtendedViews.hasView(state.currentTab)) {
+            await window.KtxExtendedViews.renderView(state.currentTab, content, state);
         } else {
             // Secondary fallback tabs
             content.innerHTML = `
@@ -995,65 +997,77 @@ const KtxApp = (function () {
                     </div>
                 </div>
 
-                <!-- 4 KPI Metrics -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
-                        <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Tổng hồ sơ</span>
-                        <div class="my-2 flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">420</span>
-                            <span class="text-xs text-slate-500">chỉ tiêu 450</span>
+                <!-- 4 KPI Metrics (Image 1 Standard Design) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG HỒ SƠ ĐĂNG KÝ</span>
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#0b2a5b] dark:text-blue-400">
+                                <span class="material-symbols-outlined text-[18px]">assignment</span>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-[#0B2A5B] dark:bg-blue-500 h-full rounded-full" style="width: 93.3%"></div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                420 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                            </div>
                         </div>
-                        <div class="flex justify-between items-center mt-1.5 text-slate-500 text-[11px]">
-                            <span>Tiến độ lấp đầy</span>
-                            <span class="font-semibold text-[#0B2A5B] dark:text-blue-400">93.3%</span>
-                        </div>
-                    </div>
-
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
-                        <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Đã duyệt</span>
-                        <div class="my-2 flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">312</span>
-                            <span class="text-xs text-emerald-600 font-semibold">74.3%</span>
-                        </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-emerald-600 h-full rounded-full" style="width: 74%"></div>
-                        </div>
-                        <div class="flex justify-between items-center mt-1.5 text-slate-500 text-[11px]">
-                            <span>Xác nhận đóng phí</span>
-                            <span class="font-semibold text-emerald-600">289/312 SV</span>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Chỉ tiêu 450 · Đạt 93.3%</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
-                        <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Chờ xét duyệt</span>
-                        <div class="my-2 flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-[#0B2A5B] dark:text-blue-400 tracking-tight">86</span>
-                            <span class="text-xs text-blue-600/80">đơn tồn đọng</span>
+                    <div onclick="KtxApp.setAdmissionsTab('approved')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">HỒ SƠ ĐÃ DUYỆT</span>
+                            <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <span class="material-symbols-outlined text-[18px]">how_to_reg</span>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-[#0B2A5B] dark:bg-blue-400 h-full rounded-full" style="width: 20%"></div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                312 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                            </div>
                         </div>
-                        <div class="flex justify-between items-center mt-1.5 text-slate-500 text-[11px]">
-                            <span>Thời gian xử lý TB</span>
-                            <span class="font-bold text-[#0B2A5B] dark:text-blue-400">&lt; 2.5 giờ</span>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Đã đóng phí: 289/312 SV (74.3%)</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
-                        <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Từ chối / Hủy</span>
-                        <div class="my-2 flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">22</span>
-                            <span class="text-xs text-slate-500">5.2%</span>
+                    <div onclick="KtxApp.setAdmissionsTab('pending')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">CHỜ XÉT DUYỆT</span>
+                            <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                                <span class="material-symbols-outlined text-[18px]">pending_actions</span>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-slate-400 h-full rounded-full" style="width: 5%"></div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-[#0b2a5b] dark:text-blue-300 tracking-tight">
+                                86 <span class="text-sm font-normal text-slate-500">đơn chờ</span>
+                            </div>
                         </div>
-                        <div class="flex justify-between items-center mt-1.5 text-slate-500 text-[11px]">
-                            <span>Phúc khảo</span>
-                            <span class="font-semibold text-slate-700 dark:text-slate-300">3 đơn</span>
+                        <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
+                            <span>Thời gian xử lý TB &lt; 2.5h</span>
+                            <span>Ưu tiên xét duyệt →</span>
+                        </div>
+                    </div>
+
+                    <div onclick="KtxApp.setAdmissionsTab('rejected')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỪ CHỐI / HỦY</span>
+                            <div class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                                <span class="material-symbols-outlined text-[18px]">cancel</span>
+                            </div>
+                        </div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                22 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-slate-600 dark:text-slate-400 font-semibold">Tỷ lệ 5.2% · 3 đơn phúc khảo</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
                 </div>
@@ -1197,61 +1211,77 @@ const KtxApp = (function () {
                     </div>
                 </div>
 
-                <!-- 4 KPI Metrics -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                <!-- 4 KPI Metrics (Image 1 Standard Design) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div onclick="KtxApp.setContractsTab('valid')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">ĐANG HIỆU LỰC</span>
-                            <span class="material-symbols-outlined text-blue-500 text-[20px]">verified_user</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">HỢP ĐỒNG ĐANG HIỆU LỰC</span>
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#0b2a5b] dark:text-blue-400">
+                                <span class="material-symbols-outlined text-[18px]">verified_user</span>
+                            </div>
                         </div>
-                        <div class="mt-2 flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-[#0B2A5B] dark:text-blue-400 tracking-tight">3.240</span>
-                            <span class="text-xs text-slate-500">hồ sơ</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                3.240 <span class="text-sm font-normal text-slate-500">hợp đồng</span>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                            <div class="bg-[#375ba9] dark:bg-blue-500 h-full rounded-full" style="width: 94%"></div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Tỷ lệ bao phủ: 94.7% SV</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                    <div onclick="KtxApp.setContractsTab('expiring')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">SẮP HẾT HẠN (≤ 15 NGÀY)</span>
-                            <span class="material-symbols-outlined text-amber-500 text-[20px]">warning</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">SẮP HẾT HẠN (≤ 15 NGÀY)</span>
+                            <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                                <span class="material-symbols-outlined text-[18px]">warning</span>
+                            </div>
                         </div>
-                        <div class="mt-2 flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">45</span>
-                            <span class="text-xs text-amber-600/80">hợp đồng</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
+                                45 <span class="text-sm font-normal text-slate-500">hợp đồng</span>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                            <div class="bg-amber-500 h-full rounded-full" style="width: 28%"></div>
+                        <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
+                            <span>Ưu tiên gia hạn ngay</span>
+                            <span>Gia hạn tự động →</span>
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                    <div onclick="KtxApp.setContractsTab('ended')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">ĐÃ THANH LÝ</span>
-                            <span class="material-symbols-outlined text-slate-400 text-[20px]">assignment_turned_in</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐÃ THANH LÝ TRẢ PHÒNG</span>
+                            <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                                <span class="material-symbols-outlined text-[18px]">assignment_turned_in</span>
+                            </div>
                         </div>
-                        <div class="mt-2 flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">180</span>
-                            <span class="text-xs text-slate-500">kỳ này</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                180 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                            <div class="bg-slate-400 h-full rounded-full" style="width: 100%"></div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-slate-600 dark:text-slate-400 font-semibold">Đã hoàn trả 100% tiền cọc</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                    <div onclick="KtxApp.navigate('hoa-don')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">TỔNG TIỀN CỌC GIỮ</span>
-                            <span class="material-symbols-outlined text-emerald-500 text-[20px]">savings</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG TIỀN CỌC GIỮ</span>
+                            <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <span class="material-symbols-outlined text-[18px]">savings</span>
+                            </div>
                         </div>
-                        <div class="mt-2 flex items-baseline gap-1">
-                            <span class="text-2xl font-bold text-[#0B2A5B] dark:text-blue-300 tracking-tight">1.620.000.000</span>
-                            <span class="text-xs font-semibold text-[#0B2A5B]">đ</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-[#0b2a5b] dark:text-emerald-400 tracking-tight">
+                                1,62 <span class="text-sm font-normal text-slate-500">tỷ đồng</span>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                            <div class="bg-emerald-500 h-full rounded-full" style="width: 88%"></div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Tài khoản bảo đảm VietinBank</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
                 </div>
@@ -1411,69 +1441,77 @@ const KtxApp = (function () {
                     </div>
                 </div>
 
-                <!-- 4 KPI Metrics -->
+                <!-- 4 KPI Metrics (Image 1 Standard Design) -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Tổng sinh viên nội trú</span>
-                            <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-[#0B2A5B]">
-                                <span class="material-symbols-outlined text-[20px]">groups</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG SINH VIÊN NỘI TRÚ</span>
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#0b2a5b] dark:text-blue-400">
+                                <span class="material-symbols-outlined text-[18px]">groups</span>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">3.420</div>
-                            <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500">
-                                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                                <span>Đạt 97.4% công suất giường</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                3.420 <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">3.800 giường · Đạt 97.4% công suất</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Nam sinh (Khu A)</span>
-                            <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-[#375ba9]">
-                                <span class="material-symbols-outlined text-[20px]">male</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">NAM SINH (KHU A)</span>
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#375ba9] dark:text-blue-400">
+                                <span class="material-symbols-outlined text-[18px]">male</span>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">1.950</div>
-                            <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500">
-                                <span class="w-2 h-2 rounded-full bg-[#375ba9]"></span>
-                                <span>57% tổng nội trú · Tòa A1, A2, A3</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                1.950 <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">57% tổng nội trú · Tòa A1, A2, A3</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Nữ sinh (Khu B)</span>
-                            <div class="w-8 h-8 rounded-lg bg-pink-50 flex items-center justify-center text-pink-600">
-                                <span class="material-symbols-outlined text-[20px]">female</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">NỮ SINH (KHU B)</span>
+                            <div class="w-8 h-8 rounded-lg bg-pink-50 dark:bg-pink-950/40 flex items-center justify-center text-pink-600 dark:text-pink-400">
+                                <span class="material-symbols-outlined text-[18px]">female</span>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">1.470</div>
-                            <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500">
-                                <span class="w-2 h-2 rounded-full bg-pink-500"></span>
-                                <span>43% tổng nội trú · Tòa B1, B2</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                1.470 <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-pink-600 dark:text-pink-400 font-semibold">43% tổng nội trú · Tòa B1, B2</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Tạm vắng / Nghỉ phép</span>
-                            <div class="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
-                                <span class="material-symbols-outlined text-[20px]">event_busy</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TẠM VẮNG / NGHỈ PHÉP</span>
+                            <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                                <span class="material-symbols-outlined text-[18px]">event_busy</span>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">18</div>
-                            <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500">
-                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                                <span>0.5% · Cập nhật 15 phút trước</span>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
+                                18 <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-amber-600 dark:text-amber-400 font-semibold">Có đơn duyệt · Điểm danh số</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
                 </div>
@@ -1596,58 +1634,77 @@ const KtxApp = (function () {
                     </div>
                 </div>
 
-                <!-- 5 Metrics Cards -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
-                    <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-100 dark:border-[#232B3B]">
-                        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-[#0B2A5B] shrink-0">
-                            <span class="material-symbols-outlined text-[20px]">meeting_room</span>
-                        </div>
-                        <div>
-                            <div class="text-xl font-bold text-[#0B2A5B] dark:text-white leading-none">48</div>
-                            <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Tổng phòng</div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-100 dark:border-[#232B3B]">
-                        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-[#0B2A5B] shrink-0">
-                            <span class="material-symbols-outlined text-[20px]">bed</span>
-                        </div>
-                        <div>
-                            <div class="text-xl font-bold text-[#0B2A5B] dark:text-white leading-none">384</div>
-                            <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Tổng giường</div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3 p-2.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100">
-                        <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-[#375ba9] shrink-0">
-                            <span class="material-symbols-outlined text-[20px]">groups</span>
-                        </div>
-                        <div>
-                            <div class="flex items-baseline gap-1">
-                                <span class="text-xl font-bold text-[#375ba9] leading-none">342</span>
-                                <span class="text-[11px] font-bold text-blue-600">89%</span>
+                <!-- 4 KPI Metrics (Image 1 Standard Design) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG PHÒNG LƯU TRÚ</span>
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#0b2a5b] dark:text-blue-400">
+                                <span class="material-symbols-outlined text-[18px]">meeting_room</span>
                             </div>
-                            <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Đang ở</div>
+                        </div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                48 <span class="text-sm font-normal text-slate-500">phòng</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">5 tòa KTX sinh viên (A, B, C)</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-3 p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                            <span class="material-symbols-outlined text-[20px]">airline_seat_individual_suite</span>
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG CHỖ Ở (GIƯỜNG)</span>
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#375ba9] dark:text-blue-400">
+                                <span class="material-symbols-outlined text-[18px]">bed</span>
+                            </div>
                         </div>
-                        <div>
-                            <div class="text-xl font-bold text-emerald-600 leading-none">38</div>
-                            <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Còn trống</div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                384 <span class="text-sm font-normal text-slate-500">giường</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Tỷ lệ lấp đầy bình quân 89%</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-3 p-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 col-span-2 sm:col-span-1">
-                        <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                            <span class="material-symbols-outlined text-[20px]">build</span>
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">SINH VIÊN ĐANG Ở</span>
+                            <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <span class="material-symbols-outlined text-[18px]">groups</span>
+                            </div>
                         </div>
-                        <div>
-                            <div class="text-xl font-bold text-amber-600 leading-none">4</div>
-                            <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Bảo trì</div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight">
+                                342 <span class="text-sm font-normal text-slate-500">sinh viên</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Hiện còn trống 38 chỗ</span>
+                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                        </div>
+                    </div>
+
+                    <div onclick="KtxApp.navigate('sua-chua')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">GIƯỜNG CẦN BẢO TRÌ</span>
+                            <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                                <span class="material-symbols-outlined text-[18px]">build</span>
+                            </div>
+                        </div>
+                        <div class="my-3">
+                            <div class="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
+                                4 <span class="text-sm font-normal text-slate-500">giường</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
+                            <span>Đang khắc phục sự cố</span>
+                            <span>Điều phối kỹ thuật →</span>
                         </div>
                     </div>
                 </div>
@@ -2299,21 +2356,53 @@ const KtxApp = (function () {
                     <div id="paletteResults" class="max-h-96 overflow-y-auto p-2 space-y-3">
                         <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lối tắt thao tác nhanh</div>
                         <div class="grid grid-cols-2 gap-1.5">
-                            <button onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">dashboard</span>
+                            <button onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">dashboard</span>
                                 <span>Về Dashboard Tổng quan</span>
                             </button>
-                            <button onclick="KtxApp.navigate('don-dang-ky'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">how_to_reg</span>
+                            <button onclick="KtxApp.navigate('don-dang-ky'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">how_to_reg</span>
                                 <span>Xét duyệt đơn K65</span>
                             </button>
-                            <button onclick="KtxApp.navigate('hop-dong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">edit_document</span>
+                            <button onclick="KtxApp.navigate('hop-dong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">edit_document</span>
                                 <span>Quản lý Hợp đồng cư xá</span>
                             </button>
-                            <button onclick="KtxApp.navigate('phong-va-giuong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">domain</span>
-                                <span>Xem sơ đồ buồng phòng</span>
+                            <button onclick="KtxApp.navigate('sinh-vien'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">badge</span>
+                                <span>Hồ sơ Sinh viên</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('lop-khoa'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">school</span>
+                                <span>Lớp & Khoa viện</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('phong-va-giuong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">domain</span>
+                                <span>Sơ đồ buồng phòng</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('dien-nuoc-dich-vu'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">bolt</span>
+                                <span>Điện nước & Dịch vụ</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('hoa-don'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">receipt_long</span>
+                                <span>Hóa đơn & Thu phí</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('sua-chua'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">build</span>
+                                <span>Yêu cầu sửa chữa</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('vi-pham'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">gavel</span>
+                                <span>Vi phạm & Kỷ luật</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('nhan-vien-tai-khoan'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">manage_accounts</span>
+                                <span>Nhân viên & Tài khoản</span>
+                            </button>
+                            <button onclick="KtxApp.navigate('bao-cao'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">bar_chart</span>
+                                <span>Báo cáo thống kê</span>
                             </button>
                         </div>
                     </div>
@@ -2465,6 +2554,7 @@ const KtxApp = (function () {
         inspectRoom,
         toggleBedMaintenance,
         closeModal,
+        getCurrentTab: () => state.currentTab,
         exportReport
     };
 })();

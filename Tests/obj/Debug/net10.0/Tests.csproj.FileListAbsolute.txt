@@ -163,3 +163,4 @@ D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\Tests\obj\Debug\net10.0\refint\T
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\Tests\obj\Debug\net10.0\Tests.pdb
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\Tests\obj\Debug\net10.0\Tests.genruntimeconfig.cache
 D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\Tests\obj\Debug\net10.0\ref\Tests.dll
+D:\PHAN TICH THIET KE YEU CAU\Quan_ly_Ky_tuc_xa\Tests\obj\Debug\net10.0\Tests.sourcelink.json
