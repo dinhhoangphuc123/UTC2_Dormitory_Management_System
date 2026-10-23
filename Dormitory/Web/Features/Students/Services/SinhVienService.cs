@@ -32,7 +32,7 @@ namespace Dormitory.Web.Features.Students.Services
                 .Include(s => s.DanhSachHopDong)
                     .ThenInclude(h => h.DanhSachHoaDon)
                         .ThenInclude(i => i.DanhSachChiTietHoaDon)
-                .AsQueryable();
+                .AsSplitQuery();
 
             if (!string.IsNullOrWhiteSpace(search))
             {

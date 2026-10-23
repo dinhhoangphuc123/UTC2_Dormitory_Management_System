@@ -19,6 +19,7 @@ namespace Dormitory.Web.Features.Reports.Services
                 .Include(t => t.DanhSachPhong)
                     .ThenInclude(p => p.DanhSachGiuong)
                         .ThenInclude(g => g.DanhSachHopDong)
+                .AsSplitQuery()
                 .ToListAsync();
 
             var invoices = await _context.HoaDons

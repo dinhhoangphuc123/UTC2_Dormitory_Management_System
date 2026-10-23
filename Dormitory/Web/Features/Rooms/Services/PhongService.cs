@@ -26,7 +26,7 @@ namespace Dormitory.Web.Features.Rooms.Services
                 .Include(p => p.DanhSachGiuong)
                     .ThenInclude(g => g.DanhSachHopDong)
                         .ThenInclude(h => h.SinhVien)
-                .AsQueryable();
+                .AsSplitQuery();
 
             if (!string.IsNullOrWhiteSpace(buildingId) && buildingId != "Tòa: Tất cả" && buildingId != "all")
             {
@@ -71,4 +71,3 @@ namespace Dormitory.Web.Features.Rooms.Services
         }
     }
 }
-

@@ -18,6 +18,7 @@ namespace Dormitory.Web.Features.Buildings.Services
             var buildings = await _context.ToaNhas
                 .Include(b => b.DanhSachPhong)
                     .ThenInclude(p => p.DanhSachGiuong)
+                .AsSplitQuery()
                 .ToListAsync();
 
             return buildings.Select(b => new BuildingItemDto
@@ -38,6 +39,7 @@ namespace Dormitory.Web.Features.Buildings.Services
             var b = await _context.ToaNhas
                 .Include(b => b.DanhSachPhong)
                     .ThenInclude(p => p.DanhSachGiuong)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(b => b.MaToaNha == id);
 
             if (b == null) return null;
@@ -56,4 +58,3 @@ namespace Dormitory.Web.Features.Buildings.Services
         }
     }
 }
-

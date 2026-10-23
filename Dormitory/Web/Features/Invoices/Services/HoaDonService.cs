@@ -26,6 +26,7 @@ namespace Dormitory.Web.Features.Invoices.Services
                             .ThenInclude(p => p!.ToaNha)
                 .Include(h => h.DanhSachThanhToan)
                 .Include(h => h.DanhSachChiTietHoaDon)
+                .AsSplitQuery()
                 .OrderByDescending(h => h.NgayLap)
                 .ToListAsync();
 

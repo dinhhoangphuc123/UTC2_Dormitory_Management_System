@@ -36,6 +36,7 @@ namespace Dormitory.Web.Features.Dashboard.Services
                 .Include(t => t.DanhSachPhong)
                     .ThenInclude(p => p.DanhSachGiuong)
                         .ThenInclude(g => g.DanhSachHopDong)
+                .AsSplitQuery()
                 .ToListAsync();
 
             var zoneOccupancies = buildings.Select(b =>
@@ -58,6 +59,8 @@ namespace Dormitory.Web.Features.Dashboard.Services
             var pendingAppList = await _context.DonDangKys
                 .Include(d => d.SinhVien)
                 .Where(d => d.TrangThai == "choDuyet")
+                .OrderByDescending(d => d.NgayDangKy)
+                .ThenBy(d => d.MaDonDangKy)
                 .Take(5)
                 .ToListAsync();
 
@@ -80,6 +83,8 @@ namespace Dormitory.Web.Features.Dashboard.Services
             var openTickets = await _context.YeuCauSuaChuas
                 .Include(y => y.Phong)
                 .Where(y => y.TrangThai == "moiGui" || y.TrangThai == "dangXuLy")
+                .OrderByDescending(y => y.NgayGui)
+                .ThenBy(y => y.MaYeuCau)
                 .Take(5)
                 .ToListAsync();
 

@@ -20,7 +20,7 @@ namespace Dormitory.Web.Features.Academic.Services
             var query = _context.LopHocs
                 .Include(l => l.DanhSachSinhVien)
                     .ThenInclude(s => s.DanhSachHopDong)
-                .AsQueryable();
+                .AsSplitQuery();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
