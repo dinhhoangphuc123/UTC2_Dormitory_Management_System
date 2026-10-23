@@ -6,7 +6,7 @@ using Dormitory.Web.Features.Accounts.Validators;
 namespace Dormitory.Web.Features.Accounts.Api
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/auth")]
     public class AuthApiController : ControllerBase
     {
         private readonly IAuthService _authService;

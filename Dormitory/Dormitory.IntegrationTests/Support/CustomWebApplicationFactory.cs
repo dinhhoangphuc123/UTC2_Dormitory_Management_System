@@ -34,4 +34,3 @@ namespace Dormitory.IntegrationTests.Support
         }
     }
 }
-

@@ -575,7 +575,7 @@ const KtxApp = (function () {
                             <h2 class="text-2xl sm:text-3xl font-bold text-[#0B0F1A] dark:text-white">Đăng nhập</h2>
                         </div>
 
-                        <form id="loginForm" class="space-y-5" onsubmit="event.preventDefault(); KtxApp.handleLoginForm();">
+                        <form id="loginForm" class="space-y-5">
                             <div>
                                 <label class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">Tên đăng nhập / Mã số</label>
                                 <div class="relative">
@@ -679,19 +679,41 @@ const KtxApp = (function () {
         showToast(`Đã điền tài khoản: ${roleName}`, 'info');
     }
 
+    function initLoginHandlers() {
+        const form = document.getElementById('loginForm');
+        if (!form) return;
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await handleLoginForm();
+        });
+    }
+
     async function handleLoginForm() {
-        const u = document.getElementById('loginUsername').value;
-        const p = document.getElementById('loginPassword').value;
+        const usernameInput = document.getElementById('loginUsername');
+        const passwordInput = document.getElementById('loginPassword');
+        const username = usernameInput ? usernameInput.value.trim() : '';
+        const password = passwordInput ? passwordInput.value : '';
+
+        if (!username || !password) {
+            showToast('Vui lòng nhập đầy đủ tài khoản và mật khẩu', 'error');
+            return false;
+        }
+
         const btn = document.getElementById('loginSubmitBtn');
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Đang xác thực...</span>`;
+            btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Đang xác thực...</span>';
         }
-        await login(u, p);
+
+        const ok = await login(username, password);
+
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = `<span>Đăng nhập</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>`;
+            btn.innerHTML = '<span>Đăng nhập</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
         }
+
+        return ok;
     }
 
     // Active View Router
