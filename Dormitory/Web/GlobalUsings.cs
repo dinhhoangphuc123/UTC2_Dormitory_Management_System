@@ -1,0 +1,21 @@
+global using System;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Threading.Tasks;
+global using Dormitory.Web.Shared.Models;
+global using Dormitory.Web.Shared.Constants;
+global using Dormitory.Web.Shared.Helpers;
+global using Dormitory.Web.Features.Accounts.Entities;
+global using Dormitory.Web.Features.Staff.Entities;
+global using Dormitory.Web.Features.Academic.Entities;
+global using Dormitory.Web.Features.Students.Entities;
+global using Dormitory.Web.Features.Buildings.Entities;
+global using Dormitory.Web.Features.Rooms.Entities;
+global using Dormitory.Web.Features.Registrations.Entities;
+global using Dormitory.Web.Features.Contracts.Entities;
+global using Dormitory.Web.Features.Utilities.Entities;
+global using Dormitory.Web.Features.Invoices.Entities;
+global using Dormitory.Web.Features.Payments.Entities;
+global using Dormitory.Web.Features.Maintenance.Entities;
+global using Dormitory.Web.Features.Violations.Entities;
+

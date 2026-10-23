@@ -1,0 +1,29 @@
+name: CI / Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore Dormitory/Dormitory.slnx
+
+      - name: Build solution
+        run: dotnet build Dormitory/Dormitory.slnx --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test Dormitory/Dormitory.UnitTests/Dormitory.UnitTests.csproj --configuration Release --no-build --verbosity normal
+

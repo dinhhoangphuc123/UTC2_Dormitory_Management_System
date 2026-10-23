@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Web/Web.csproj" />
+  <Project Path="Dormitory.UnitTests/Dormitory.UnitTests.csproj" />
+  <Project Path="Dormitory.IntegrationTests/Dormitory.IntegrationTests.csproj" />
+  <Project Path="Dormitory.E2ETests/Dormitory.E2ETests.csproj" />
+</Solution>
+
