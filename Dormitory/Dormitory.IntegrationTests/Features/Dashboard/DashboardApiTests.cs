@@ -29,19 +29,5 @@ namespace Dormitory.IntegrationTests.Features.Dashboard
             Assert.True(res.Success);
             Assert.True(res.Data?.TotalStudents > 0);
         }
-
-        [Fact]
-        public async Task ResolveTask_WithValidTaskId_ReturnsOk()
-        {
-            using var context = _fixture.CreateDbContext();
-            var service = new DashboardService(context);
-            var controller = new DashboardApiController(service);
-
-            var result = await controller.ResolveTask("t1");
-            var ok = Assert.IsType<OkObjectResult>(result);
-            var res = Assert.IsType<ApiResponse>(ok.Value);
-            Assert.True(res.Success);
-        }
     }
 }
-

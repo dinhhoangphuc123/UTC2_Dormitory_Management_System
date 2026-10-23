@@ -10,10 +10,5 @@ const ViolationsFeature = {
     async createViolation(data) {
         return await Api.post('/api/vipham', data);
     },
-
-    async closeViolation(id) {
-        return await Api.post(`/api/vipham/${id}/close`, {});
-    }
 };
 window.ViolationsFeature = ViolationsFeature;
-

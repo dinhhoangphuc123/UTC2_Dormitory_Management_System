@@ -10,9 +10,9 @@ namespace Dormitory.Web.Features.Contracts.Mappings
             var phong = h.Giuong?.Phong;
             var toa = phong?.ToaNha;
 
-            string roomNum = phong != null ? phong.MaPhong.Split('_').Last() : "A101";
-            string bedNum = h.Giuong != null ? $"G0{h.Giuong.SoThuTu}" : "G01";
-            string buildingId = toa?.MaToaNha ?? "A";
+            string roomNum = phong != null ? phong.MaPhong.Split('_').Last() : string.Empty;
+            string bedNum = h.Giuong != null ? $"G{h.Giuong.SoThuTu}" : string.Empty;
+            string buildingId = toa?.MaToaNha ?? string.Empty;
 
             int remainingDays = (h.TrangThai == "daKetThuc")
                 ? 0
@@ -24,7 +24,7 @@ namespace Dormitory.Web.Features.Contracts.Mappings
             if (h.TrangThai == "daKetThuc")
             {
                 status = "Đã thanh lý";
-                statusNote = "Đã tất toán";
+                statusNote = "Hợp đồng đã kết thúc";
             }
             else if (remainingDays <= 15)
             {
@@ -51,10 +51,15 @@ namespace Dormitory.Web.Features.Contracts.Mappings
                 Id = h.MaHopDong,
                 ContractNumber = h.MaHopDong,
                 StudentId = h.MaSinhVien,
-                StudentName = h.SinhVien?.HoTen ?? "Sinh viên",
+                StudentName = h.SinhVien?.HoTen ?? string.Empty,
                 Mssv = h.MaSinhVien,
                 AvatarInitials = initials,
-                Gender = h.SinhVien?.GioiTinh == "nu" ? "Nữ" : "Nam",
+                Gender = h.SinhVien?.GioiTinh switch
+                {
+                    "nu" => "Nữ",
+                    "nam" => "Nam",
+                    _ => "—"
+                },
                 RoomNumber = roomNum,
                 BedNumber = bedNum,
                 BuildingId = buildingId,
@@ -63,11 +68,10 @@ namespace Dormitory.Web.Features.Contracts.Mappings
                 RemainingDays = remainingDays,
                 MonthlyFee = h.GiaThueThang,
                 DepositAmount = h.TienCoc,
-                DepositStatus = (h.TrangThai == "daKetThuc") ? "Đã hoàn" : "Đã nộp",
+                DepositStatus = h.TienCoc > 0 ? "Theo hợp đồng" : "Chưa ghi nhận",
                 Status = status,
                 StatusNote = statusNote
             };
         }
     }
 }
-

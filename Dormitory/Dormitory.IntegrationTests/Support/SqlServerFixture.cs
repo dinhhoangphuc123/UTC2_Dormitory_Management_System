@@ -14,6 +14,7 @@ namespace Dormitory.IntegrationTests.Support
 
             var context = new ApplicationDbContext(options);
             DbSeeder.SeedAllAsync(context).GetAwaiter().GetResult();
+            DemoDataSeeder.SeedAsync(context).GetAwaiter().GetResult();
             return context;
         }
 

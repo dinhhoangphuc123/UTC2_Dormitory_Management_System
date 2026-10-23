@@ -37,7 +37,7 @@ namespace Dormitory.Web.Features.Violations.Entities
         [Column("maNhanVienLap")]
         public string? MaNhanVienLap { get; set; }
 
-        [Column("ngayLap")]
+        [NotMapped]
         public DateTime NgayLap { get; set; } = DateTime.Now;
 
         [ForeignKey(nameof(MaSinhVien))]

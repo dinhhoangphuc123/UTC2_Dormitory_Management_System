@@ -10,12 +10,12 @@ namespace Dormitory.UnitTests.Features.Contracts
         {
             var req = new CreateContractRequestDto
             {
-                StudentName = "Trần Minh Hoàng",
                 Mssv = "6451071012",
-                RoomNumber = "101",
-                BedNumber = "G1",
+                BedId = "A01_101_G01",
                 MonthlyFee = 500000,
-                DepositAmount = 500000
+                DepositAmount = 500000,
+                StartDate = "2026-09-01",
+                EndDate = "2027-01-31"
             };
 
             var (isValid, errorMessage) = CreateContractValidator.Validate(req);
@@ -28,10 +28,8 @@ namespace Dormitory.UnitTests.Features.Contracts
         {
             var req = new CreateContractRequestDto
             {
-                StudentName = "Trần Minh Hoàng",
                 Mssv = "6451071012",
-                RoomNumber = "101",
-                BedNumber = "G1",
+                BedId = "A01_101_G01",
                 MonthlyFee = -100
             };
 
@@ -40,4 +38,3 @@ namespace Dormitory.UnitTests.Features.Contracts
         }
     }
 }
-

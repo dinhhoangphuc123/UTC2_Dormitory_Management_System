@@ -37,6 +37,11 @@ namespace Dormitory.Web.Features.Invoices.Api
             }
 
             var invoice = await _hoaDonService.CreateInvoiceAsync(req);
+            if (invoice == null)
+            {
+                return NotFound(ApiResponse.Fail("Không tìm thấy hợp đồng nội trú đang hiệu lực phù hợp với sinh viên và phòng."));
+            }
+
             return Ok(ApiResponse<InvoiceItemDto>.Ok(invoice, $"Đã tạo hóa đơn {invoice.Code} thành công!"));
         }
 
@@ -57,13 +62,5 @@ namespace Dormitory.Web.Features.Invoices.Api
 
             return BadRequest(ApiResponse.Fail("Không thể xác nhận thanh toán."));
         }
-
-        [HttpPost("send-reminders")]
-        public async Task<IActionResult> SendReminders()
-        {
-            int count = await _hoaDonService.SendRemindersAsync();
-            return Ok(ApiResponse.Ok($"Đã gửi thông báo nhắc nợ qua SMS và Email KTX tới {count} sinh viên!"));
-        }
     }
 }
-

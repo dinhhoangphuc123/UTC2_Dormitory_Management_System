@@ -8,6 +8,7 @@ using Dormitory.Web.Features.Payments.Entities;
 using Dormitory.Web.Features.Registrations.Entities;
 using Dormitory.Web.Features.Staff.Entities;
 using Dormitory.Web.Features.Students.Entities;
+using Dormitory.Web.Features.Violations.Entities;
 
 namespace Dormitory.Web.Data.Seeding
 {
@@ -330,9 +331,9 @@ namespace Dormitory.Web.Data.Seeding
 
                 var cthd = new List<ChiTietHoaDon>
                 {
-                    new() { MaHoaDon = hd.MaHoaDon, NoiDung = "Tiền phòng KTX tháng 10/2026", SoLuong = 1, DonGia = 500000, ThanhTien = 500000 },
-                    new() { MaHoaDon = hd.MaHoaDon, NoiDung = "Điện chia đầu người (30 kWh)", SoLuong = 30, DonGia = 2500, ThanhTien = 75000 },
-                    new() { MaHoaDon = hd.MaHoaDon, NoiDung = "Nước chia đầu người (4 m3)", SoLuong = 4, DonGia = 12000, ThanhTien = 48000 }
+                    new() { MaHoaDon = hd.MaHoaDon, LoaiKhoan = "tienPhong", NoiDung = "Tiền phòng KTX tháng 10/2026", SoLuong = 1, DonGia = 500000, ThanhTien = 500000 },
+                    new() { MaHoaDon = hd.MaHoaDon, LoaiKhoan = "dien", NoiDung = "Điện chia đầu người (30 kWh)", SoLuong = 30, DonGia = 2500, ThanhTien = 75000 },
+                    new() { MaHoaDon = hd.MaHoaDon, LoaiKhoan = "nuoc", NoiDung = "Nước chia đầu người (4 m3)", SoLuong = 4, DonGia = 12000, ThanhTien = 48000 }
                 };
                 await context.ChiTietHoaDons.AddRangeAsync(cthd);
 
@@ -371,4 +372,3 @@ namespace Dormitory.Web.Data.Seeding
         }
     }
 }
-

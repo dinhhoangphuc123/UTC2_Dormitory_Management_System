@@ -22,7 +22,9 @@ namespace Dormitory.UnitTests.Features.Staff
             Assert.Equal("NV01", dto.Id);
             Assert.Equal("Nguyễn Văn An", dto.Name);
             Assert.Equal("active", dto.Status);
+            Assert.Equal("Chưa đăng nhập", dto.LastLogin);
+            Assert.Equal("Chưa phân quyền", dto.Role);
+            Assert.Equal("Chưa phân công", dto.ManagedArea);
         }
     }
 }
-

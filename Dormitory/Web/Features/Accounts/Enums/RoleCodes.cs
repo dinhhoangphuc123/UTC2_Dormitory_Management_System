@@ -7,6 +7,7 @@ namespace Dormitory.Web.Features.Accounts.Enums
     {
         public const string Admin = "admin";
         public const string QuanLy = "quanLy";
+        public const string KeToan = "keToan";
         public const string NhanVien = "nhanVien";
         public const string SinhVien = "sinhVien";
     }

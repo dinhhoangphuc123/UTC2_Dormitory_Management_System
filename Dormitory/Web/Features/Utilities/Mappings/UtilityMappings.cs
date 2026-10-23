@@ -5,7 +5,7 @@ namespace Dormitory.Web.Features.Utilities.Mappings
 {
     public static class UtilityMappings
     {
-        public static UtilityItemDto ToUtilityItemDto(this Phong r)
+        public static UtilityItemDto ToUtilityItemDto(this Phong r, List<string>? services = null)
         {
             string roomNum = r.MaPhong.Split('_').Last();
             var latestElectric = r.DanhSachChiSoDienNuoc
@@ -20,13 +20,13 @@ namespace Dormitory.Web.Features.Utilities.Mappings
                 .ThenByDescending(c => c.Thang)
                 .FirstOrDefault();
 
-            int oldElec = latestElectric != null ? (int)latestElectric.ChiSoCu : 1200 + (r.SoTang * 100);
-            int? newElec = latestElectric != null ? (int)latestElectric.ChiSoMoi : null;
-            int? usageElec = (newElec.HasValue && newElec >= oldElec) ? (newElec.Value - oldElec) : null;
+            decimal? oldElec = latestElectric?.ChiSoCu;
+            decimal? newElec = latestElectric?.ChiSoMoi;
+            decimal? usageElec = (newElec.HasValue && oldElec.HasValue && newElec >= oldElec) ? (newElec.Value - oldElec.Value) : null;
 
-            int oldWat = latestWater != null ? (int)latestWater.ChiSoCu : 50 + (r.SoTang * 10);
-            int? newWat = latestWater != null ? (int)latestWater.ChiSoMoi : null;
-            int? usageWat = (newWat.HasValue && newWat >= oldWat) ? (newWat.Value - oldWat) : null;
+            decimal? oldWat = latestWater?.ChiSoCu;
+            decimal? newWat = latestWater?.ChiSoMoi;
+            decimal? usageWat = (newWat.HasValue && oldWat.HasValue && newWat >= oldWat) ? (newWat.Value - oldWat.Value) : null;
 
             string st = "PENDING";
             if (newElec.HasValue && newWat.HasValue)
@@ -35,8 +35,6 @@ namespace Dormitory.Web.Features.Utilities.Mappings
                 else st = "RECORDED";
             }
 
-            var services = new List<string> { "Net", "Rác" };
-
             string roomLabel = $"{r.MaToaNha}-{roomNum}";
             return new UtilityItemDto
             {
@@ -44,18 +42,17 @@ namespace Dormitory.Web.Features.Utilities.Mappings
                 Room = roomLabel,
                 Building = r.MaToaNha,
                 Floor = r.SoTang,
-                Capacity = $"Tầng {r.SoTang} · {r.LoaiPhong?.SoNguoiToiDa ?? 8} Chỗ",
+                Capacity = $"Tầng {r.SoTang} · {r.LoaiPhong?.SoNguoiToiDa ?? 0} Chỗ",
                 OldElectric = oldElec,
                 NewElectric = newElec,
                 UsageElectric = usageElec,
                 OldWater = oldWat,
                 NewWater = newWat,
                 UsageWater = usageWat,
-                Services = services,
+                Services = services ?? new List<string>(),
                 Status = st,
                 UpdatedAt = latestElectric != null ? latestElectric.NgayGhi.ToString("dd/MM/yyyy") : null
             };
         }
     }
 }
-

@@ -10,8 +10,8 @@ namespace Dormitory.Web.Features.Violations.Mappings
             var sv = v.SinhVien;
             var hd = sv?.DanhSachHopDong?.FirstOrDefault(h => h.TrangThai == "hieuLuc");
             var phong = hd?.Giuong?.Phong;
-            string bld = phong?.MaToaNha ?? "A01";
-            string room = phong != null ? $"P.{phong.MaPhong.Split('_').Last()}" : "P.304";
+            string bld = phong?.MaToaNha ?? string.Empty;
+            string room = phong != null ? $"P.{phong.MaPhong.Split('_').Last()}" : string.Empty;
 
             string pType = v.HinhThucXuLy switch
             {
@@ -40,20 +40,19 @@ namespace Dormitory.Web.Features.Violations.Mappings
             return new ViolationRecordDto
             {
                 Id = v.MaViPham.ToString(),
-                Code = $"BB-2026-{v.MaViPham:D3}",
-                StudentId = sv?.MaSinhVien ?? "72DCHT21045",
-                StudentName = sv?.HoTen ?? "Trần Minh Hoàng",
+                Code = $"BB-{v.NgayViPham:yyyy}-{v.MaViPham:D4}",
+                StudentId = sv?.MaSinhVien ?? string.Empty,
+                StudentName = sv?.HoTen ?? string.Empty,
                 Room = room,
                 Building = bld,
-                Violation = v.LoaiViPham?.TenLoaiViPham ?? "Nấu ăn sai quy định",
+                Violation = v.LoaiViPham?.TenLoaiViPham ?? string.Empty,
                 ViolationType = vType,
                 Date = v.NgayViPham.ToString("dd/MM/yyyy"),
                 Penalty = pLabel,
                 PenaltyType = pType,
-                Status = "Đã thi hành",
-                Notes = v.NoiDung ?? "Biên bản ghi nhận tại chỗ."
+                Status = "Đã ghi nhận",
+                Notes = v.NoiDung ?? string.Empty
             };
         }
     }
 }
-

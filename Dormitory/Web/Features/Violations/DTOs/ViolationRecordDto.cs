@@ -13,7 +13,7 @@ namespace Dormitory.Web.Features.Violations.DTOs
         public string Date { get; set; } = string.Empty;
         public string Penalty { get; set; } = "Khiển trách";
         public string PenaltyType { get; set; } = "reprimand"; // remind, reprimand, warning, expel
-        public string Status { get; set; } = "Chờ duyệt"; // Đã thi hành, Đang khiếu nại, Chờ duyệt
+        public string Status { get; set; } = "Đã ghi nhận";
         public string Notes { get; set; } = string.Empty;
     }
 }

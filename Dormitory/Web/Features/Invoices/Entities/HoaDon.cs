@@ -22,24 +22,6 @@ namespace Dormitory.Web.Features.Invoices.Entities
         [Column("nam")]
         public int Nam { get; set; }
 
-        [Column("tienPhong", TypeName = "decimal(12,2)")]
-        public decimal TienPhong { get; set; }
-
-        [Column("tienDienNuoc", TypeName = "decimal(12,2)")]
-        public decimal TienDienNuoc { get; set; }
-
-        [Column("tienDichVuKhac", TypeName = "decimal(12,2)")]
-        public decimal TienDichVuKhac { get; set; }
-
-        [Column("tienMienGiam", TypeName = "decimal(12,2)")]
-        public decimal TienMienGiam { get; set; }
-
-        [Column("tienPhat", TypeName = "decimal(12,2)")]
-        public decimal TienPhat { get; set; }
-
-        [Column("tongTien", TypeName = "decimal(12,2)")]
-        public decimal TongTien { get; set; }
-
         [Required]
         [Column("hanThanhToan", TypeName = "date")]
         public DateTime HanThanhToan { get; set; }
@@ -59,4 +41,3 @@ namespace Dormitory.Web.Features.Invoices.Entities
         public virtual ICollection<ThanhToan> DanhSachThanhToan { get; set; } = new List<ThanhToan>();
     }
 }
-

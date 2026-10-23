@@ -47,11 +47,7 @@ namespace Dormitory.Web.Features.Academic.Services
 
         public async Task<ClassItemDto> CreateClassAsync(CreateClassDto req)
         {
-            int nienKhoa = 65;
-            if (req.Cohort.StartsWith("k", StringComparison.OrdinalIgnoreCase) && int.TryParse(req.Cohort.Substring(1), out int nk))
-            {
-                nienKhoa = nk;
-            }
+            int nienKhoa = int.Parse(req.Cohort.Trim()[1..], System.Globalization.CultureInfo.InvariantCulture);
 
             var entity = new LopHoc
             {
@@ -64,8 +60,7 @@ namespace Dormitory.Web.Features.Academic.Services
             _context.LopHocs.Add(entity);
             await _context.SaveChangesAsync();
 
-            return entity.ToClassItemDto(req);
+            return entity.ToClassItemDto();
         }
     }
 }
-

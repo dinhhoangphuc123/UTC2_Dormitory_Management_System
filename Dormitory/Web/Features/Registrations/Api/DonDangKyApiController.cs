@@ -30,13 +30,13 @@ namespace Dormitory.Web.Features.Registrations.Api
         [HttpPost("{id}/approve")]
         public async Task<IActionResult> Approve(string id)
         {
-            bool success = await _donDangKyService.ApproveApplicationAsync(id, "NV01");
+            bool success = await _donDangKyService.ApproveApplicationAsync(id, null);
             if (success)
             {
-                return Ok(ApiResponse.Ok($"Đã duyệt hồ sơ đăng ký {id} và tự động xếp phòng thành công!"));
+                return Ok(ApiResponse.Ok($"Đã duyệt hồ sơ đăng ký {id}."));
             }
 
-            return BadRequest(ApiResponse.Fail("Không thể duyệt hồ sơ."));
+            return NotFound(ApiResponse.Fail("Không tìm thấy hồ sơ đang chờ duyệt."));
         }
 
         [HttpPost("{id}/reject")]
@@ -50,14 +50,13 @@ namespace Dormitory.Web.Features.Registrations.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            bool success = await _donDangKyService.RejectApplicationAsync(id, "NV01", dto.Reason);
+            bool success = await _donDangKyService.RejectApplicationAsync(id, null, dto.Reason);
             if (success)
             {
                 return Ok(ApiResponse.Ok($"Đã từ chối đơn đăng ký {id}."));
             }
 
-            return BadRequest(ApiResponse.Fail("Không thể từ chối đơn đăng ký."));
+            return NotFound(ApiResponse.Fail("Không tìm thấy hồ sơ đang chờ duyệt."));
         }
     }
 }
-

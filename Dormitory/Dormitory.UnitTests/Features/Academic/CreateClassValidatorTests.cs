@@ -12,8 +12,8 @@ namespace Dormitory.UnitTests.Features.Academic
             {
                 Code = "CNTT01_K65",
                 Name = "Công nghệ Thông tin 01",
-                TotalStudents = 50,
-                Residents = 25
+                Faculty = "CNTT",
+                Cohort = "k65"
             };
 
             var (isValid, errorMessage) = CreateClassValidator.Validate(dto);
@@ -33,6 +33,20 @@ namespace Dormitory.UnitTests.Features.Academic
             var (isValid, _) = CreateClassValidator.Validate(dto);
             Assert.False(isValid);
         }
+
+        [Fact]
+        public void Validate_WithInvalidCohort_ShouldFail()
+        {
+            var dto = new CreateClassDto
+            {
+                Code = "CNTT01",
+                Name = "Lớp Test",
+                Faculty = "CNTT",
+                Cohort = "KXX"
+            };
+
+            var (isValid, _) = CreateClassValidator.Validate(dto);
+            Assert.False(isValid);
+        }
     }
 }
-

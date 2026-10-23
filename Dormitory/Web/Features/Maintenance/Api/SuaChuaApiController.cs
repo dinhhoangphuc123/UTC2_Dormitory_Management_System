@@ -38,6 +38,11 @@ namespace Dormitory.Web.Features.Maintenance.Api
             }
 
             var ticket = await _suaChuaService.CreateTicketAsync(req);
+            if (ticket == null)
+            {
+                return NotFound(ApiResponse.Fail("Không tìm thấy hợp đồng nội trú đang hiệu lực cho sinh viên này."));
+            }
+
             return Ok(ApiResponse<MaintenanceTicketDto>.Ok(ticket, $"Đã tạo phiếu báo hỏng {ticket.Code} thành công!"));
         }
 
@@ -50,7 +55,7 @@ namespace Dormitory.Web.Features.Maintenance.Api
                 return Ok(ApiResponse.Ok($"Đã điều phối kỹ thuật viên {req.Technician} xử lý phiếu!"));
             }
 
-            return BadRequest(ApiResponse.Fail("Không thể điều phối phiếu sửa chữa."));
+            return NotFound(ApiResponse.Fail("Không tìm thấy phiếu hoặc nhân viên kỹ thuật đang làm việc."));
         }
 
         [HttpPost("{id}/complete")]
@@ -62,8 +67,7 @@ namespace Dormitory.Web.Features.Maintenance.Api
                 return Ok(ApiResponse.Ok("Đã nghiệm thu và hoàn tất sửa chữa!"));
             }
 
-            return BadRequest(ApiResponse.Fail("Không thể hoàn tất phiếu sửa chữa."));
+            return NotFound(ApiResponse.Fail("Không tìm thấy phiếu sửa chữa."));
         }
     }
 }
-

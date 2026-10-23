@@ -26,6 +26,12 @@ namespace Dormitory.Web.Features.Students.Services
                     .ThenInclude(h => h.Giuong)
                         .ThenInclude(g => g!.Phong)
                             .ThenInclude(p => p!.ToaNha)
+                .Include(s => s.DanhSachHopDong)
+                    .ThenInclude(h => h.DanhSachHoaDon)
+                        .ThenInclude(i => i.DanhSachThanhToan)
+                .Include(s => s.DanhSachHopDong)
+                    .ThenInclude(h => h.DanhSachHoaDon)
+                        .ThenInclude(i => i.DanhSachChiTietHoaDon)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -82,4 +88,3 @@ namespace Dormitory.Web.Features.Students.Services
         }
     }
 }
-

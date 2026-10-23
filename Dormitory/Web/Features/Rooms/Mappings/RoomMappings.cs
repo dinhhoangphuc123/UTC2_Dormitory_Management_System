@@ -8,8 +8,8 @@ namespace Dormitory.Web.Features.Rooms.Mappings
         public static RoomListItemDto ToRoomListItemDto(this Phong p)
         {
             string roomNum = p.MaPhong.Split('_').Last();
-            int capacity = p.LoaiPhong?.SoNguoiToiDa ?? 8;
-            decimal price = p.LoaiPhong?.GiaThueThang ?? 500000;
+            int capacity = p.LoaiPhong?.SoNguoiToiDa ?? p.DanhSachGiuong.Count;
+            decimal price = p.LoaiPhong?.GiaThueThang ?? 0;
 
             var beds = p.DanhSachGiuong.OrderBy(g => g.SoThuTu).Select(g =>
             {
@@ -29,22 +29,9 @@ namespace Dormitory.Web.Features.Rooms.Mappings
                 };
             }).ToList();
 
-            if (beds.Count == 0)
-            {
-                for (int i = 1; i <= 8; i++)
-                {
-                    beds.Add(new BedItemDto
-                    {
-                        Id = $"{p.MaPhong}_G{i}",
-                        BedNumber = $"G{i}",
-                        Status = "Giường trống"
-                    });
-                }
-            }
-
             int occupied = beds.Count(b => b.Status == "Đang ở");
             bool isMaint = p.TrangThai == "baoTri" || beds.Any(b => b.Status == "Bảo trì");
-            string roomStatus = isMaint ? "Bảo trì" : (occupied >= capacity ? "Đầy" : "Còn chỗ");
+            string roomStatus = isMaint ? "Bảo trì" : (capacity > 0 && occupied >= capacity ? "Đầy" : "Còn chỗ");
 
             return new RoomListItemDto
             {
@@ -55,8 +42,8 @@ namespace Dormitory.Web.Features.Rooms.Mappings
                 RoomNumber = roomNum,
                 Capacity = capacity,
                 Occupied = occupied,
-                Gender = p.ToaNha?.GioiTinhQuyDinh == "nu" ? "Nữ" : "Nam",
-                RoomType = p.LoaiPhong?.TenLoaiPhong ?? "Tiêu chuẩn",
+                Gender = p.ToaNha?.GioiTinhQuyDinh == "nu" ? "Nữ" : p.ToaNha?.GioiTinhQuyDinh == "nam" ? "Nam" : "—",
+                RoomType = p.LoaiPhong?.TenLoaiPhong ?? "—",
                 PricePerMonth = price,
                 Status = roomStatus,
                 Beds = beds
@@ -64,4 +51,3 @@ namespace Dormitory.Web.Features.Rooms.Mappings
         }
     }
 }
-

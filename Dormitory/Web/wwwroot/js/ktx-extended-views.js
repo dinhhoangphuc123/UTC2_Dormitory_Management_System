@@ -18,6 +18,7 @@ window.KtxExtendedViews = (function () {
         invoices: [],
         tickets: [],
         violations: [],
+        violationTypes: [],
         staff: [],
         reports: null,
         // Active filters
@@ -47,7 +48,7 @@ window.KtxExtendedViews = (function () {
         staffDept: 'ALL',
         staffRole: 'ALL',
         staffStatus: 'ALL',
-        reportSemester: 'Năm học 2026-2027 · HK1',
+        reportSemester: '',
         reportScope: 'ALL'
     };
 
@@ -111,6 +112,20 @@ window.KtxExtendedViews = (function () {
         `;
     }
 
+    async function fetchApiData(url) {
+        const response = await fetch(url);
+        const json = await response.json();
+        if (!response.ok || !json.success) {
+            throw new Error(json.message || `Yêu cầu thất bại (${response.status})`);
+        }
+        return json.data;
+    }
+
+    function reportLoadFailure(label, error) {
+        console.error(`Không tải được ${label}:`, error);
+        KtxApp.showToast(`Không tải được ${label}: ${error.message || 'lỗi không xác định'}`, 'error');
+    }
+
     function hasView(tabId) {
         return [
             'lop-khoa',
@@ -163,23 +178,24 @@ window.KtxExtendedViews = (function () {
     // ========================================================
     async function loadClasses() {
         try {
-            const res = await fetch('/api/lophoc');
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data)) {
-                extState.classes = json.data;
-            }
-        } catch (e) {
-            console.error('Error loading classes:', e);
+            extState.classes = await fetchApiData('/api/lophoc');
+        } catch (error) {
+            extState.classes = [];
+            reportLoadFailure('danh sách lớp học', error);
         }
     }
 
     function renderClassesView() {
+        const faculties = [...new Set(extState.classes.map(c => c.faculty).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'vi'));
+        const cohorts = [...new Set(extState.classes.map(c => c.cohort).filter(cohort => cohort && cohort !== '—'))]
+            .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
         let filtered = extState.classes.filter(c => {
             const matchSearch = !extState.classSearch ||
                 c.code.toLowerCase().includes(extState.classSearch.toLowerCase()) ||
                 c.name.toLowerCase().includes(extState.classSearch.toLowerCase()) ||
                 c.advisor.toLowerCase().includes(extState.classSearch.toLowerCase());
-            const matchFaculty = extState.classFaculty === 'ALL' || c.facultyKey === extState.classFaculty;
+            const matchFaculty = extState.classFaculty === 'ALL' || c.faculty === extState.classFaculty;
             const matchCohort = extState.classCohort === 'ALL' || c.cohort.toLowerCase() === extState.classCohort.toLowerCase();
             return matchSearch && matchFaculty && matchCohort;
         });
@@ -224,7 +240,7 @@ window.KtxExtendedViews = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">6 khoa viện trực thuộc UTC2</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">${faculties.length} khoa/viện theo dữ liệu</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -242,7 +258,7 @@ window.KtxExtendedViews = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Đang cư trú tại 5 tòa KTX</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Theo hợp đồng còn hiệu lực</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -260,7 +276,7 @@ window.KtxExtendedViews = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-purple-600 dark:text-purple-400 font-semibold">Chính quy các khóa K62 - K65</span>
+                            <span class="text-purple-600 dark:text-purple-400 font-semibold">Theo danh sách sinh viên đã lưu</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -278,7 +294,7 @@ window.KtxExtendedViews = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Mức độ hỗ trợ chỗ ở cao</span>
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Tính từ số liệu hiện có</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -288,24 +304,16 @@ window.KtxExtendedViews = (function () {
                 <div class="page-filter-bar flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs">
                     <div class="page-filter-search flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
-                        <input type="text" placeholder="Tìm theo mã lớp, tên lớp, cố vấn học tập..." value="${extState.classSearch}" oninput="KtxExtendedViews.filterClassesSearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
+                        <input type="text" placeholder="Tìm theo mã lớp, tên lớp, khoa/viện..." value="${extState.classSearch}" oninput="KtxExtendedViews.filterClassesSearch(this.value)" class="w-full bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                     </div>
                     <div class="page-filter-controls flex items-center gap-2">
                         <select onchange="KtxExtendedViews.filterClassesFaculty(this.value)" class="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                             <option value="ALL">Khoa: Tất cả</option>
-                            <option value="cntt" ${extState.classFaculty === 'cntt' ? 'selected' : ''}>Khoa CNTT</option>
-                            <option value="ktvt" ${extState.classFaculty === 'ktvt' ? 'selected' : ''}>Khoa Kinh tế vận tải</option>
-                            <option value="ck" ${extState.classFaculty === 'ck' ? 'selected' : ''}>Khoa Cơ khí</option>
-                            <option value="ktxd" ${extState.classFaculty === 'ktxd' ? 'selected' : ''}>Khoa Kỹ thuật xây dựng</option>
-                            <option value="dt" ${extState.classFaculty === 'dt' ? 'selected' : ''}>Khoa Điện - Điện tử</option>
-                            <option value="ct" ${extState.classFaculty === 'ct' ? 'selected' : ''}>Khoa KT Công trình</option>
+                            ${faculties.map(faculty => `<option value="${faculty}" ${extState.classFaculty === faculty ? 'selected' : ''}>${faculty}</option>`).join('')}
                         </select>
                         <select onchange="KtxExtendedViews.filterClassesCohort(this.value)" class="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                             <option value="ALL">Khóa: Tất cả</option>
-                            <option value="k65" ${extState.classCohort === 'k65' ? 'selected' : ''}>Khóa 65</option>
-                            <option value="k64" ${extState.classCohort === 'k64' ? 'selected' : ''}>Khóa 64</option>
-                            <option value="k63" ${extState.classCohort === 'k63' ? 'selected' : ''}>Khóa 63</option>
-                            <option value="k62" ${extState.classCohort === 'k62' ? 'selected' : ''}>Khóa 62</option>
+                            ${cohorts.map(cohort => `<option value="${cohort}" ${extState.classCohort === cohort ? 'selected' : ''}>Khóa ${cohort.toUpperCase()}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -412,36 +420,11 @@ window.KtxExtendedViews = (function () {
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Khoa / Viện</label>
-                                <select id="newClassFaculty" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="Khoa Công nghệ thông tin">Khoa CNTT</option>
-                                    <option value="Khoa Kinh tế vận tải">Khoa Kinh tế vận tải</option>
-                                    <option value="Khoa Cơ khí">Khoa Cơ khí</option>
-                                    <option value="Khoa Kỹ thuật xây dựng">Khoa Kỹ thuật xây dựng</option>
-                                    <option value="Khoa Điện - Điện tử">Khoa Điện - Điện tử</option>
-                                </select>
+                                <input id="newClassFaculty" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Khóa</label>
-                                <select id="newClassCohort" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="k65">Khóa K65</option>
-                                    <option value="k64">Khóa K64</option>
-                                    <option value="k63">Khóa K63</option>
-                                    <option value="k62">Khóa K62</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Cố vấn học tập</label>
-                            <input id="newClassAdvisor" type="text" placeholder="VD: TS. Nguyễn Văn A" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tổng sĩ số</label>
-                                <input id="newClassTotal" type="number" value="50" min="1" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">SV Nội trú ban đầu</label>
-                                <input id="newClassResidents" type="number" value="25" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                                <input id="newClassCohort" required type="text" pattern="[kK][0-9]+" placeholder="VD: k65" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
                         </div>
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
@@ -459,15 +442,12 @@ window.KtxExtendedViews = (function () {
         const name = document.getElementById('newClassName').value;
         const faculty = document.getElementById('newClassFaculty').value;
         const cohort = document.getElementById('newClassCohort').value;
-        const advisor = document.getElementById('newClassAdvisor').value;
-        const total = Number(document.getElementById('newClassTotal').value) || 50;
-        const residents = Number(document.getElementById('newClassResidents').value) || 0;
 
         try {
             const res = await fetch('/api/lophoc', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, name, faculty, cohort, advisor, totalStudents: total, residents })
+                body: JSON.stringify({ code, name, faculty, cohort })
             });
             const json = await res.json();
             if (json.success) {
@@ -517,13 +497,10 @@ window.KtxExtendedViews = (function () {
     // ========================================================
     async function loadUtilities() {
         try {
-            const res = await fetch('/api/diennuoc');
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data)) {
-                extState.utilities = json.data;
-            }
-        } catch (e) {
-            console.error('Error loading utilities:', e);
+            extState.utilities = await fetchApiData('/api/diennuoc');
+        } catch (error) {
+            extState.utilities = [];
+            reportLoadFailure('dữ liệu điện nước', error);
         }
     }
 
@@ -540,6 +517,10 @@ window.KtxExtendedViews = (function () {
         const totalRecorded = extState.utilities.filter(u => u.status === 'RECORDED' || u.status === 'EXCEEDED').length;
         const totalExceeded = extState.utilities.filter(u => u.status === 'EXCEEDED').length;
         const totalPending = extState.utilities.filter(u => u.status === 'PENDING').length;
+        const electricityRate = extState.utilities.find(u => u.electricityRate != null)?.electricityRate;
+        const waterRate = extState.utilities.find(u => u.waterRate != null)?.waterRate;
+        const buildings = [...new Set(extState.utilities.map(u => u.building).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'vi'));
 
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
@@ -590,7 +571,7 @@ window.KtxExtendedViews = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
-                            <span>Hạn chót ngày 25 hàng tháng</span>
+                            <span>Tiến độ ghi số trong database</span>
                             <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -622,11 +603,11 @@ window.KtxExtendedViews = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-[#0b2a5b] dark:text-blue-300 tracking-tight">
-                                2.800 <span class="text-sm font-normal text-slate-500">đ/kWh</span>
+                                ${electricityRate == null ? 'Chưa cấu hình' : electricityRate.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">${electricityRate == null ? '' : 'đ/kWh'}</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Nước 14.500 đ/m³ · Wi-Fi miễn phí</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Nước ${waterRate == null ? 'chưa cấu hình' : `${waterRate.toLocaleString('vi-VN')} đ/m³`} · Giá từ database</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -641,11 +622,7 @@ window.KtxExtendedViews = (function () {
                     <div class="page-filter-controls flex items-center gap-2">
                         <select onchange="KtxExtendedViews.filterUtilityBuilding(this.value)" class="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                             <option value="ALL">Tòa: Tất cả</option>
-                            <option value="A01" ${extState.utilityBuilding === 'A01' ? 'selected' : ''}>Tòa A01</option>
-                            <option value="A02" ${extState.utilityBuilding === 'A02' ? 'selected' : ''}>Tòa A02</option>
-                            <option value="B01" ${extState.utilityBuilding === 'B01' ? 'selected' : ''}>Tòa B01</option>
-                            <option value="B02" ${extState.utilityBuilding === 'B02' ? 'selected' : ''}>Tòa B02</option>
-                            <option value="C01" ${extState.utilityBuilding === 'C01' ? 'selected' : ''}>Tòa C01</option>
+                            ${buildings.map(building => `<option value="${building}" ${extState.utilityBuilding === building ? 'selected' : ''}>Tòa ${building}</option>`).join('')}
                         </select>
                         <select onchange="KtxExtendedViews.filterUtilityStatus(this.value)" class="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                             <option value="ALL">Trạng thái: Tất cả</option>
@@ -686,7 +663,7 @@ window.KtxExtendedViews = (function () {
                                             </td>
                                             <td class="py-3 px-4">
                                                 <div class="flex items-center gap-2">
-                                                    <span class="text-slate-400 font-mono">${u.oldElectric}</span>
+                                                    <span class="text-slate-400 font-mono">${u.oldElectric ?? '--'}</span>
                                                     <span class="material-symbols-outlined text-[14px] text-slate-400">arrow_forward</span>
                                                     <span class="font-bold text-slate-900 dark:text-white font-mono">${u.newElectric !== null ? u.newElectric : '--'}</span>
                                                 </div>
@@ -694,7 +671,7 @@ window.KtxExtendedViews = (function () {
                                             </td>
                                             <td class="py-3 px-4">
                                                 <div class="flex items-center gap-2">
-                                                    <span class="text-slate-400 font-mono">${u.oldWater}</span>
+                                                    <span class="text-slate-400 font-mono">${u.oldWater ?? '--'}</span>
                                                     <span class="material-symbols-outlined text-[14px] text-slate-400">arrow_forward</span>
                                                     <span class="font-bold text-slate-900 dark:text-white font-mono">${u.newWater !== null ? u.newWater : '--'}</span>
                                                 </div>
@@ -832,13 +809,10 @@ window.KtxExtendedViews = (function () {
     // ========================================================
     async function loadInvoices() {
         try {
-            const res = await fetch('/api/hoadon');
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data)) {
-                extState.invoices = json.data;
-            }
-        } catch (e) {
-            console.error('Error loading invoices:', e);
+            extState.invoices = await fetchApiData('/api/hoadon');
+        } catch (error) {
+            extState.invoices = [];
+            reportLoadFailure('danh sách hóa đơn', error);
         }
     }
 
@@ -869,9 +843,9 @@ window.KtxExtendedViews = (function () {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theo dõi khoản thu, tình trạng thanh toán và công nợ nội trú</p>
                     </div>
                     <div class="page-title-actions flex items-center gap-2">
-                        <button type="button" onclick="KtxExtendedViews.sendReminderNotifications()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition">
+                        <button type="button" onclick="KtxExtendedViews.filterInvoiceStatus('overdue')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition">
                             <span class="material-symbols-outlined text-[16px]">notifications_active</span>
-                            <span>Nhắc nợ (${overdueCount})</span>
+                            <span>Xem nợ quá hạn (${overdueCount})</span>
                         </button>
                         <button type="button" onclick="KtxExtendedViews.openCreateInvoiceModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">add_card</span>
@@ -882,9 +856,9 @@ window.KtxExtendedViews = (function () {
 
                 <!-- KPI Cards -->
                 <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    ${renderMetricCard({ label: 'Thực thu đã thu', value: (totalPaid + 400000000).toLocaleString('vi-VN'), unit: 'đ', icon: 'payments', tone: 'blue', footer: 'Tổng tiền đã thu' })}
+                    ${renderMetricCard({ label: 'Thực thu đã thu', value: totalPaid.toLocaleString('vi-VN'), unit: 'đ', icon: 'payments', tone: 'blue', footer: 'Tổng tiền đã thu' })}
                     ${renderMetricCard({ label: 'Chờ sinh viên nộp', value: totalPending.toLocaleString('vi-VN'), unit: 'đ', icon: 'schedule', tone: 'amber', footer: 'Đang chờ thanh toán' })}
-                    ${renderMetricCard({ label: 'Công nợ quá hạn', value: (totalOverdue + 210000000).toLocaleString('vi-VN'), unit: 'đ', icon: 'account_balance_wallet', tone: 'red', footer: `Cần nhắc nợ ${overdueCount} hóa đơn` })}
+                    ${renderMetricCard({ label: 'Công nợ quá hạn', value: totalOverdue.toLocaleString('vi-VN'), unit: 'đ', icon: 'account_balance_wallet', tone: 'red', footer: `${overdueCount} hóa đơn quá hạn` })}
                     ${renderMetricCard({ label: 'Cổng tích hợp', value: '03', unit: 'cổng', icon: 'credit_card', tone: 'slate', footer: 'VNPAY QR · VietinBank · Tiền mặt' })}
                 </div>
 
@@ -976,16 +950,6 @@ window.KtxExtendedViews = (function () {
     function filterInvoiceCategory(v) { extState.invoiceCategory = v; reRender(); }
     function filterInvoiceStatus(v) { extState.invoiceStatus = v; reRender(); }
 
-    async function sendReminderNotifications() {
-        try {
-            const res = await fetch('/api/hoadon/send-reminders', { method: 'POST' });
-            const json = await res.json();
-            KtxApp.showToast(json.message || 'Đã gửi thông báo nhắc nợ thành công!');
-        } catch (e) {
-            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
-        }
-    }
-
     function confirmPaymentPrompt(code, amount) {
         if (!confirm(`Xác nhận đã thu số tiền ${amount.toLocaleString('vi-VN')} đ cho hóa đơn ${code}?`)) return;
 
@@ -1048,35 +1012,29 @@ window.KtxExtendedViews = (function () {
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mã Tòa *</label>
-                                <input id="invBld" required type="text" value="A2" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
+                                <input id="invBld" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
                             </div>
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Số Phòng *</label>
                                 <input id="invRoom" required type="text" placeholder="VD: 304" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
                             </div>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">MSSV</label>
-                                <input id="invStudentId" required type="text" placeholder="72DCHT..." class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Họ Tên SV</label>
-                                <input id="invStudentName" required type="text" placeholder="Họ và tên..." class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">MSSV</label>
+                            <input id="invStudentId" required type="text" placeholder="Mã sinh viên trong dữ liệu" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
                         </div>
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Nội Dung Thu Phí</label>
-                            <input id="invTitle" required type="text" value="Tiền phòng KTX & Dịch vụ" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            <input id="invTitle" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Số Tiền (VNĐ)</label>
-                                <input id="invAmount" required type="number" value="1480000" min="1000" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                                <input id="invAmount" required type="number" min="0.01" step="0.01" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Hạn Nộp</label>
-                                <input id="invDueDate" required type="text" value="15/11/2026" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                                <input id="invDueDate" required type="date" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
                         </div>
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
@@ -1093,7 +1051,6 @@ window.KtxExtendedViews = (function () {
         const bld = document.getElementById('invBld').value;
         const room = document.getElementById('invRoom').value;
         const sId = document.getElementById('invStudentId').value;
-        const sName = document.getElementById('invStudentName').value;
         const title = document.getElementById('invTitle').value;
         const amount = Number(document.getElementById('invAmount').value);
         const due = document.getElementById('invDueDate').value;
@@ -1102,7 +1059,7 @@ window.KtxExtendedViews = (function () {
             const res = await fetch('/api/hoadon', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ building: bld, room: `${bld}-${room}`, studentId: sId, studentName: sName, title, amount, dueDate: due, category: 'tonghop' })
+                body: JSON.stringify({ building: bld, room: `${bld}-${room}`, studentId: sId, title, amount, dueDate: due, category: 'tonghop' })
             });
             const json = await res.json();
             if (json.success) {
@@ -1123,17 +1080,18 @@ window.KtxExtendedViews = (function () {
     // ========================================================
     async function loadTickets() {
         try {
-            const res = await fetch('/api/suachua');
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data)) {
-                extState.tickets = json.data;
-            }
-        } catch (e) {
-            console.error('Error loading tickets:', e);
+            extState.tickets = await fetchApiData('/api/suachua');
+        } catch (error) {
+            extState.tickets = [];
+            reportLoadFailure('danh sách yêu cầu sửa chữa', error);
         }
     }
 
     function renderMaintenanceView() {
+        const ticketBuildings = [...new Set(extState.tickets.map(ticket => ticket.building).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'vi'));
+        const ticketCategories = [...new Set(extState.tickets.map(ticket => ticket.category).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'vi'));
         let filtered = extState.tickets.filter(t => {
             const matchSearch = !extState.ticketSearch ||
                 t.code.toLowerCase().includes(extState.ticketSearch.toLowerCase()) ||
@@ -1189,19 +1147,11 @@ window.KtxExtendedViews = (function () {
                         </div>
                             <select onchange="KtxExtendedViews.filterTicketBuilding(this.value)" class="h-10 w-36 shrink-0 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                                 <option value="ALL">Tất cả Tòa</option>
-                                <option value="A1"  ${extState.ticketBuilding === 'A1'  ? 'selected' : ''}>Tòa KTX A1</option>
-                                <option value="A2"  ${extState.ticketBuilding === 'A2'  ? 'selected' : ''}>Tòa KTX A2</option>
-                                <option value="B1"  ${extState.ticketBuilding === 'B1'  ? 'selected' : ''}>Tòa KTX B1</option>
-                                <option value="B2"  ${extState.ticketBuilding === 'B2'  ? 'selected' : ''}>Tòa KTX B2</option>
-                                <option value="C1"  ${extState.ticketBuilding === 'C1'  ? 'selected' : ''}>Tòa KTX C1</option>
+                                ${ticketBuildings.map(building => `<option value="${building}" ${extState.ticketBuilding === building ? 'selected' : ''}>Tòa ${building}</option>`).join('')}
                             </select>
                             <select onchange="KtxExtendedViews.filterTicketCategory(this.value)" class="h-10 w-52 shrink-0 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                                 <option value="ALL">Tất cả Hạng mục</option>
-                                <option value="Điện dân dụng"    ${extState.ticketCategory === 'Điện dân dụng'    ? 'selected' : ''}>Điện dân dụng</option>
-                                <option value="Nước / Vệ sinh"  ${extState.ticketCategory === 'Nước / Vệ sinh'  ? 'selected' : ''}>Nước / Vệ sinh</option>
-                                <option value="Khóa cửa / Cửa sổ" ${extState.ticketCategory === 'Khóa cửa / Cửa sổ' ? 'selected' : ''}>Khóa cửa / Cửa sổ</option>
-                                <option value="Đồ gỗ / Giường tủ" ${extState.ticketCategory === 'Đồ gỗ / Giường tủ' ? 'selected' : ''}>Đồ gỗ / Giường tủ</option>
-                                <option value="Thiết bị mạng"   ${extState.ticketCategory === 'Thiết bị mạng'   ? 'selected' : ''}>Thiết bị mạng</option>
+                                ${ticketCategories.map(category => `<option value="${category}" ${extState.ticketCategory === category ? 'selected' : ''}>${category}</option>`).join('')}
                             </select>
                             <select onchange="KtxExtendedViews.filterTicketPriority(this.value)" class="h-10 w-36 shrink-0 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none">
                                 <option value="ALL">Độ ưu tiên</option>
@@ -1386,50 +1336,9 @@ window.KtxExtendedViews = (function () {
                         <button onclick="KtxExtendedViews.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
                     </div>
                     <form onsubmit="event.preventDefault(); KtxExtendedViews.submitCreateTicket();" class="space-y-3.5 pt-4 text-xs">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tòa Nhà *</label>
-                                <select id="tkBld" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="A01">Tòa A01</option>
-                                    <option value="A02" selected>Tòa A02</option>
-                                    <option value="B01">Tòa B01</option>
-                                    <option value="B02">Tòa B02</option>
-                                    <option value="C01">Tòa C01</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Số Phòng *</label>
-                                <input id="tkRoom" required type="text" placeholder="VD: 308" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Hạng Mục Thiết Bị</label>
-                                <select id="tkCat" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="Điện dân dụng">Điện dân dụng</option>
-                                    <option value="Nước / Vệ sinh">Nước / Vệ sinh</option>
-                                    <option value="Khóa cửa / Cửa sổ">Khóa cửa / Cửa sổ</option>
-                                    <option value="Đồ gỗ / Giường tủ">Đồ gỗ / Giường tủ</option>
-                                    <option value="Thiết bị mạng">Thiết bị mạng</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mức Độ Ưu Tiên</label>
-                                <select id="tkPriority" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="Bình thường">Bình thường</option>
-                                    <option value="Khẩn cấp">Khẩn cấp</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Người Báo Hỏng *</label>
-                                <input id="tkReporter" required type="text" placeholder="Họ tên SV/Cán bộ" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Số Điện Thoại</label>
-                                <input id="tkPhone" type="text" placeholder="0918..." class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">MSSV người báo hỏng *</label>
+                            <input id="tkStudentId" required type="text" placeholder="Mã sinh viên có hợp đồng đang hiệu lực" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
                         </div>
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mô Tả Chi Tiết Sự Cố *</label>
@@ -1446,19 +1355,14 @@ window.KtxExtendedViews = (function () {
     }
 
     async function submitCreateTicket() {
-        const bld = document.getElementById('tkBld').value;
-        const room = document.getElementById('tkRoom').value;
-        const cat = document.getElementById('tkCat').value;
-        const pri = document.getElementById('tkPriority').value;
-        const rep = document.getElementById('tkReporter').value;
-        const phone = document.getElementById('tkPhone').value;
+        const studentId = document.getElementById('tkStudentId').value;
         const desc = document.getElementById('tkDesc').value;
 
         try {
             const res = await fetch('/api/suachua', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ building: bld, room, category: cat, priority: pri, reporter: rep, phone, description: desc })
+                body: JSON.stringify({ studentId, description: desc })
             });
             const json = await res.json();
             if (json.success) {
@@ -1474,9 +1378,11 @@ window.KtxExtendedViews = (function () {
         }
     }
 
-    function openAssignTicketModal(id) {
+    async function openAssignTicketModal(id) {
         const modalContainer = document.getElementById('modalsContainer');
         if (!modalContainer) return;
+        await loadStaff();
+        const technicians = extState.staff.filter(member => member.status === 'active');
 
         modalContainer.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="KtxExtendedViews.closeModal()">
@@ -1485,11 +1391,9 @@ window.KtxExtendedViews = (function () {
                     <div class="space-y-3 text-xs">
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Chọn kỹ thuật viên:</label>
-                            <select id="assignTech" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                <option value="Phạm Thành">Phạm Thành (Kỹ sư Cơ điện)</option>
-                                <option value="Vũ Tuấn">Vũ Tuấn (Kỹ thuật Mạng & Khóa)</option>
-                                <option value="Đặng Long">Đặng Long (Thợ Mộc & Giát giường)</option>
-                                <option value="Hoàng Khang">Hoàng Khang (Điện nước)</option>
+                            <select id="assignTech" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                <option value="">Chọn nhân viên</option>
+                                ${technicians.map(member => `<option value="${member.id}">${member.name} · ${member.position}</option>`).join('')}
                             </select>
                         </div>
                     </div>
@@ -1508,15 +1412,16 @@ window.KtxExtendedViews = (function () {
             const res = await fetch('/api/suachua/assign', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ticketId: id, technician: tech, deadline: 'Trong ngày hôm nay' })
+                body: JSON.stringify({ ticketId: id, technician: tech })
             });
             const json = await res.json();
+            if (!res.ok || !json.success) throw new Error(json.message || 'Không thể điều phối phiếu.');
             KtxApp.showToast(json.message || 'Đã điều phối thành công!');
             closeModal();
             await loadTickets();
             reRender();
         } catch (e) {
-            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
+            KtxApp.showToast(e.message || 'Lỗi kết nối máy chủ', 'error');
         }
     }
 
@@ -1537,13 +1442,10 @@ window.KtxExtendedViews = (function () {
     // ========================================================
     async function loadViolations() {
         try {
-            const res = await fetch('/api/vipham');
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data)) {
-                extState.violations = json.data;
-            }
-        } catch (e) {
-            console.error('Error loading violations:', e);
+            extState.violations = await fetchApiData('/api/vipham');
+        } catch (error) {
+            extState.violations = [];
+            reportLoadFailure('danh sách vi phạm', error);
         }
     }
 
@@ -1578,9 +1480,9 @@ window.KtxExtendedViews = (function () {
                 <!-- KPI Strip -->
                 <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     ${renderMetricCard({ label: 'Tổng biên bản học kỳ', value: extState.violations.length, unit: 'vụ', icon: 'gavel', tone: 'blue', footer: 'Biên bản đã ghi nhận' })}
-                    ${renderMetricCard({ label: 'Đã thi hành quyết định', value: extState.violations.filter(v => v.status === 'Đã thi hành').length, unit: 'vụ', icon: 'task_alt', tone: 'green', footer: 'Hồ sơ đã được xử lý' })}
-                    ${renderMetricCard({ label: 'Đang khiếu nại', value: extState.violations.filter(v => v.status === 'Đang khiếu nại').length, unit: 'vụ', icon: 'pending_actions', tone: 'amber', footer: 'Hồ sơ chờ giải quyết' })}
-                    ${renderMetricCard({ label: 'Hành vi phổ biến', value: 'Nấu ăn phòng', unit: '', icon: 'warning', tone: 'red', footer: 'Ồn quá giờ', valueSize: 'text-xl' })}
+                    ${renderMetricCard({ label: 'Nhắc nhở', value: extState.violations.filter(v => v.penaltyType === 'remind').length, unit: 'vụ', icon: 'notifications', tone: 'green', footer: 'Hình thức xử lý ghi nhận' })}
+                    ${renderMetricCard({ label: 'Cảnh cáo', value: extState.violations.filter(v => v.penaltyType === 'warning').length, unit: 'vụ', icon: 'warning', tone: 'amber', footer: 'Hình thức xử lý ghi nhận' })}
+                    ${renderMetricCard({ label: 'Buộc rời KTX', value: extState.violations.filter(v => v.penaltyType === 'expel').length, unit: 'vụ', icon: 'gavel', tone: 'red', footer: 'Hình thức xử lý ghi nhận' })}
                 </div>
 
                 <!-- Filter Bar -->
@@ -1591,9 +1493,7 @@ window.KtxExtendedViews = (function () {
                     </div>
                     <select aria-label="Lọc theo trạng thái" onchange="KtxExtendedViews.filterViolationStatus(this.value)" class="h-10 w-56 shrink-0 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
                         <option value="ALL" ${extState.violationStatus === 'ALL' ? 'selected' : ''}>Trạng thái: Tất cả</option>
-                        <option value="Chờ duyệt" ${extState.violationStatus === 'Chờ duyệt' ? 'selected' : ''}>Chờ duyệt</option>
-                        <option value="Đang khiếu nại" ${extState.violationStatus === 'Đang khiếu nại' ? 'selected' : ''}>Đang khiếu nại</option>
-                        <option value="Đã thi hành" ${extState.violationStatus === 'Đã thi hành' ? 'selected' : ''}>Đã thi hành</option>
+                        <option value="Đã ghi nhận" ${extState.violationStatus === 'Đã ghi nhận' ? 'selected' : ''}>Đã ghi nhận</option>
                     </select>
                     <select aria-label="Lọc theo hình thức xử lý" onchange="KtxExtendedViews.filterViolationPenaltyType(this.value)" class="h-10 w-56 shrink-0 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
                         <option value="ALL" ${extState.violationPenaltyType === 'ALL' ? 'selected' : ''}>Hình thức xử lý: Tất cả</option>
@@ -1616,7 +1516,6 @@ window.KtxExtendedViews = (function () {
                                     <th class="py-3 px-4">Ngày Lập</th>
                                     <th class="py-3 px-4">Hình Thức Xử Lý</th>
                                     <th class="py-3 px-4">Trạng Thái</th>
-                                    <th class="py-3 px-4 text-right">Thao Tác</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1638,13 +1537,6 @@ window.KtxExtendedViews = (function () {
                                             <td class="py-3 px-4 text-slate-500">${v.date}</td>
                                             <td class="py-3 px-4">${pBadge}</td>
                                             <td class="py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">${v.status}</td>
-                                            <td class="py-3 px-4 text-right space-x-1">
-                                                ${v.status !== 'Đã thi hành' ? `
-                                                    <button onclick="KtxExtendedViews.closeViolation('${v.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition">
-                                                        Đóng hồ sơ
-                                                    </button>
-                                                ` : ''}
-                                            </td>
                                         </tr>
                                     `;
                                 }).join('')}
@@ -1660,9 +1552,15 @@ window.KtxExtendedViews = (function () {
     function filterViolationStatus(status) { extState.violationStatus = status; reRender(); }
     function filterViolationPenaltyType(penaltyType) { extState.violationPenaltyType = penaltyType; reRender(); }
 
-    function openCreateViolationModal() {
+    async function openCreateViolationModal() {
         const modalContainer = document.getElementById('modalsContainer');
         if (!modalContainer) return;
+        try {
+            extState.violationTypes = await fetchApiData('/api/vipham/types');
+        } catch (error) {
+            extState.violationTypes = [];
+            reportLoadFailure('danh sách loại vi phạm', error);
+        }
 
         modalContainer.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
@@ -1675,43 +1573,25 @@ window.KtxExtendedViews = (function () {
                         <button onclick="KtxExtendedViews.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
                     </div>
                     <form onsubmit="event.preventDefault(); KtxExtendedViews.submitCreateViolation();" class="space-y-3.5 pt-4 text-xs">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">MSSV Vi Phạm *</label>
-                                <input id="vpStudentId" required type="text" placeholder="VD: 72DCHT21045" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Họ Tên Sinh Viên *</label>
-                                <input id="vpStudentName" required type="text" placeholder="Họ và tên..." class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tòa Nhà</label>
-                                <select id="vpBld" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="A01">Tòa A01</option>
-                                    <option value="A02">Tòa A02</option>
-                                    <option value="B01">Tòa B01</option>
-                                    <option value="B02">Tòa B02</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Số Phòng</label>
-                                <input id="vpRoom" required type="text" placeholder="VD: 304" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">MSSV vi phạm *</label>
+                            <input id="vpStudentId" required type="text" placeholder="Mã sinh viên trong dữ liệu" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
                         </div>
                         <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Hành Vi Vi Phạm</label>
-                            <input id="vpTitle" required type="text" value="Nấu ăn sai quy định trong phòng" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Loại vi phạm *</label>
+                            <select id="vpViolationTypeId" required ${extState.violationTypes.length ? '' : 'disabled'} class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                <option value="">Chọn loại vi phạm</option>
+                                ${extState.violationTypes.map(type => `<option value="${type.id}">${type.name}</option>`).join('')}
+                            </select>
+                            ${extState.violationTypes.length ? '' : '<p class="mt-1 text-rose-600">Không có loại vi phạm khả dụng.</p>'}
                         </div>
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Hình Thức Xử Lý Đề Xuất</label>
                             <select id="vpPenalty" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                <option value="Khiển trách">Khiển trách</option>
-                                <option value="Nhắc nhở">Nhắc nhở</option>
-                                <option value="Cảnh cáo cấp 1">Cảnh cáo cấp 1</option>
-                                <option value="Cảnh cáo cấp 2">Cảnh cáo cấp 2</option>
-                                <option value="Buộc rời KTX">Buộc rời KTX</option>
+                                <option value="reprimand">Khiển trách</option>
+                                <option value="remind">Nhắc nhở</option>
+                                <option value="warning">Cảnh cáo</option>
+                                <option value="expel">Buộc rời KTX</option>
                             </select>
                         </div>
                         <div>
@@ -1730,18 +1610,15 @@ window.KtxExtendedViews = (function () {
 
     async function submitCreateViolation() {
         const sId = document.getElementById('vpStudentId').value;
-        const sName = document.getElementById('vpStudentName').value;
-        const bld = document.getElementById('vpBld').value;
-        const room = document.getElementById('vpRoom').value;
-        const title = document.getElementById('vpTitle').value;
-        const penalty = document.getElementById('vpPenalty').value;
+        const violationTypeId = document.getElementById('vpViolationTypeId').value;
+        const penaltyType = document.getElementById('vpPenalty').value;
         const notes = document.getElementById('vpNotes').value;
 
         try {
             const res = await fetch('/api/vipham', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId: sId, studentName: sName, building: bld, room, violation: title, penalty, notes })
+                body: JSON.stringify({ studentId: sId, violationTypeId, penaltyType, notes })
             });
             const json = await res.json();
             if (json.success) {
@@ -1757,30 +1634,15 @@ window.KtxExtendedViews = (function () {
         }
     }
 
-    async function closeViolation(id) {
-        try {
-            const res = await fetch(`/api/vipham/${id}/close`, { method: 'POST' });
-            const json = await res.json();
-            KtxApp.showToast(json.message || 'Đã đóng hồ sơ biên bản!');
-            await loadViolations();
-            reRender();
-        } catch (e) {
-            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
-        }
-    }
-
     // ========================================================
     // 6. NHÂN VIÊN & TÀI KHOẢN (Staff View)
     // ========================================================
     async function loadStaff() {
         try {
-            const res = await fetch('/api/nhanvien');
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data)) {
-                extState.staff = json.data;
-            }
-        } catch (e) {
-            console.error('Error loading staff:', e);
+            extState.staff = await fetchApiData('/api/nhanvien');
+        } catch (error) {
+            extState.staff = [];
+            reportLoadFailure('danh sách nhân viên', error);
         }
     }
 
@@ -1817,7 +1679,14 @@ window.KtxExtendedViews = (function () {
                     ${renderMetricCard({ label: 'Tổng nhân sự KTX', value: extState.staff.length, unit: 'cán bộ', icon: 'groups', tone: 'blue', footer: 'Nhân sự trong hệ thống' })}
                     ${renderMetricCard({ label: 'Đang hoạt động', value: extState.staff.filter(s => s.status === 'active').length, unit: 'tài khoản', icon: 'verified_user', tone: 'green', footer: 'Tài khoản đang sử dụng' })}
                     ${renderMetricCard({ label: 'Tạm khóa / Đình chỉ', value: extState.staff.filter(s => s.status === 'locked').length, unit: 'tài khoản', icon: 'lock', tone: 'red', footer: 'Tài khoản đang bị khóa' })}
-                    ${renderMetricCard({ label: 'Phân quyền vai trò', value: '04', unit: 'vai trò', icon: 'admin_panel_settings', tone: 'amber', footer: 'Admin · BQL · Kỹ thuật · Kế toán' })}
+                    ${renderMetricCard({
+                        label: 'Phân quyền vai trò',
+                        value: new Set(extState.staff.map(staff => staff.role).filter(Boolean)).size,
+                        unit: 'vai trò',
+                        icon: 'admin_panel_settings',
+                        tone: 'amber',
+                        footer: [...new Set(extState.staff.map(staff => staff.role).filter(Boolean))].join(' · ') || 'Chưa có dữ liệu vai trò'
+                    })}
                 </div>
 
                 <!-- Filter Bar -->
@@ -1938,16 +1807,6 @@ window.KtxExtendedViews = (function () {
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Chức Danh</label>
                                 <input id="stPos" required type="text" placeholder="VD: Giám thị viên" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tổ Công Tác</label>
-                                <select id="stDept" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="Tổ Giám thị & Sinh viên">Tổ Giám thị & Sinh viên</option>
-                                    <option value="Ban Quản trị KTX">Ban Quản trị KTX</option>
-                                    <option value="Tổ Kỹ thuật - Vận hành">Tổ Kỹ thuật - Vận hành</option>
-                                    <option value="Tổ Thu chi & Hóa đơn">Tổ Thu chi & Hóa đơn</option>
-                                    <option value="Tổ An ninh Trật tự">Tổ An ninh Trật tự</option>
-                                </select>
-                            </div>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
@@ -1959,21 +1818,13 @@ window.KtxExtendedViews = (function () {
                                 <input id="stEmail" required type="email" placeholder="ten.nv@utc2.edu.vn" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Khu Vực Phụ Trách</label>
-                                <input id="stArea" type="text" value="Tòa A01 & A02" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Vai Trò Hệ Thống</label>
-                                <select id="stRole" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                    <option value="Ban Quản lý">Ban Quản lý</option>
-                                    <option value="Kỹ thuật viên">Kỹ thuật viên</option>
-                                    <option value="Kế toán">Kế toán</option>
-                                    <option value="System Admin">System Admin</option>
-                                    <option value="Chỉ xem (Viewer)">Chỉ xem (Viewer)</option>
-                                </select>
-                            </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Vai Trò Hệ Thống</label>
+                            <select id="stRole" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                <option value="quanLy">Quản lý KTX</option>
+                                <option value="keToan">Kế toán</option>
+                                <option value="admin">Quản trị viên</option>
+                            </select>
                         </div>
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                             <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 font-semibold">Hủy</button>
@@ -1988,17 +1839,15 @@ window.KtxExtendedViews = (function () {
     async function submitAddStaff() {
         const name = document.getElementById('stName').value;
         const pos = document.getElementById('stPos').value;
-        const dept = document.getElementById('stDept').value;
         const phone = document.getElementById('stPhone').value;
         const email = document.getElementById('stEmail').value;
-        const area = document.getElementById('stArea').value;
         const role = document.getElementById('stRole').value;
 
         try {
             const res = await fetch('/api/nhanvien', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, position: pos, department: dept, phone, email, managedArea: area, role })
+                body: JSON.stringify({ name, position: pos, phone, email, role })
             });
             const json = await res.json();
             if (json.success) {
@@ -2019,25 +1868,22 @@ window.KtxExtendedViews = (function () {
     // ========================================================
     async function loadReports() {
         try {
-            const res = await fetch('/api/baocao/summary');
-            const json = await res.json();
-            if (json.success && json.data) {
-                extState.reports = json.data;
-            }
-        } catch (e) {
-            console.error('Error loading reports:', e);
+            extState.reports = await fetchApiData('/api/baocao/summary');
+        } catch (error) {
+            extState.reports = null;
+            reportLoadFailure('báo cáo thống kê', error);
         }
     }
 
     function renderReportsView() {
         const r = extState.reports || {
-            semester: 'Năm học 2026-2027 · HK1',
-            totalRooms: 450,
-            totalBeds: 3600,
-            occupiedBeds: 3420,
-            vacantBeds: 180,
-            occupancyRate: 95.0,
-            totalRevenue: 5239000000,
+            semester: '—',
+            totalRooms: 0,
+            totalBeds: 0,
+            occupiedBeds: 0,
+            vacantBeds: 0,
+            occupancyRate: 0,
+            totalRevenue: 0,
             buildingOperations: []
         };
 
@@ -2173,7 +2019,6 @@ window.KtxExtendedViews = (function () {
         filterInvoiceSearch,
         filterInvoiceCategory,
         filterInvoiceStatus,
-        sendReminderNotifications,
         confirmPaymentPrompt,
         printInvoice,
         openCreateInvoiceModal,
@@ -2198,7 +2043,6 @@ window.KtxExtendedViews = (function () {
         filterViolationPenaltyType,
         openCreateViolationModal,
         submitCreateViolation,
-        closeViolation,
         // Staff methods
         filterStaffSearch,
         filterStaffStatus,

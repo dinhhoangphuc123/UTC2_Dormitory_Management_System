@@ -17,9 +17,9 @@ namespace Dormitory.Web.Features.Students.DTOs
         public string BedNumber { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string Hometown { get; set; } = string.Empty;
-        public string PaymentStatus { get; set; } = "Đủ"; // Đủ, Nợ, Chưa đóng
+        public string PaymentStatus { get; set; } = "Chưa có hóa đơn";
         public decimal? DebtAmount { get; set; }
-        public string ResidenceStatus { get; set; } = "Đang ở"; // Đang ở, Tạm vắng, Đã trả phòng
+        public string ResidenceStatus { get; set; } = "Chưa nội trú";
         public string AdmissionDate { get; set; } = string.Empty;
         public string? BirthDate { get; set; }
         public string? PriorityCategory { get; set; }
@@ -32,4 +32,3 @@ namespace Dormitory.Web.Features.Students.DTOs
         public string NewBedNumber { get; set; } = string.Empty;
     }
 }
-

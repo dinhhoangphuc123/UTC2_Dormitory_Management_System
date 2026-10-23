@@ -9,17 +9,12 @@ namespace Dormitory.Web.Data.Seeding
         {
             await RoleSeeder.SeedAsync(context);
             await ReferenceDataSeeder.SeedAsync(context);
-            await DemoDataSeeder.SeedAsync(context);
         }
 
         public static async Task SeedAsync(ApplicationDbContext context, IWebHostEnvironment? env = null)
         {
             await RoleSeeder.SeedAsync(context);
             await ReferenceDataSeeder.SeedAsync(context);
-            if (env == null || env.IsDevelopment())
-            {
-                await DemoDataSeeder.SeedAsync(context);
-            }
         }
     }
 }

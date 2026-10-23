@@ -27,8 +27,7 @@ namespace Dormitory.Web.Features.Payments.Entities
         [Column("phuongThuc")]
         public string PhuongThuc { get; set; } = "tienMat";
 
-        [MaxLength(50)]
-        [Column("maGiaoDichNganHang")]
+        [NotMapped]
         public string? MaGiaoDichNganHang { get; set; }
 
         [MaxLength(20)]
@@ -46,4 +45,3 @@ namespace Dormitory.Web.Features.Payments.Entities
         public virtual NhanVien? NhanVienThu { get; set; }
     }
 }
-

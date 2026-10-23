@@ -16,25 +16,45 @@ namespace Dormitory.Web.Features.Payments.Services
 
         public async Task<bool> ProcessPaymentAsync(ConfirmPaymentDto req)
         {
-            var invoice = await _context.HoaDons.FirstOrDefaultAsync(h => h.MaHoaDon == req.InvoiceId);
-            if (invoice != null)
+            var invoice = await _context.HoaDons
+                .Include(h => h.DanhSachThanhToan)
+                .Include(h => h.DanhSachChiTietHoaDon)
+                .FirstOrDefaultAsync(h => h.MaHoaDon == req.InvoiceId);
+            if (invoice == null || invoice.TrangThai == "daThanhToan")
             {
-                invoice.TrangThai = "daThanhToan";
-                var payment = new ThanhToan
-                {
-                    MaThanhToan = $"TT-{DateTime.Now.Ticks % 1000000}",
-                    MaHoaDon = invoice.MaHoaDon,
-                    SoTien = req.Amount > 0 ? req.Amount : 1480000,
-                    NgayThanhToan = DateTime.Now,
-                    PhuongThuc = req.PaymentMethod.Contains("VNPAY") ? "viDienTu" : (req.PaymentMethod.Contains("khoản") ? "chuyenKhoan" : "tienMat"),
-                    GhiChu = req.Note ?? "Thanh toán qua cổng KTX"
-                };
-                _context.ThanhToans.Add(payment);
-                await _context.SaveChangesAsync();
-                return true;
+                return false;
             }
 
-            return false;
+            var method = req.PaymentMethod?.ToLowerInvariant() ?? string.Empty;
+            var paymentType = method.Contains("vnpay") || method.Contains("ví điện tử")
+                ? "viDienTu"
+                : method.Contains("chuyển khoản") || method.Contains("chuyen khoan")
+                    ? "chuyenKhoan"
+                    : method.Contains("tiền mặt") || method.Contains("tien mat")
+                        ? "tienMat"
+                        : null;
+            var invoiceTotal = invoice.DanhSachChiTietHoaDon.Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia);
+            var outstanding = invoiceTotal - invoice.DanhSachThanhToan.Sum(t => t.SoTien);
+            if (paymentType == null || req.Amount <= 0 || req.Amount > outstanding)
+            {
+                return false;
+            }
+
+            _context.ThanhToans.Add(new ThanhToan
+            {
+                MaThanhToan = $"TT-{Guid.NewGuid().ToString("N")[..8]}",
+                MaHoaDon = invoice.MaHoaDon,
+                SoTien = req.Amount,
+                NgayThanhToan = DateTime.Now,
+                PhuongThuc = paymentType,
+                GhiChu = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim()
+            });
+            if (req.Amount == outstanding)
+            {
+                invoice.TrangThai = "daThanhToan";
+            }
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<decimal> GetTotalRevenueAsync()
@@ -43,4 +63,3 @@ namespace Dormitory.Web.Features.Payments.Services
         }
     }
 }
-

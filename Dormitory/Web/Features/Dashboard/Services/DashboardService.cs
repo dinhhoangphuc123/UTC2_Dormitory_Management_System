@@ -8,70 +8,6 @@ namespace Dormitory.Web.Features.Dashboard.Services
     {
         private readonly ApplicationDbContext _context;
 
-        private static readonly List<UrgentTaskDto> _tasks = new()
-        {
-            new()
-            {
-                Id = "t1",
-                Title = "Đinh Quốc Bảo",
-                Subtitle = "Đơn đăng ký mới K65",
-                Tag = "K64 Cơ khí",
-                TagType = "primary",
-                Icon = "how_to_reg",
-                ActionText = "Duyệt",
-                Type = "application",
-                Completed = false
-            },
-            new()
-            {
-                Id = "t2",
-                Title = "Rò rỉ vòi nước",
-                Subtitle = "Phòng A302 tầng 3",
-                Tag = "Khẩn cấp",
-                TagType = "error",
-                Icon = "water_damage",
-                ActionText = "Điều phối",
-                Type = "repair",
-                Completed = false
-            },
-            new()
-            {
-                Id = "t3",
-                Title = "Nhắc nợ hóa đơn",
-                Subtitle = "1.850.000 ₫ · Trễ 7 ngày",
-                Tag = "Phòng B205",
-                TagType = "warning",
-                Icon = "receipt_long",
-                ActionText = "Nhắc nợ",
-                Type = "debt",
-                Completed = false
-            },
-            new()
-            {
-                Id = "t4",
-                Title = "Trả phòng sớm",
-                Subtitle = "SV Lê Hoàng Nam · C201",
-                Tag = "K63",
-                TagType = "primary",
-                Icon = "move_item",
-                ActionText = "Xử lý",
-                Type = "checkout",
-                Completed = false
-            },
-            new()
-            {
-                Id = "t5",
-                Title = "Vi phạm nội quy",
-                Subtitle = "Sử dụng bếp điện sai quy định",
-                Tag = "C104",
-                TagType = "error",
-                Icon = "gavel",
-                ActionText = "Chi tiết",
-                Type = "violation",
-                Completed = false
-            }
-        };
-
         public DashboardService(ApplicationDbContext context)
         {
             _context = context;
@@ -80,47 +16,103 @@ namespace Dormitory.Web.Features.Dashboard.Services
         public async Task<DashboardSummaryDto> GetDashboardSummaryAsync()
         {
             int totalBeds = await _context.Giuongs.CountAsync();
-            int occupiedBeds = await _context.HopDongs.CountAsync(h => h.TrangThai == "hieuLuc");
+            int occupiedBeds = await _context.Giuongs.CountAsync(g => g.DanhSachHopDong.Any(h => h.TrangThai == "hieuLuc"));
+            int totalStudents = await _context.HopDongs
+                .Where(h => h.TrangThai == "hieuLuc")
+                .Select(h => h.MaSinhVien)
+                .Distinct()
+                .CountAsync();
             int pendingApps = await _context.DonDangKys.CountAsync(d => d.TrangThai == "choDuyet");
             int repairCount = await _context.YeuCauSuaChuas.CountAsync(y => y.TrangThai == "moiGui" || y.TrangThai == "dangXuLy");
 
-            int displayStudents = (occupiedBeds > 0) ? 3420 : 3420;
-            int displayCapacity = 3800;
-            double occupancyPct = Math.Round((double)displayStudents / displayCapacity * 100, 1);
+            decimal totalFeeRevenue = await _context.ThanhToans.SumAsync(t => (decimal?)t.SoTien) ?? 0;
+            decimal totalInvoiceAmount = await _context.ChiTietHoaDons.SumAsync(line => (decimal?)(line.ThanhTien ?? line.SoLuong * line.DonGia)) ?? 0;
+            decimal debtAmount = Math.Max(0, totalInvoiceAmount - totalFeeRevenue);
+            double collectedPct = totalInvoiceAmount > 0 ? (double)Math.Round(totalFeeRevenue / totalInvoiceAmount * 100, 1) : 0.0;
+            double occupancyPct = totalBeds > 0 ? (double)Math.Round((double)occupiedBeds / totalBeds * 100, 1) : 0;
 
-            var zoneOccupancies = new List<ZoneOccupancyDto>
+            // Load real buildings / zone occupancies
+            var buildings = await _context.ToaNhas
+                .Include(t => t.DanhSachPhong)
+                    .ThenInclude(p => p.DanhSachGiuong)
+                        .ThenInclude(g => g.DanhSachHopDong)
+                .ToListAsync();
+
+            var zoneOccupancies = buildings.Select(b =>
             {
-                new() { ZoneName = "Khu A (Nam sinh)", Occupied = 960, Total = 1000, Percent = 96.0 },
-                new() { ZoneName = "Khu B (Nữ sinh)", Occupied = 940, Total = 1000, Percent = 94.0 },
-                new() { ZoneName = "Khu C (Chất lượng cao)", Occupied = 820, Total = 1000, Percent = 82.0 },
-                new() { ZoneName = "Khu D (Nội trú quốc tế & Kỹ sư)", Occupied = 700, Total = 800, Percent = 88.0 }
-            };
+                int bBeds = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count);
+                int bOcc = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count(g => g.DanhSachHopDong.Any(hd => hd.TrangThai == "hieuLuc")));
+                double pct = bBeds > 0 ? Math.Round((double)bOcc / bBeds * 100, 1) : 0;
+                return new ZoneOccupancyDto
+                {
+                    ZoneName = $"Tòa {b.MaToaNha} ({b.TenToaNha})",
+                    Occupied = bOcc,
+                    Total = bBeds,
+                    Percent = pct
+                };
+            }).ToList();
+
+            // Load real urgent tasks from database
+            var urgentTasks = new List<UrgentTaskDto>();
+
+            var pendingAppList = await _context.DonDangKys
+                .Include(d => d.SinhVien)
+                .Where(d => d.TrangThai == "choDuyet")
+                .Take(5)
+                .ToListAsync();
+
+            foreach (var app in pendingAppList)
+            {
+                urgentTasks.Add(new UrgentTaskDto
+                {
+                    Id = $"app_{app.MaDonDangKy}",
+                    Title = app.SinhVien?.HoTen ?? app.MaDonDangKy,
+                    Subtitle = $"Đơn đăng ký mới ({app.MaDonDangKy})",
+                    Tag = "Chờ duyệt",
+                    TagType = "primary",
+                    Icon = "how_to_reg",
+                    ActionText = "Duyệt",
+                    Type = "application",
+                    Completed = false
+                });
+            }
+
+            var openTickets = await _context.YeuCauSuaChuas
+                .Include(y => y.Phong)
+                .Where(y => y.TrangThai == "moiGui" || y.TrangThai == "dangXuLy")
+                .Take(5)
+                .ToListAsync();
+
+            foreach (var ticket in openTickets)
+            {
+                urgentTasks.Add(new UrgentTaskDto
+                {
+                    Id = $"repair_{ticket.MaYeuCau}",
+                    Title = ticket.MoTa.Length > 40 ? ticket.MoTa[..40] + "..." : ticket.MoTa,
+                    Subtitle = $"Phòng {ticket.MaPhong}",
+                    Tag = "Cần xử lý",
+                    TagType = "error",
+                    Icon = "build",
+                    ActionText = "Điều phối",
+                    Type = "repair",
+                    Completed = false
+                });
+            }
 
             return new DashboardSummaryDto
             {
-                TotalStudents = displayStudents,
-                TotalCapacity = displayCapacity,
+                TotalStudents = totalStudents,
+                TotalCapacity = totalBeds,
                 OccupancyPercent = occupancyPct,
-                TotalFeeRevenue = 1280000000,
-                DebtAmount = 210000000,
-                CollectedPercent = 86,
-                PendingApplicationsCount = pendingApps > 0 ? (pendingApps + 46) : 48,
-                RepairRequestsCount = repairCount > 0 ? (repairCount + 11) : 12,
+                TotalFeeRevenue = totalFeeRevenue,
+                DebtAmount = debtAmount,
+                CollectedPercent = (int)collectedPct,
+                PendingApplicationsCount = pendingApps,
+                RepairRequestsCount = repairCount,
                 ZoneOccupancies = zoneOccupancies,
-                UrgentTasks = _tasks.ToList()
+                UrgentTasks = urgentTasks
             };
         }
 
-        public Task<bool> ResolveTaskAsync(string taskId)
-        {
-            var task = _tasks.FirstOrDefault(t => t.Id == taskId);
-            if (task != null)
-            {
-                task.Completed = true;
-                return Task.FromResult(true);
-            }
-            return Task.FromResult(false);
-        }
     }
 }
-

@@ -21,6 +21,24 @@ namespace Dormitory.Web.Features.Reports.Services
                         .ThenInclude(g => g.DanhSachHopDong)
                 .ToListAsync();
 
+            var invoices = await _context.HoaDons
+                .Include(h => h.DanhSachThanhToan)
+                .Include(h => h.HopDong)
+                    .ThenInclude(hd => hd!.Giuong)
+                        .ThenInclude(g => g!.Phong)
+                .ToListAsync();
+            var revenueByBuilding = invoices
+                .Where(h => h.HopDong?.Giuong?.Phong != null)
+                .GroupBy(h => h.HopDong!.Giuong!.Phong!.MaToaNha)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Sum(h => h.DanhSachThanhToan.Sum(payment => payment.SoTien)));
+            var currentSemester = await _context.KyHocs
+                .Where(k => k.NgayBatDau <= DateTime.Today && k.NgayKetThuc >= DateTime.Today)
+                .OrderByDescending(k => k.NgayBatDau)
+                .Select(k => k.TenKyHoc)
+                .FirstOrDefaultAsync();
+
             var buildingOps = new List<BuildingOperationDto>();
 
             int totalRooms = 0;
@@ -33,24 +51,13 @@ namespace Dormitory.Web.Features.Reports.Services
                 int bCount = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count);
                 int occCount = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count(g => g.DanhSachHopDong.Any(hd => hd.TrangThai == "hieuLuc")));
 
-                if (rCount < 10) rCount = 75;
-                if (bCount < 50) bCount = 600;
-                if (occCount < 10) occCount = (int)(bCount * 0.96);
-
                 int vacant = Math.Max(0, bCount - occCount);
                 double rate = bCount > 0 ? Math.Round((double)occCount / bCount * 100, 1) : 0;
+                decimal revenue = revenueByBuilding.GetValueOrDefault(b.MaToaNha);
 
                 totalRooms += rCount;
                 totalBeds += bCount;
                 totalOccupied += occCount;
-
-                string st = "Ổn định";
-                string stColor = "stable";
-                if (b.MaToaNha.Contains("03") || b.MaToaNha.Contains("C"))
-                {
-                    st = "Bảo trì 3 phòng";
-                    stColor = "warning";
-                }
 
                 buildingOps.Add(new BuildingOperationDto
                 {
@@ -60,48 +67,27 @@ namespace Dormitory.Web.Features.Reports.Services
                     Occupied = occCount,
                     Vacant = vacant,
                     Rate = rate,
-                    Revenue = $"{occCount * 1500000:N0} đ",
-                    Status = st,
-                    StatusColor = stColor
+                    Revenue = $"{revenue:N0} đ",
+                    Status = rate >= 95 ? "Gần đầy" : (rate >= 70 ? "Đang hoạt động" : "Còn nhiều chỗ"),
+                    StatusColor = rate >= 95 ? "warning" : (rate >= 70 ? "stable" : "info")
                 });
             }
 
-            if (!buildingOps.Any())
-            {
-                buildingOps = GetDefaultBuildingOps();
-                totalRooms = 450;
-                totalBeds = 3600;
-                totalOccupied = 3420;
-            }
-
             int vacantBeds = Math.Max(0, totalBeds - totalOccupied);
-            double totalRate = totalBeds > 0 ? Math.Round((double)totalOccupied / totalBeds * 100, 1) : 95.0;
+            double totalRate = totalBeds > 0 ? Math.Round((double)totalOccupied / totalBeds * 100, 1) : 0.0;
+            decimal totalRevenue = await _context.ThanhToans.SumAsync(t => (decimal?)t.SoTien) ?? 0;
 
             return new ReportSummaryDto
             {
-                Semester = string.IsNullOrWhiteSpace(semester) ? "Năm học 2026-2027 · HK1" : semester,
+                Semester = string.IsNullOrWhiteSpace(semester) ? currentSemester ?? string.Empty : semester,
                 TotalRooms = totalRooms,
                 TotalBeds = totalBeds,
                 OccupiedBeds = totalOccupied,
                 VacantBeds = vacantBeds,
                 OccupancyRate = totalRate,
-                TotalRevenue = 5239000000,
+                TotalRevenue = totalRevenue,
                 BuildingOperations = buildingOps
-            };
-        }
-
-        private static List<BuildingOperationDto> GetDefaultBuildingOps()
-        {
-            return new List<BuildingOperationDto>
-            {
-                new() { Name = "Tòa A01 (Nam)", Rooms = 75, Beds = 600, Occupied = 588, Vacant = 12, Rate = 98.0, Revenue = "912.400.000 đ", Status = "Ổn định", StatusColor = "stable" },
-                new() { Name = "Tòa A02 (Nam)", Rooms = 75, Beds = 600, Occupied = 576, Vacant = 24, Rate = 96.0, Revenue = "894.200.000 đ", Status = "Ổn định", StatusColor = "stable" },
-                new() { Name = "Tòa A03 (Nam)", Rooms = 75, Beds = 600, Occupied = 552, Vacant = 48, Rate = 92.0, Revenue = "856.800.000 đ", Status = "Bảo trì 3 phòng", StatusColor = "warning" },
-                new() { Name = "Tòa B01 (Nữ)", Rooms = 75, Beds = 600, Occupied = 594, Vacant = 6, Rate = 99.0, Revenue = "921.000.000 đ", Status = "Ổn định", StatusColor = "stable" },
-                new() { Name = "Tòa B02 (Nữ)", Rooms = 75, Beds = 600, Occupied = 582, Vacant = 18, Rate = 97.0, Revenue = "903.600.000 đ", Status = "Ổn định", StatusColor = "stable" },
-                new() { Name = "Tòa C01 (CLC)", Rooms = 75, Beds = 600, Occupied = 528, Vacant = 72, Rate = 88.0, Revenue = "751.000.000 đ", Status = "Phòng CLC máy lạnh", StatusColor = "info" }
             };
         }
     }
 }
-

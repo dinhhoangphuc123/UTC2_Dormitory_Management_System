@@ -5,7 +5,5 @@ namespace Dormitory.Web.Features.Dashboard.Services
     public interface IDashboardService
     {
         Task<DashboardSummaryDto> GetDashboardSummaryAsync();
-        Task<bool> ResolveTaskAsync(string taskId);
     }
 }
-

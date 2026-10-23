@@ -14,10 +14,5 @@ const InvoicesFeature = {
     async confirmPayment(invoiceId, paymentMethod = 'Tiền mặt (BQL)') {
         return await Api.post('/api/hoadon/confirm-payment', { invoiceId, paymentMethod });
     },
-
-    async sendReminders() {
-        return await Api.post('/api/hoadon/send-reminders', {});
-    }
 };
 window.InvoicesFeature = InvoicesFeature;
-

@@ -47,7 +47,12 @@ namespace Dormitory.Web.Features.Contracts.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var created = await _hopDongService.CreateContractAsync(req, "NV01");
+            var created = await _hopDongService.CreateContractAsync(req, null);
+            if (created == null)
+            {
+                return BadRequest(ApiResponse.Fail("Không tìm thấy sinh viên, giường khả dụng hoặc kỳ học phù hợp với dữ liệu đã chọn."));
+            }
+
             return Ok(ApiResponse<ContractListItemDto>.Ok(created, "Ban hành hợp đồng mới thành công!"));
         }
 
@@ -81,4 +86,3 @@ namespace Dormitory.Web.Features.Contracts.Api
         }
     }
 }
-

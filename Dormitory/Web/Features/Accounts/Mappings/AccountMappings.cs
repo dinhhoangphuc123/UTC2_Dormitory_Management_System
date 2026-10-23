@@ -1,5 +1,4 @@
 using Dormitory.Web.Features.Accounts.DTOs;
-using Dormitory.Web.Features.Accounts.Enums;
 
 namespace Dormitory.Web.Features.Accounts.Mappings
 {

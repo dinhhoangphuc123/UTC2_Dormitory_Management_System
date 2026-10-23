@@ -65,11 +65,11 @@ namespace Dormitory.Web.Features.Contracts.Entities
         [Column("maNhanVienLap")]
         public string? MaNhanVienLap { get; set; }
 
-        [Column("ngayLap")]
+        [NotMapped]
         public DateTime NgayLap { get; set; } = DateTime.Now;
 
         [MaxLength(255)]
-        [Column("ghiChu")]
+        [Column("lyDoThanhLy")]
         public string? GhiChu { get; set; }
 
         [ForeignKey(nameof(MaDonDangKy))]
@@ -91,4 +91,3 @@ namespace Dormitory.Web.Features.Contracts.Entities
         public virtual ICollection<HoaDon> DanhSachHoaDon { get; set; } = new List<HoaDon>();
     }
 }
-

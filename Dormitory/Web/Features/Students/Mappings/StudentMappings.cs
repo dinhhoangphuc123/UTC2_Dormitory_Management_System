@@ -1,5 +1,6 @@
 using Dormitory.Web.Features.Students.DTOs;
 using Dormitory.Web.Features.Students.Entities;
+using Dormitory.Web.Features.Academic.Mappings;
 
 namespace Dormitory.Web.Features.Students.Mappings
 {
@@ -10,24 +11,18 @@ namespace Dormitory.Web.Features.Students.Mappings
             var activeContract = s.DanhSachHopDong?.FirstOrDefault(h => h.TrangThai == "hieuLuc");
             var phong = activeContract?.Giuong?.Phong;
             var toa = phong?.ToaNha;
+            var invoices = s.DanhSachHopDong?.SelectMany(h => h.DanhSachHoaDon).ToList() ?? [];
+            var debtAmount = invoices.Sum(i => Math.Max(
+                0,
+                i.DanhSachChiTietHoaDon.Sum(line => line.ThanhTien ?? line.SoLuong * line.DonGia) -
+                i.DanhSachThanhToan.Sum(p => p.SoTien)));
 
             string roomNumber = phong != null ? phong.MaPhong.Split('_').Last() : "Chưa xếp";
-            string bedNumber = activeContract?.Giuong != null ? $"G0{activeContract.Giuong.SoThuTu}" : "Chưa có";
-            string buildingId = toa?.MaToaNha ?? "A01";
-            int floor = phong?.SoTang ?? 1;
+            string bedNumber = activeContract?.Giuong != null ? $"G{activeContract.Giuong.SoThuTu}" : "—";
+            string buildingId = toa?.MaToaNha ?? "";
+            int floor = phong?.SoTang ?? 0;
 
-            string cohortStr = s.NamNhapHoc switch
-            {
-                2025 => "K65",
-                2024 => "K64",
-                2023 => "K63",
-                2022 => "K62",
-                _ => "K64"
-            };
-
-            string avatar = s.GioiTinh == "nu"
-                ? "https://lh3.googleusercontent.com/aida-public/AB6AXuC4eBy4iKqJSSJaK36G-uNk6bORYFLSwK3hhn5u4Zt-x7LoLjuRgo6_eqZ-4yCQNFfOvCByJSsoUltlvv89Ccx_zqOlPTHU5370_87_53BkRiNvK_T3DmJrqzeQnuu8aPManRY2Jkv6htn6iZbjRYIAlpJzSQ-ZoXfuo89D8s8C9ynbwfdQ5L_gob1dgOVsycNqMXcoWVQn0PkY2dARObOpvSqfJ8Xrk3cwZstOicCWbxrkHxLUDwnyDw"
-                : "https://lh3.googleusercontent.com/aida-public/AB6AXuApy05bQf0n4X_3prqg9yRnz1Up26ewX2j1XKbV6Xt4a-hJZehP0j72pEsQwNuUzh_nPoWXQGNOgFkC2Me0lALOeEj0dQADljvkwQMdtiZQzuASphPArI_NMYnujwIu8_vxfXfLlucOEC-ZSM50VINW56baL0PSL5VAHyQNPkgrhhNC18YFXZgdM9I51O-AR2Xn0aYBoy4fwCLeh5tLezRdOv5KlpxttMInEo_NnrWTT7t_2jRPIDcxwQ";
+            string cohortStr = AcademicMappings.GetCohortCode(s.MaLop, s.NamNhapHoc).ToUpperInvariant();
 
             return new SinhVienListItemDto
             {
@@ -35,25 +30,29 @@ namespace Dormitory.Web.Features.Students.Mappings
                 Mssv = s.MaSinhVien,
                 Name = s.HoTen,
                 Cccd = s.Cccd,
-                AvatarUrl = avatar,
-                Gender = s.GioiTinh == "nu" ? "Nữ" : "Nam",
+                AvatarUrl = "",
+                Gender = s.GioiTinh switch
+                {
+                    "nu" => "Nữ",
+                    "nam" => "Nam",
+                    _ => "—"
+                },
                 Cohort = cohortStr,
-                Major = s.LopHoc?.TenKhoa ?? "CNTT",
+                Major = s.LopHoc?.TenKhoa ?? "—",
                 ClassName = s.LopHoc?.TenLop ?? s.MaLop,
                 BuildingId = buildingId,
                 Floor = floor,
                 RoomNumber = roomNumber,
                 BedNumber = bedNumber,
-                Phone = s.DienThoai ?? "0900 000 000",
-                Hometown = s.DiaChiThuongTru ?? "TP. Hồ Chí Minh",
-                PaymentStatus = (s.MaSinhVien == "6451071088") ? "Nợ" : "Đủ",
-                DebtAmount = (s.MaSinhVien == "6451071088") ? 250000 : 0,
-                ResidenceStatus = (s.MaSinhVien == "6351020045") ? "Tạm vắng" : "Đang ở",
-                AdmissionDate = activeContract != null ? activeContract.NgayBatDau.ToString("dd/MM/yyyy") : "05/09/2026",
+                Phone = s.DienThoai ?? "—",
+                Hometown = s.DiaChiThuongTru ?? "—",
+                PaymentStatus = invoices.Count == 0 ? "Chưa có hóa đơn" : debtAmount > 0 ? "Nợ" : "Đủ",
+                DebtAmount = debtAmount,
+                ResidenceStatus = activeContract != null ? "Đang ở" : "Chưa nội trú",
+                AdmissionDate = activeContract?.NgayBatDau.ToString("dd/MM/yyyy") ?? "—",
                 BirthDate = s.NgaySinh.ToString("dd/MM/yyyy"),
                 PriorityCategory = s.DoiTuongUuTien
             };
         }
     }
 }
-

@@ -10,23 +10,27 @@ namespace Dormitory.Web.Features.Invoices.Mappings
             var hd = h.HopDong;
             var sv = hd?.SinhVien;
             var phong = hd?.Giuong?.Phong;
-            var bld = phong?.MaToaNha ?? "A1";
+            var bld = phong?.MaToaNha ?? string.Empty;
 
-            string roomLabel = phong != null ? $"{phong.MaToaNha}-{phong.MaPhong.Split('_').Last()}" : "A2-304";
-            string stName = sv?.HoTen ?? "Trần Minh Hoàng";
-            string stId = sv?.MaSinhVien ?? "72DCHT21045";
+            string roomLabel = phong != null ? $"{phong.MaToaNha}-{phong.MaPhong.Split('_').Last()}" : string.Empty;
+            string stName = sv?.HoTen ?? string.Empty;
+            string stId = sv?.MaSinhVien ?? string.Empty;
+            decimal invoiceTotal = h.DanhSachChiTietHoaDon.Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia);
 
-            bool isPaid = h.TrangThai == "daThanhToan" || (h.DanhSachThanhToan != null && h.DanhSachThanhToan.Any());
+            bool isPaid = h.TrangThai == "daThanhToan" ||
+                (invoiceTotal > 0 && h.DanhSachThanhToan.Sum(t => t.SoTien) >= invoiceTotal);
             bool isOverdue = !isPaid && h.HanThanhToan < DateTime.Today;
 
             string stCode = isPaid ? "paid" : (isOverdue ? "overdue" : "pending");
             string stLabel = isPaid ? "Đã nộp" : (isOverdue ? "Nợ quá hạn" : "Chờ nộp");
 
-            string cat = "tonghop";
-            string catColor = "#375ba9";
-            if (h.MaHoaDon.Contains("DN")) { cat = "diennuoc"; catColor = "#0b2a5b"; }
-            else if (h.MaHoaDon.Contains("PH")) { cat = "phong"; catColor = "#88a9fd"; }
-            else if (h.MaHoaDon.Contains("GX")) { cat = "guixe"; catColor = "#747780"; }
+            var lineTypes = h.DanhSachChiTietHoaDon.Select(d => d.LoaiKhoan).Distinct().ToList();
+            string cat = lineTypes.Count > 0 && lineTypes.All(type => type is "dien" or "nuoc")
+                ? "diennuoc"
+                : lineTypes.Count == 1 && lineTypes[0] == "tienPhong"
+                    ? "phong"
+                    : "tonghop";
+            string catColor = cat == "diennuoc" ? "#0b2a5b" : (cat == "phong" ? "#88a9fd" : "#375ba9");
 
             var latestPayment = h.DanhSachThanhToan?.OrderByDescending(t => t.NgayThanhToan).FirstOrDefault();
             string method = isPaid ? (latestPayment?.PhuongThuc switch
@@ -52,10 +56,11 @@ namespace Dormitory.Web.Features.Invoices.Mappings
                 Building = bld,
                 StudentName = stName,
                 StudentId = stId,
-                Title = $"Tổng hợp T{h.Thang:D2}/{h.Nam} (Phòng + Dịch vụ)",
+                Title = h.DanhSachChiTietHoaDon.OrderBy(d => d.MaChiTiet).Select(d => d.NoiDung).FirstOrDefault()
+                    ?? $"Hóa đơn T{h.Thang:D2}/{h.Nam}",
                 Category = cat,
                 CategoryColor = catColor,
-                Amount = 1480000,
+                Amount = invoiceTotal,
                 DueDate = h.HanThanhToan.ToString("dd/MM/yyyy"),
                 IsOverdue = isOverdue,
                 OverdueText = isOverdue ? $"Quá {(DateTime.Today - h.HanThanhToan).Days} ngày" : null,
@@ -67,4 +72,3 @@ namespace Dormitory.Web.Features.Invoices.Mappings
         }
     }
 }
-

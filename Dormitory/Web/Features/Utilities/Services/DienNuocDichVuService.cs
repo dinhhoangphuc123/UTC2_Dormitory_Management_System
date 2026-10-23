@@ -25,7 +25,21 @@ namespace Dormitory.Web.Features.Utilities.Services
                 .ThenBy(p => p.MaPhong)
                 .ToListAsync();
 
-            var result = rooms.Select(r => r.ToUtilityItemDto()).ToList();
+            var serviceRows = await GetActiveServicesAsync();
+            var servicesByRoom = serviceRows
+                .GroupBy(row => row.RoomId)
+                .ToDictionary(group => group.Key, group => group.Select(row => row.Name).Distinct().ToList());
+            var result = rooms.Select(r => r.ToUtilityItemDto(servicesByRoom.GetValueOrDefault(r.MaPhong))).ToList();
+            if (result.Count > 0)
+            {
+                var electricityRate = await GetCurrentRateAsync("dien", DateTime.Today);
+                var waterRate = await GetCurrentRateAsync("nuoc", DateTime.Today);
+                foreach (var item in result)
+                {
+                    item.ElectricityRate = electricityRate?.Gia;
+                    item.WaterRate = waterRate?.Gia;
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -57,18 +71,36 @@ namespace Dormitory.Web.Features.Utilities.Services
                 .Include(p => p.ToaNha)
                 .Include(p => p.LoaiPhong)
                 .Include(p => p.DanhSachChiSoDienNuoc)
-                .FirstOrDefaultAsync(p => p.MaPhong == req.RoomId || p.MaPhong.EndsWith(req.RoomId));
+                .FirstOrDefaultAsync(p => p.MaPhong == req.RoomId);
 
             if (room == null) return null;
 
-            string roomNum = room.MaPhong.Split('_').Last();
-
-            int nowMonth = DateTime.Now.Month;
-            int nowYear = DateTime.Now.Year;
+            var now = DateTime.Now;
+            int nowMonth = now.Month;
+            int nowYear = now.Year;
 
             var elecIndex = room.DanhSachChiSoDienNuoc.FirstOrDefault(c => c.Loai == "dien" && c.Thang == nowMonth && c.Nam == nowYear);
             var latestElec = room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "dien").OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
-            decimal oldElec = elecIndex?.ChiSoCu ?? (latestElec != null ? latestElec.ChiSoMoi : (1200 + room.SoTang * 100));
+            var oldElec = elecIndex?.ChiSoCu ?? latestElec?.ChiSoMoi;
+            var elecRate = elecIndex == null
+                ? await GetCurrentRateAsync("dien", now.Date)
+                : null;
+
+            var waterIndex = room.DanhSachChiSoDienNuoc.FirstOrDefault(c => c.Loai == "nuoc" && c.Thang == nowMonth && c.Nam == nowYear);
+            var latestWat = room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "nuoc").OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
+            var oldWater = waterIndex?.ChiSoCu ?? latestWat?.ChiSoMoi;
+            var waterRate = waterIndex == null
+                ? await GetCurrentRateAsync("nuoc", now.Date)
+                : null;
+
+            if (!oldElec.HasValue || !oldWater.HasValue ||
+                req.NewElectric < oldElec.Value || req.NewWater < oldWater.Value ||
+                (elecIndex == null && elecRate == null) ||
+                (waterIndex == null && waterRate == null))
+            {
+                return null;
+            }
+
             if (elecIndex == null)
             {
                 elecIndex = new ChiSoDienNuoc
@@ -77,23 +109,19 @@ namespace Dormitory.Web.Features.Utilities.Services
                     Loai = "dien",
                     Thang = nowMonth,
                     Nam = nowYear,
-                    ChiSoCu = oldElec,
+                    ChiSoCu = oldElec.Value,
                     ChiSoMoi = req.NewElectric,
-                    MaGia = "GIA_DIEN_2026",
-                    NgayGhi = DateTime.Now,
-                    MaNhanVienGhi = "NV01"
+                    MaGia = elecRate!.MaGia,
+                    NgayGhi = now
                 };
                 _context.ChiSoDienNuocs.Add(elecIndex);
             }
             else
             {
                 elecIndex.ChiSoMoi = req.NewElectric;
-                elecIndex.NgayGhi = DateTime.Now;
+                elecIndex.NgayGhi = now;
             }
 
-            var waterIndex = room.DanhSachChiSoDienNuoc.FirstOrDefault(c => c.Loai == "nuoc" && c.Thang == nowMonth && c.Nam == nowYear);
-            var latestWat = room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "nuoc").OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
-            decimal oldWater = waterIndex?.ChiSoCu ?? (latestWat != null ? latestWat.ChiSoMoi : (50 + room.SoTang * 10));
             if (waterIndex == null)
             {
                 waterIndex = new ChiSoDienNuoc
@@ -102,29 +130,25 @@ namespace Dormitory.Web.Features.Utilities.Services
                     Loai = "nuoc",
                     Thang = nowMonth,
                     Nam = nowYear,
-                    ChiSoCu = oldWater,
+                    ChiSoCu = oldWater.Value,
                     ChiSoMoi = req.NewWater,
-                    MaGia = "GIA_NUOC_2026",
-                    NgayGhi = DateTime.Now,
-                    MaNhanVienGhi = "NV01"
+                    MaGia = waterRate!.MaGia,
+                    NgayGhi = now
                 };
                 _context.ChiSoDienNuocs.Add(waterIndex);
             }
             else
             {
                 waterIndex.ChiSoMoi = req.NewWater;
-                waterIndex.NgayGhi = DateTime.Now;
+                waterIndex.NgayGhi = now;
             }
 
             await _context.SaveChangesAsync();
 
-            int usageElec = Math.Max(0, req.NewElectric - (int)oldElec);
-            int usageWat = Math.Max(0, req.NewWater - (int)oldWater);
+            decimal usageElec = req.NewElectric - oldElec.Value;
+            decimal usageWat = req.NewWater - oldWater.Value;
             bool isOver = usageElec > 250 || usageWat > 20;
-
-            var activeServices = new List<string>();
-            if (req.HasInternet) activeServices.Add("Net");
-            if (req.HasTrash) activeServices.Add("Rác");
+            string roomNum = room.MaPhong.Split('_').Last();
 
             return new UtilityItemDto
             {
@@ -132,18 +156,49 @@ namespace Dormitory.Web.Features.Utilities.Services
                 Room = $"{room.MaToaNha}-{roomNum}",
                 Building = room.MaToaNha,
                 Floor = room.SoTang,
-                Capacity = $"Tầng {room.SoTang} · {room.LoaiPhong?.SoNguoiToiDa ?? 8} Chỗ",
-                OldElectric = (int)oldElec,
+                Capacity = $"Tầng {room.SoTang} · {room.LoaiPhong?.SoNguoiToiDa ?? 0} Chỗ",
+                OldElectric = oldElec,
                 NewElectric = req.NewElectric,
                 UsageElectric = usageElec,
-                OldWater = (int)oldWater,
+                OldWater = oldWater,
                 NewWater = req.NewWater,
                 UsageWater = usageWat,
-                Services = activeServices,
+                Services = await GetServicesForRoomAsync(room.MaPhong),
                 Status = isOver ? "EXCEEDED" : "RECORDED",
-                UpdatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+                UpdatedAt = now.ToString("dd/MM/yyyy HH:mm")
             };
         }
+
+        private Task<GiaDienNuoc?> GetCurrentRateAsync(string type, DateTime date) =>
+            _context.GiaDienNuocs
+                .Where(rate => rate.Loai == type &&
+                    rate.NgayApDung <= date &&
+                    (rate.NgayHetHieuLuc == null || rate.NgayHetHieuLuc >= date))
+                .OrderByDescending(rate => rate.NgayApDung)
+                .FirstOrDefaultAsync();
+
+        private async Task<List<(string RoomId, string Name)>> GetActiveServicesAsync()
+        {
+            var today = DateTime.Today;
+            return await _context.DangKyDichVus
+                .Where(registration =>
+                    registration.DichVu!.LaDangHoat &&
+                    registration.HopDong!.TrangThai == "hieuLuc" &&
+                    registration.HopDong.NgayBatDau <= today &&
+                    registration.HopDong.NgayKetThuc >= today &&
+                    registration.NgayBatDau <= today &&
+                    (registration.NgayKetThuc == null || registration.NgayKetThuc >= today))
+                .Select(registration => new ValueTuple<string, string>(
+                    registration.HopDong!.Giuong!.MaPhong,
+                    registration.DichVu!.TenDichVu))
+                .ToListAsync();
+        }
+
+        private async Task<List<string>> GetServicesForRoomAsync(string roomId) =>
+            (await GetActiveServicesAsync())
+                .Where(service => service.RoomId == roomId)
+                .Select(service => service.Name)
+                .Distinct()
+                .ToList();
     }
 }
-

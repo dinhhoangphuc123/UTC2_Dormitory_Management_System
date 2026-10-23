@@ -37,20 +37,19 @@ namespace Dormitory.Web.Features.Violations.Api
             }
 
             var record = await _viPhamService.CreateViolationAsync(req);
+            if (record == null)
+            {
+                return NotFound(ApiResponse.Fail("Không tìm thấy sinh viên hoặc loại vi phạm trong dữ liệu."));
+            }
+
             return Ok(ApiResponse<ViolationRecordDto>.Ok(record, $"Đã lập thành công biên bản {record.Code}!"));
         }
 
-        [HttpPost("{id}/close")]
-        public async Task<IActionResult> Close(string id)
+        [HttpGet("types")]
+        public async Task<IActionResult> GetTypes()
         {
-            bool success = await _viPhamService.CloseViolationAsync(id);
-            if (success)
-            {
-                return Ok(ApiResponse.Ok("Đã hoàn tất thi hành và đóng hồ sơ kỷ luật!"));
-            }
-
-            return BadRequest(ApiResponse.Fail("Không thể cập nhật hồ sơ biên bản."));
+            var types = await _viPhamService.GetViolationTypesAsync();
+            return Ok(ApiResponse<List<ViolationTypeOptionDto>>.Ok(types));
         }
     }
 }
-

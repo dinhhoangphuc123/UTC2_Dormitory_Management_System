@@ -10,9 +10,7 @@ namespace Dormitory.UnitTests.Features.Maintenance
         {
             var dto = new CreateTicketDto
             {
-                Building = "A1",
-                Room = "101",
-                Reporter = "Nguyễn Văn A",
+                StudentId = "6451071012",
                 Description = "Hỏng đèn tuýp"
             };
 
@@ -22,13 +20,11 @@ namespace Dormitory.UnitTests.Features.Maintenance
         }
 
         [Fact]
-        public void Validate_WithEmptyRoom_ShouldFail()
+        public void Validate_WithEmptyStudentId_ShouldFail()
         {
             var dto = new CreateTicketDto
             {
-                Building = "A1",
-                Room = "",
-                Reporter = "Nguyễn Văn A",
+                StudentId = string.Empty,
                 Description = "Hỏng đèn tuýp"
             };
 
@@ -37,4 +33,3 @@ namespace Dormitory.UnitTests.Features.Maintenance
         }
     }
 }
-

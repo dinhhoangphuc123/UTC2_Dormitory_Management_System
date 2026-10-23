@@ -62,43 +62,44 @@ namespace Dormitory.Web.Features.Contracts.Services
             return contracts.FirstOrDefault(c => c.Id == id || c.ContractNumber == id);
         }
 
-        public async Task<ContractListItemDto> CreateContractAsync(CreateContractRequestDto req, string staffId)
+        public async Task<ContractListItemDto?> CreateContractAsync(CreateContractRequestDto req, string? staffId)
         {
-            var sv = await _context.SinhViens.FirstOrDefaultAsync(s => s.MaSinhVien == req.Mssv);
-            if (sv == null)
+            var student = await _context.SinhViens
+                .FirstOrDefaultAsync(s => s.MaSinhVien == req.Mssv);
+            var bed = await _context.Giuongs
+                .Include(g => g.Phong)
+                .FirstOrDefaultAsync(g => g.MaGiuong == req.BedId && g.LaDangHoat);
+            if (student == null || bed?.Phong == null)
             {
-                sv = new SinhVien
-                {
-                    MaSinhVien = req.Mssv,
-                    HoTen = req.StudentName,
-                    NgaySinh = new DateTime(2005, 1, 1),
-                    GioiTinh = "nam",
-                    Cccd = "07920" + DateTime.Now.Ticks.ToString()[^7..],
-                    MaLop = "CNTT01_K64",
-                    NamNhapHoc = 2024,
-                    TrangThai = "dangHoc"
-                };
-                await _context.SinhViens.AddAsync(sv);
-                await _context.SaveChangesAsync();
+                return null;
             }
 
-            var bed = await _context.Giuongs
-                .FirstOrDefaultAsync(g => g.MaPhong.EndsWith(req.RoomNumber) && g.SoThuTu == int.Parse(req.BedNumber.Replace("G", "").TrimStart('0')));
+            DateTime.TryParseExact(req.StartDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var start);
+            DateTime.TryParseExact(req.EndDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var end);
 
-            string maGiuong = bed?.MaGiuong ?? $"A01_{req.RoomNumber}_{req.BedNumber}";
-            string maHĐ = $"HĐ-2026-{req.RoomNumber}-{req.BedNumber}";
+            var term = await _context.KyHocs.FirstOrDefaultAsync(k => k.NgayBatDau <= start && k.NgayKetThuc >= start);
+            if (term == null)
+            {
+                return null;
+            }
 
-            DateTime start = DateTime.TryParseExact(req.StartDate, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var sDate)
-                ? sDate : DateTime.Today;
-            DateTime end = DateTime.TryParseExact(req.EndDate, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var eDate)
-                ? eDate : start.AddMonths(9);
+            bool bedIsTaken = await _context.HopDongs.AnyAsync(h =>
+                h.MaGiuong == bed.MaGiuong &&
+                h.TrangThai != "daKetThuc" &&
+                h.NgayBatDau <= end &&
+                h.NgayKetThuc >= start);
+            if (bedIsTaken)
+            {
+                return null;
+            }
 
+            string maHopDong = $"HD-{DateTime.Today:yyMMdd}-{Guid.NewGuid().ToString("N")[..8]}";
             var newContract = new HopDong
             {
-                MaHopDong = maHĐ,
-                MaSinhVien = sv.MaSinhVien,
-                MaGiuong = maGiuong,
-                MaKyHoc = "HK1_2026_2027",
+                MaHopDong = maHopDong,
+                MaSinhVien = student.MaSinhVien,
+                MaGiuong = bed.MaGiuong,
+                MaKyHoc = term.MaKyHoc,
                 NgayBatDau = start,
                 NgayKetThuc = end,
                 NgayNhanPhongThucTe = start,
@@ -111,7 +112,10 @@ namespace Dormitory.Web.Features.Contracts.Services
             await _context.HopDongs.AddAsync(newContract);
             await _context.SaveChangesAsync();
 
-            return (await GetContractByIdAsync(maHĐ))!;
+            newContract.SinhVien = student;
+            newContract.Giuong = bed;
+            newContract.KyHoc = term;
+            return newContract.ToContractListItemDto();
         }
 
         public async Task<bool> RenewContractAsync(string contractId, int months = 5)
@@ -137,4 +141,3 @@ namespace Dormitory.Web.Features.Contracts.Services
         }
     }
 }
-

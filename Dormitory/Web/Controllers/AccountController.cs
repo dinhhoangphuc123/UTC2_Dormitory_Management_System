@@ -19,12 +19,18 @@ namespace Dormitory.Web.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Login(string username, string password)
+        public async Task<IActionResult> Login([FromForm] string? username, [FromForm] string? password, [FromForm] string? loginUsername, [FromForm] string? loginPassword)
         {
-            var user = await _authService.AuthenticateAsync(username, password);
-            if (user != null)
+            var userParam = !string.IsNullOrWhiteSpace(username) ? username : loginUsername;
+            var passParam = !string.IsNullOrWhiteSpace(password) ? password : loginPassword;
+
+            if (!string.IsNullOrWhiteSpace(userParam) && !string.IsNullOrWhiteSpace(passParam))
             {
-                return RedirectToAction("Index", "Home");
+                var user = await _authService.AuthenticateAsync(userParam, passParam);
+                if (user != null)
+                {
+                    return RedirectToAction("Index", "Home");
+                }
             }
 
             ViewBag.ErrorMessage = "Tên đăng nhập hoặc mật khẩu không chính xác.";

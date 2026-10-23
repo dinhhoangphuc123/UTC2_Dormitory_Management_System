@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
-using Dormitory.Web.Data.Seeding;
 
 namespace Dormitory.Web.Shared.Extensions
 {
@@ -10,26 +9,23 @@ namespace Dormitory.Web.Shared.Extensions
         {
             var connectionString = configuration.GetConnectionString("DefaultConnection");
 
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "ConnectionStrings:DefaultConnection chưa được cấu hình.");
+            }
+
+            // Kết nối trực tiếp SQL Server, không sử dụng Mock / InMemory
             services.AddDbContext<ApplicationDbContext>(options =>
             {
-                if (!string.IsNullOrWhiteSpace(connectionString))
+                options.UseSqlServer(connectionString, sqlOptions =>
                 {
-                    try
-                    {
-                        options.UseSqlServer(connectionString, sqlOptions =>
-                        {
-                            sqlOptions.CommandTimeout(30);
-                        });
-                    }
-                    catch
-                    {
-                        options.UseInMemoryDatabase("FallbackKtxDb");
-                    }
-                }
-                else
-                {
-                    options.UseInMemoryDatabase("FallbackKtxDb");
-                }
+                    sqlOptions.CommandTimeout(60);
+                    sqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        errorNumbersToAdd: null);
+                });
             });
 
             return services;
@@ -42,14 +38,18 @@ namespace Dormitory.Web.Shared.Extensions
             try
             {
                 var context = services.GetRequiredService<ApplicationDbContext>();
-                await DbSeeder.SeedAllAsync(context);
+                if (!await context.Database.CanConnectAsync())
+                {
+                    throw new InvalidOperationException(
+                        "Không thể kết nối cơ sở dữ liệu. Hãy kiểm tra SQL Server và ConnectionStrings:DefaultConnection.");
+                }
             }
             catch (Exception ex)
             {
                 var logger = services.GetRequiredService<ILogger<Program>>();
-                logger.LogWarning(ex, "Không thể kết nối SQL Server, hệ thống sẽ sử dụng bộ nhớ tạm để phục vụ giao diện.");
+                logger.LogError(ex, "Không thể khởi tạo kết nối cơ sở dữ liệu SQL Server.");
+                throw;
             }
         }
     }
 }
-

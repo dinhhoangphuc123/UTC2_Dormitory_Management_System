@@ -14,6 +14,7 @@ namespace Dormitory.UnitTests.Features.Students
                 HoTen = "Trần Minh Hoàng",
                 GioiTinh = "nam",
                 Cccd = "079203001842",
+                MaLop = "CNTT01_K64",
                 NamNhapHoc = 2024,
                 NgaySinh = new DateTime(2004, 5, 14),
                 TrangThai = "dangHoc"
@@ -27,4 +28,3 @@ namespace Dormitory.UnitTests.Features.Students
         }
     }
 }
-

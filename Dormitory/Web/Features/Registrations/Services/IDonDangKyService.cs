@@ -10,8 +10,7 @@ namespace Dormitory.Web.Features.Registrations.Services
             string? cohort = null,
             string? gender = null);
 
-        Task<bool> ApproveApplicationAsync(string applicationId, string staffId);
-        Task<bool> RejectApplicationAsync(string applicationId, string staffId, string? reason = null);
+        Task<bool> ApproveApplicationAsync(string applicationId, string? staffId);
+        Task<bool> RejectApplicationAsync(string applicationId, string? staffId, string? reason = null);
     }
 }
-

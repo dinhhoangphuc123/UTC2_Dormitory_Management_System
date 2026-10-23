@@ -11,7 +11,9 @@ namespace Dormitory.UnitTests.Features.Violations
             var dto = new CreateViolationDto
             {
                 StudentId = "6451071012",
-                Violation = "Sử dụng bếp từ công suất lớn"
+                ViolationTypeId = "VP01",
+                PenaltyType = "remind",
+                Notes = "Sử dụng bếp từ công suất lớn"
             };
 
             var (isValid, errorMessage) = CreateViolationValidator.Validate(dto);
@@ -24,8 +26,9 @@ namespace Dormitory.UnitTests.Features.Violations
         {
             var dto = new CreateViolationDto
             {
-                StudentId = "",
-                Violation = "Sử dụng bếp từ"
+                StudentId = string.Empty,
+                ViolationTypeId = "VP01",
+                PenaltyType = "remind"
             };
 
             var (isValid, _) = CreateViolationValidator.Validate(dto);
@@ -33,4 +36,3 @@ namespace Dormitory.UnitTests.Features.Violations
         }
     }
 }
-

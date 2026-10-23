@@ -34,11 +34,6 @@ namespace Dormitory.Web.Features.Violations.Services
 
             var result = list.Select(v => v.ToViolationRecordDto()).ToList();
 
-            if (!result.Any())
-            {
-                result = GetDefaultDemoViolations();
-            }
-
             if (!string.IsNullOrWhiteSpace(search))
             {
                 string s = search.Trim().ToLower();
@@ -63,73 +58,54 @@ namespace Dormitory.Web.Features.Violations.Services
             return result;
         }
 
-        public async Task<ViolationRecordDto> CreateViolationAsync(CreateViolationDto req)
+        public async Task<List<ViolationTypeOptionDto>> GetViolationTypesAsync()
         {
-            var firstLvp = await _context.LoaiViPhams.FirstOrDefaultAsync();
-            string maLvp = firstLvp?.MaLoaiViPham ?? "VP_BEPDIEN";
+            return await _context.LoaiViPhams
+                .OrderBy(v => v.TenLoaiViPham)
+                .Select(v => new ViolationTypeOptionDto { Id = v.MaLoaiViPham, Name = v.TenLoaiViPham })
+                .ToListAsync();
+        }
+
+        public async Task<ViolationRecordDto?> CreateViolationAsync(CreateViolationDto req)
+        {
+            var student = await _context.SinhViens
+                .FirstOrDefaultAsync(s => s.MaSinhVien == req.StudentId);
+            var violationType = await _context.LoaiViPhams
+                .FirstOrDefaultAsync(v => v.MaLoaiViPham == req.ViolationTypeId);
+            if (student == null || violationType == null)
+            {
+                return null;
+            }
 
             var entity = new ViPham
             {
-                MaSinhVien = req.StudentId,
-                MaLoaiViPham = maLvp,
+                MaSinhVien = student.MaSinhVien,
+                MaLoaiViPham = violationType.MaLoaiViPham,
                 NgayViPham = DateTime.Today,
-                NoiDung = req.Notes,
+                NoiDung = string.IsNullOrWhiteSpace(req.Notes) ? null : req.Notes.Trim(),
                 HinhThucXuLy = req.PenaltyType switch
                 {
                     "remind" => "nhacNho",
                     "warning" => "canhCao",
                     "expel" => "buocRaKhoi",
-                    _ => "khiểnTrách"
+                    _ => "khienTrach"
                 },
-                MaNhanVienLap = "NV01"
+                MaNhanVienLap = null
             };
 
             _context.ViPhams.Add(entity);
             await _context.SaveChangesAsync();
 
-            return new ViolationRecordDto
-            {
-                Id = entity.MaViPham.ToString(),
-                Code = $"BB-2026-{entity.MaViPham:D3}",
-                StudentId = req.StudentId,
-                StudentName = req.StudentName,
-                Room = req.Room.StartsWith("P.") ? req.Room : $"P.{req.Room}",
-                Building = req.Building,
-                Violation = req.Violation,
-                ViolationType = req.ViolationType,
-                Date = DateTime.Today.ToString("dd/MM/yyyy"),
-                Penalty = req.Penalty,
-                PenaltyType = req.PenaltyType,
-                Status = "Chờ duyệt",
-                Notes = req.Notes
-            };
-        }
-
-        public async Task<bool> CloseViolationAsync(string violationId)
-        {
-            if (int.TryParse(violationId, out int id))
-            {
-                var rec = await _context.ViPhams.FindAsync(id);
-                if (rec != null)
-                {
-                    await _context.SaveChangesAsync();
-                }
-            }
-            return true;
-        }
-
-        private static List<ViolationRecordDto> GetDefaultDemoViolations()
-        {
-            return new List<ViolationRecordDto>
-            {
-                new() { Id = "1", Code = "BB-2026-089", StudentId = "72DCHT21045", StudentName = "Trần Minh Hoàng", Room = "P.304", Building = "A01", Violation = "Nấu ăn sai quy định (bếp điện)", ViolationType = "cook", Date = "26/10/2026", Penalty = "Khiển trách", PenaltyType = "reprimand", Status = "Đã thi hành", Notes = "Nấu ăn sai quy định (bếp điện công suất lớn 2000W)" },
-                new() { Id = "2", Code = "BB-2026-088", StudentId = "73DCOT20112", StudentName = "Lê Quốc Bảo", Room = "P.202", Building = "B01", Violation = "Gây ồn ào quá giờ quy định", ViolationType = "noise", Date = "25/10/2026", Penalty = "Nhắc nhở", PenaltyType = "remind", Status = "Đã thi hành", Notes = "Gây ồn ào quá 23:00, ảnh hưởng phòng lân cận" },
-                new() { Id = "3", Code = "BB-2026-087", StudentId = "71DCVT19008", StudentName = "Phạm Thị Mai", Room = "P.410", Building = "A02", Violation = "Dẫn người ngoài qua đêm", ViolationType = "guest", Date = "24/10/2026", Penalty = "Cảnh cáo cấp 2", PenaltyType = "warning", Status = "Đang khiếu nại", Notes = "Dẫn người ngoài vào phòng lưu trú qua đêm không đăng ký" },
-                new() { Id = "4", Code = "BB-2026-086", StudentId = "72DCKT22194", StudentName = "Nguyễn Văn Đức", Room = "P.108", Building = "B02", Violation = "Tổ chức cờ bạc tại phòng", ViolationType = "gambling", Date = "22/10/2026", Penalty = "Buộc rời KTX", PenaltyType = "expel", Status = "Đã thi hành", Notes = "Tàng trữ chất cấm và tổ chức cờ bạc ăn tiền tại phòng" },
-                new() { Id = "5", Code = "BB-2026-085", StudentId = "74DCCN23401", StudentName = "Võ Nhật Quang", Room = "P.501", Building = "A01", Violation = "Tự ý câu nối đường điện", ViolationType = "electric", Date = "21/10/2026", Penalty = "Cảnh cáo - Trừ 5đ", PenaltyType = "warning", Status = "Đang khiếu nại", Notes = "Tự ý đấu nối nguồn điện sinh hoạt làm nhảy CB tầng" },
-                new() { Id = "6", Code = "BB-2026-084", StudentId = "73DCXD21012", StudentName = "Đỗ Tuấn Kiệt", Room = "P.215", Building = "B01", Violation = "Hút thuốc trong khuôn viên", ViolationType = "smoke", Date = "20/10/2026", Penalty = "Khiển trách", PenaltyType = "reprimand", Status = "Đã thi hành", Notes = "Hút thuốc lá trong hành lang ký túc xá" }
-            };
+            return (await _context.ViPhams
+                .Include(v => v.SinhVien)
+                    .ThenInclude(s => s!.DanhSachHopDong)
+                        .ThenInclude(h => h.Giuong)
+                            .ThenInclude(g => g!.Phong)
+                                .ThenInclude(p => p!.ToaNha)
+                .Include(v => v.LoaiViPham)
+                .Include(v => v.NhanVienLap)
+                .FirstAsync(v => v.MaViPham == entity.MaViPham))
+                .ToViolationRecordDto();
         }
     }
 }
-

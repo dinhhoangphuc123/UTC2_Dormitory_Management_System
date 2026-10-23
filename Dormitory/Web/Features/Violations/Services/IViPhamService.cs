@@ -5,8 +5,7 @@ namespace Dormitory.Web.Features.Violations.Services
     public interface IViPhamService
     {
         Task<List<ViolationRecordDto>> GetAllViolationsAsync(string? building = null, string? penaltyType = null, string? violationType = null, string? search = null);
-        Task<ViolationRecordDto> CreateViolationAsync(CreateViolationDto req);
-        Task<bool> CloseViolationAsync(string violationId);
+        Task<List<ViolationTypeOptionDto>> GetViolationTypesAsync();
+        Task<ViolationRecordDto?> CreateViolationAsync(CreateViolationDto req);
     }
 }
-

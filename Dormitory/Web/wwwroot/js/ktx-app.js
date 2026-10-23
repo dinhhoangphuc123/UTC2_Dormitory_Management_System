@@ -25,16 +25,14 @@ const KtxApp = (function () {
         admissionsTab: 'pending',
         admissionsPriority: '',
         admissionsSearch: '',
-        admissionsCohort: 'k65',
-        admissionsGender: 'all',
 
         contractsTab: 'valid',
         contractsBuilding: 'all',
         contractsSearch: '',
 
-        studentsCohort: 'k64',
-        studentsMajor: 'cntt',
-        studentsStatus: 'o',
+        studentsCohort: '',
+        studentsMajor: '',
+        studentsStatus: 'all',
         studentsSearch: '',
 
         roomsViewMode: 'roster',
@@ -42,9 +40,6 @@ const KtxApp = (function () {
         roomsFloor: 'all',
         roomsRoomNumber: 'all',
         isRoomsRoomMenuOpen: false,
-        roomsCohort: 'Khóa K64',
-        roomsMajor: 'CNTT',
-        roomsStatus: 'Đang ở',
         roomsSearch: '',
 
         // Active modals data
@@ -66,6 +61,10 @@ const KtxApp = (function () {
             }
         }
         return new Intl.NumberFormat('vi-VN').format(amount) + ' đ';
+    }
+
+    function getUserInitial(name) {
+        return String(name || '?').trim().charAt(0).toLocaleUpperCase('vi-VN');
     }
 
     // Toast Notifications
@@ -127,21 +126,33 @@ const KtxApp = (function () {
         if (saved) {
             try {
                 state.currentUser = JSON.parse(saved);
-            } catch (e) {
-                state.currentUser = null;
-            }
-        } else {
-            // Default to Quản lý KTX as demo mockup
-            try {
-                const res = await fetch('/api/auth/profile/ql_an');
-                const json = await res.json();
-                if (json.success && json.data) {
-                    state.currentUser = json.data;
-                    localStorage.setItem('utc2_current_user', JSON.stringify(json.data));
+                if (state.currentUser?.isDevelopmentGuest && !window.ktxDevelopmentBypassEnabled) {
+                    state.currentUser = null;
+                    localStorage.removeItem('utc2_current_user');
                 }
             } catch (e) {
-                console.error(e);
+                state.currentUser = null;
+                localStorage.removeItem('utc2_current_user');
             }
+        } else {
+            state.currentUser = null;
+        }
+    }
+
+    function skipLogin() {
+        if (!window.ktxDevelopmentBypassEnabled) return;
+
+        state.currentUser = {
+            name: 'Khách xem thử',
+            role: 'Chế độ xem thử',
+            isDevelopmentGuest: true
+        };
+        localStorage.setItem('utc2_current_user', JSON.stringify(state.currentUser));
+
+        if (window.location.pathname.toLowerCase().includes('/account/login')) {
+            window.location.href = '/';
+        } else {
+            renderApp();
         }
     }
 
@@ -158,15 +169,20 @@ const KtxApp = (function () {
                 localStorage.setItem('utc2_current_user', JSON.stringify(json.data));
                 showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
                 setTimeout(() => {
-                    navigate('dashboard');
-                }, 400);
+                    if (window.location.pathname.toLowerCase().includes('/account/login')) {
+                        window.location.href = '/';
+                    } else {
+                        navigate('dashboard');
+                    }
+                }, 300);
                 return true;
             } else {
-                showToast(json.message || 'Đăng nhập thất bại', 'error');
+                showToast(json.message || 'Tên đăng nhập hoặc mật khẩu không chính xác', 'error');
                 return false;
             }
         } catch (e) {
-            showToast('Lỗi kết nối máy chủ', 'error');
+            console.error('Login error:', e);
+            showToast('Lỗi kết nối máy chủ SQL Server', 'error');
             return false;
         }
     }
@@ -174,22 +190,11 @@ const KtxApp = (function () {
     function logout() {
         state.currentUser = null;
         localStorage.removeItem('utc2_current_user');
-        showToast('Đã đăng xuất khỏi phiên làm việc', 'info');
-        renderApp();
-    }
-
-    async function switchUser(username) {
-        try {
-            const res = await fetch(`/api/auth/profile/${username}`);
-            const json = await res.json();
-            if (json.success && json.data) {
-                state.currentUser = json.data;
-                localStorage.setItem('utc2_current_user', JSON.stringify(json.data));
-                showToast(`Đã chuyển sang tài khoản: ${json.data.name} (${json.data.role})`, 'success');
-                renderApp();
-            }
-        } catch (e) {
-            showToast('Không thể chuyển tài khoản', 'error');
+        showToast('Đã đăng xuất khỏi hệ thống', 'info');
+        if (!window.location.pathname.toLowerCase().includes('/account/login')) {
+            window.location.href = '/Account/Login';
+        } else {
+            renderApp();
         }
     }
 
@@ -201,64 +206,63 @@ const KtxApp = (function () {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    async function fetchApiData(url) {
+        const response = await fetch(url);
+        const json = await response.json();
+        if (!response.ok || !json.success) {
+            throw new Error(json.message || `Yêu cầu thất bại (${response.status})`);
+        }
+        return json.data;
+    }
+
+    function reportLoadFailure(message, error) {
+        console.error(message, error);
+        showToast(`${message}: ${error.message || 'lỗi không xác định'}`, 'error');
+    }
+
     // Data Loaders from C# API
     async function loadDashboard() {
         try {
-            const res = await fetch('/api/dashboard/summary');
-            const json = await res.json();
-            if (json.success) {
-                state.dashboardSummary = json.data;
-            }
+            state.dashboardSummary = await fetchApiData('/api/dashboard/summary');
         } catch (e) {
-            console.error(e);
+            state.dashboardSummary = null;
+            reportLoadFailure('Không tải được tổng quan', e);
         }
     }
 
     async function loadStudents() {
         try {
-            const res = await fetch('/api/sinhvien');
-            const json = await res.json();
-            if (json.success) {
-                state.students = json.data;
-            }
+            state.students = await fetchApiData('/api/sinhvien');
         } catch (e) {
-            console.error(e);
+            state.students = [];
+            reportLoadFailure('Không tải được danh sách sinh viên', e);
         }
     }
 
     async function loadContracts() {
         try {
-            const res = await fetch('/api/hopdong');
-            const json = await res.json();
-            if (json.success) {
-                state.contracts = json.data;
-            }
+            state.contracts = await fetchApiData('/api/hopdong');
         } catch (e) {
-            console.error(e);
+            state.contracts = [];
+            reportLoadFailure('Không tải được danh sách hợp đồng', e);
         }
     }
 
     async function loadApplications() {
         try {
-            const res = await fetch('/api/dondangky');
-            const json = await res.json();
-            if (json.success) {
-                state.applications = json.data;
-            }
+            state.applications = await fetchApiData('/api/dondangky');
         } catch (e) {
-            console.error(e);
+            state.applications = [];
+            reportLoadFailure('Không tải được danh sách đơn đăng ký', e);
         }
     }
 
     async function loadRooms() {
         try {
-            const res = await fetch('/api/phong');
-            const json = await res.json();
-            if (json.success) {
-                state.rooms = json.data;
-            }
+            state.rooms = await fetchApiData('/api/phong');
         } catch (e) {
-            console.error(e);
+            state.rooms = [];
+            reportLoadFailure('Không tải được sơ đồ phòng', e);
         }
     }
 
@@ -408,7 +412,7 @@ const KtxApp = (function () {
                     <div class="p-3 bg-[#0a1628] shrink-0 border-t border-white/5">
                         <div class="flex items-center justify-between p-2 rounded-xl bg-[#0f213b] border border-white/5">
                             <div class="flex items-center gap-2.5 min-w-0">
-                                <img src="${state.currentUser.avatar}" alt="${state.currentUser.name}" class="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-blue-400/40" />
+                                <span class="w-8 h-8 rounded-full shrink-0 ring-1 ring-blue-400/40 bg-blue-900 text-white flex items-center justify-center text-xs font-bold" aria-label="${state.currentUser.name}">${getUserInitial(state.currentUser.name)}</span>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">${state.currentUser.name}</div>
                                     <div class="text-[10px] text-blue-300 truncate">${state.currentUser.role}</div>
@@ -470,7 +474,7 @@ const KtxApp = (function () {
                     <!-- Profile Dropdown & Switcher -->
                     <div class="relative pl-1">
                         <button type="button" onclick="KtxApp.toggleProfileMenu()" class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                            <img src="${state.currentUser.avatar}" alt="${state.currentUser.name}" class="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+                            <span class="w-8 h-8 rounded-full ring-1 ring-slate-200 dark:ring-slate-700 bg-blue-100 dark:bg-blue-900 text-[#0B2A5B] dark:text-white flex items-center justify-center text-xs font-bold" aria-label="${state.currentUser.name}">${getUserInitial(state.currentUser.name)}</span>
                             <div class="hidden sm:flex flex-col text-left">
                                 <span class="text-xs font-bold text-slate-900 dark:text-white leading-tight">${state.currentUser.name}</span>
                                 <span class="text-[10px] text-slate-400">${state.currentUser.role}</span>
@@ -478,34 +482,8 @@ const KtxApp = (function () {
                             <span class="material-symbols-outlined text-[16px] text-slate-400">expand_more</span>
                         </button>
 
-                        <div id="profileDropdown" class="hidden absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-2xl p-2 z-50 animate-fade-in">
-                            <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-800 mb-1">
-                                <div class="text-xs font-bold text-slate-900 dark:text-white">${state.currentUser.name}</div>
-                                <div class="text-[11px] text-slate-400">${state.currentUser.email}</div>
-                                <div class="mt-1 text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">${state.currentUser.department}</div>
-                            </div>
-                            
-                            <div class="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Chuyển vai trò Demo</div>
-                            <div class="space-y-0.5">
-                                <button onclick="KtxApp.switchUser('ql_an')" class="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between">
-                                    <span>Nguyễn Văn An (Quản lý)</span>
-                                    ${state.currentUser.username === 'ql_an' ? '<span class="material-symbols-outlined text-[16px] text-blue-600">check</span>' : ''}
-                                </button>
-                                <button onclick="KtxApp.switchUser('kt_binh')" class="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between">
-                                    <span>Lê Thị Bình (Kế toán)</span>
-                                    ${state.currentUser.username === 'kt_binh' ? '<span class="material-symbols-outlined text-[16px] text-blue-600">check</span>' : ''}
-                                </button>
-                                <button onclick="KtxApp.switchUser('sv_minh')" class="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between">
-                                    <span>Trần Nhật Minh (Sinh viên)</span>
-                                    ${state.currentUser.username === 'sv_minh' ? '<span class="material-symbols-outlined text-[16px] text-blue-600">check</span>' : ''}
-                                </button>
-                                <button onclick="KtxApp.switchUser('admin')" class="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between">
-                                    <span>Nguyễn Hoàng (Admin)</span>
-                                    ${state.currentUser.username === 'admin' ? '<span class="material-symbols-outlined text-[16px] text-blue-600">check</span>' : ''}
-                                </button>
-                            </div>
-
-                            <div class="border-t border-slate-100 dark:border-slate-800 mt-2 pt-1">
+                        <div id="profileDropdown" class="hidden absolute right-0 mt-2 w-48 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-2xl p-2 z-50 animate-fade-in">
+                            <div class="border-t border-slate-100 dark:border-slate-800 pt-1">
                                 <button onclick="KtxApp.logout()" class="w-full text-left px-3 py-2 rounded-lg text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2">
                                     <span class="material-symbols-outlined text-[16px]">logout</span>
                                     <span>Đăng xuất</span>
@@ -582,7 +560,7 @@ const KtxApp = (function () {
                                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#98A2B3]">
                                         <span class="material-symbols-outlined text-[18px]">person</span>
                                     </div>
-                                    <input type="text" id="loginUsername" required value="ql_an" placeholder="Nhập mã nhân viên hoặc MSSV (vd: ql_an)" class="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                                    <input type="text" id="loginUsername" required autocomplete="username" placeholder="Nhập tài khoản hoặc mã số" class="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
                                 </div>
                             </div>
 
@@ -592,7 +570,7 @@ const KtxApp = (function () {
                                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#98A2B3]">
                                         <span class="material-symbols-outlined text-[18px]">key</span>
                                     </div>
-                                    <input type="password" id="loginPassword" required value="quanly123" placeholder="••••••••" class="w-full pl-10 pr-11 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                                    <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="Nhập mật khẩu" class="w-full pl-10 pr-11 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
                                 </div>
                             </div>
 
@@ -610,23 +588,16 @@ const KtxApp = (function () {
                             </button>
                         </form>
 
-                        <!-- Phân cách Tài khoản Demo -->
-                        <div class="relative my-8">
-                            <div class="absolute inset-0 flex items-center">
-                                <div class="w-full border-t border-[#E4E7EC] dark:border-[#232B3B]"></div>
+                        ${window.ktxDevelopmentBypassEnabled ? `
+                            <div class="mt-5 border-t border-slate-200 dark:border-slate-700 pt-5">
+                                <button type="button" onclick="KtxApp.skipLogin()" class="w-full py-3 px-4 rounded-xl border border-[#0B2A5B] dark:border-blue-400 text-[#0B2A5B] dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-semibold text-sm transition">
+                                    Bỏ qua đăng nhập — xem dữ liệu database
+                                </button>
+                                <p class="mt-2 text-center text-[11px] text-amber-700 dark:text-amber-300">
+                                    Chỉ dùng trong Development; các thao tác sẽ dùng dữ liệu thật.
+                                </p>
                             </div>
-                            <div class="relative flex justify-center text-xs uppercase">
-                                <span class="bg-white dark:bg-[#121826] px-3 text-[#98A2B3] font-semibold tracking-wider">Tài khoản demo nhanh</span>
-                            </div>
-                        </div>
-
-                        <!-- 4 Nút Demo Vai Trò -->
-                        <div class="flex flex-wrap items-center justify-center gap-2">
-                            <button type="button" onclick="KtxApp.fillDemo('ql_an', 'quanly123', 'Quản lý KTX')" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E4E7EC] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] hover:border-[#0B2A5B] transition shadow-xs">Quản lý KTX</button>
-                            <button type="button" onclick="KtxApp.fillDemo('kt_binh', 'ketoan123', 'Kế toán')" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E4E7EC] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] hover:border-[#0B2A5B] transition shadow-xs">Kế toán</button>
-                            <button type="button" onclick="KtxApp.fillDemo('sv_minh', 'sinhvien123', 'Sinh viên')" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E4E7EC] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] hover:border-[#0B2A5B] transition shadow-xs">Sinh viên</button>
-                            <button type="button" onclick="KtxApp.fillDemo('admin', 'admin123', 'Admin')" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E4E7EC] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] hover:border-[#0B2A5B] transition shadow-xs">Admin</button>
-                        </div>
+                        ` : ''}
 
                         <div class="mt-8 text-center">
                             <p class="text-xs text-[#667085] dark:text-slate-400">
@@ -650,19 +621,16 @@ const KtxApp = (function () {
                             </button>
                         </div>
                         <div class="py-4 space-y-3 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                            <p>Sinh viên chính quy Khóa mới (K65) và các khóa K62, K63, K64 có nguyện vọng lưu trú tại Ký túc xá UTC2 Phân hiệu TP.HCM nộp hồ sơ trực tuyến:</p>
+                            <p>Sinh viên chính quy có nguyện vọng lưu trú tại Ký túc xá UTC2 Phân hiệu TP.HCM thực hiện đăng ký theo hướng dẫn của Ban Quản lý:</p>
                             <ul class="list-disc pl-5 space-y-1.5 text-slate-700 dark:text-slate-200">
                                 <li><strong>Hồ sơ ưu tiên:</strong> Bản scan Giấy chứng nhận hộ nghèo, con thương binh hoặc học sinh vùng sâu (KV1).</li>
                                 <li><strong>Điểm xét tuyển:</strong> Điểm thi tuyển sinh hoặc điểm rèn luyện & GPA gần nhất.</li>
                                 <li><strong>Thời gian xử lý:</strong> Ban Quản lý duyệt và phản hồi trong vòng 24 - 48 giờ.</li>
                             </ul>
-                            <div class="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900/50 text-[#0B2A5B] dark:text-blue-300">
-                                Đang có đợt xét tuyển K65 với <strong>86 hồ sơ chờ duyệt</strong>. Bạn có thể đăng nhập bằng tài khoản <strong>Quản lý KTX</strong> để xem xét duyệt.
-                            </div>
                         </div>
                         <div class="flex justify-end pt-2">
-                            <button type="button" onclick="KtxApp.closeRegistrationModal(); KtxApp.fillDemo('ql_an', 'quanly123', 'Quản lý KTX')" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white font-semibold text-xs hover:bg-[#143F8C] transition-colors">
-                                Trải nghiệm với tài khoản Quản lý
+                            <button type="button" onclick="KtxApp.closeRegistrationModal()" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white font-semibold text-xs hover:bg-[#143F8C] transition-colors">
+                                Đóng
                             </button>
                         </div>
                     </div>
@@ -671,25 +639,21 @@ const KtxApp = (function () {
         `;
     }
 
-    function fillDemo(username, password, roleName) {
-        const u = document.getElementById('loginUsername');
-        const p = document.getElementById('loginPassword');
-        if (u) u.value = username;
-        if (p) p.value = password;
-        showToast(`Đã điền tài khoản: ${roleName}`, 'info');
-    }
-
     function initLoginHandlers() {
         const form = document.getElementById('loginForm');
         if (!form) return;
 
-        form.addEventListener('submit', async (event) => {
+        form.onsubmit = async (event) => {
             event.preventDefault();
             await handleLoginForm();
-        });
+        };
     }
 
+    let isLoggingIn = false;
+
     async function handleLoginForm() {
+        if (isLoggingIn) return false;
+
         const usernameInput = document.getElementById('loginUsername');
         const passwordInput = document.getElementById('loginPassword');
         const username = usernameInput ? usernameInput.value.trim() : '';
@@ -700,20 +664,23 @@ const KtxApp = (function () {
             return false;
         }
 
+        isLoggingIn = true;
         const btn = document.getElementById('loginSubmitBtn');
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Đang xác thực...</span>';
         }
 
-        const ok = await login(username, password);
-
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<span>Đăng nhập</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+        try {
+            const ok = await login(username, password);
+            return ok;
+        } finally {
+            isLoggingIn = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Đăng nhập</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+            }
         }
-
-        return ok;
     }
 
     // Active View Router
@@ -762,14 +729,14 @@ const KtxApp = (function () {
     // 1. Dashboard View Renderer
     function renderDashboardView() {
         const d = state.dashboardSummary || {
-            totalStudents: 3420,
-            totalCapacity: 3800,
-            occupancyPercent: 90.0,
-            totalFeeRevenue: 1280000000,
-            debtAmount: 210000000,
-            collectedPercent: 86,
-            pendingApplicationsCount: 48,
-            repairRequestsCount: 12,
+            totalStudents: 0,
+            totalCapacity: 0,
+            occupancyPercent: 0,
+            totalFeeRevenue: 0,
+            debtAmount: 0,
+            collectedPercent: 0,
+            pendingApplicationsCount: 0,
+            repairRequestsCount: 0,
             zoneOccupancies: [],
             urgentTasks: []
         };
@@ -921,7 +888,7 @@ const KtxApp = (function () {
                             <div class="grid grid-cols-3 gap-3 text-center">
                                 <div class="p-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-100 dark:border-[#232B3B]">
                                     <span class="text-[11px] text-slate-500 block uppercase tracking-wider font-semibold">Kế hoạch</span>
-                                    <span class="text-xl font-bold text-slate-900 dark:text-white mt-1 block">1,49 Tỷ</span>
+                                    <span class="text-xl font-bold text-slate-900 dark:text-white mt-1 block">${formatVND(d.totalFeeRevenue + d.debtAmount, true)}</span>
                                 </div>
                                 <div class="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
                                     <span class="text-[11px] text-[#0B2A5B] dark:text-blue-400 block uppercase tracking-wider font-semibold">Đã thu</span>
@@ -992,6 +959,9 @@ const KtxApp = (function () {
     // 2. Admissions View Renderer (Đợt & Đơn đăng ký)
     function renderAdmissionsView() {
         const apps = state.applications || [];
+        const approvedCount = apps.filter(a => a.status === 'Đã duyệt').length;
+        const pendingCount = apps.filter(a => a.status === 'Chờ duyệt').length;
+        const rejectedCount = apps.filter(a => a.status === 'Bị từ chối').length;
         let filtered = apps;
 
         if (state.admissionsTab !== 'all') {
@@ -1018,10 +988,10 @@ const KtxApp = (function () {
                 <div class="page-title-banner flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div>
                         <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Đợt & Đơn đăng ký</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Xét duyệt hồ sơ nhập túc xá tân sinh viên K65 và sinh viên tái đăng ký nội trú</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Xét duyệt các hồ sơ đăng ký lưu trú trong database</p>
                     </div>
                     <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
-                        <button type="button" onclick="KtxApp.exportReport('Đơn tuyển sinh K65')" class="h-10 px-4 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
+                        <button type="button" onclick="KtxApp.exportReport('Danh sách đơn đăng ký lưu trú')" class="h-10 px-4 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-[18px] text-slate-500">file_download</span>
                             <span>Xuất danh sách</span>
                         </button>
@@ -1043,11 +1013,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                420 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                                ${apps.length} <span class="text-sm font-normal text-slate-500">hồ sơ</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Chỉ tiêu 450 · Đạt 93.3%</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Tổng hồ sơ đăng ký trong cơ sở dữ liệu</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1061,11 +1031,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                312 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                                ${approvedCount} <span class="text-sm font-normal text-slate-500">hồ sơ</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Đã đóng phí: 289/312 SV (74.3%)</span>
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Đã được xét duyệt</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1079,11 +1049,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-[#0b2a5b] dark:text-blue-300 tracking-tight">
-                                86 <span class="text-sm font-normal text-slate-500">đơn chờ</span>
+                                ${pendingCount} <span class="text-sm font-normal text-slate-500">đơn chờ</span>
                             </div>
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
-                            <span>Thời gian xử lý TB &lt; 2.5h</span>
+                            <span>Hồ sơ đang chờ xử lý</span>
                             <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1097,11 +1067,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                22 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                                ${rejectedCount} <span class="text-sm font-normal text-slate-500">hồ sơ</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-slate-600 dark:text-slate-400 font-semibold">Tỷ lệ 5.2% · 3 đơn phúc khảo</span>
+                            <span class="text-slate-600 dark:text-slate-400 font-semibold">Hồ sơ bị từ chối</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1114,23 +1084,23 @@ const KtxApp = (function () {
                             state.admissionsTab === 'pending' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }">
                             <span>Chờ duyệt</span>
-                            <span class="px-1.5 py-0.2 rounded-full bg-white/20 text-white text-[10px] font-bold">86</span>
+                            <span class="px-1.5 py-0.2 rounded-full bg-white/20 text-white text-[10px] font-bold">${pendingCount}</span>
                         </button>
                         <button type="button" onclick="KtxApp.setAdmissionsTab('approved')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
                             state.admissionsTab === 'approved' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }">
                             <span>Đã duyệt</span>
-                            <span class="text-[11px] text-slate-400">312</span>
+                            <span class="text-[11px] text-slate-400">${approvedCount}</span>
                         </button>
                         <button type="button" onclick="KtxApp.setAdmissionsTab('rejected')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
                             state.admissionsTab === 'rejected' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }">
                             <span>Bị từ chối</span>
-                            <span class="text-[11px] text-slate-400">22</span>
+                            <span class="text-[11px] text-slate-400">${rejectedCount}</span>
                         </button>
                         <button type="button" onclick="KtxApp.setAdmissionsTab('all')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
                             state.admissionsTab === 'all' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }">Tất cả (420)</button>
+                        }">Tất cả (${apps.length})</button>
                     </div>
 
                     <div class="page-filter-search flex-1 flex items-center gap-2 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B]">
@@ -1170,7 +1140,7 @@ const KtxApp = (function () {
                                         <td class="py-3.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">${app.applicationCode}</td>
                                         <td class="py-3.5 px-4">
                                             <div class="flex items-center gap-3 min-w-[200px]">
-                                                <img src="${app.avatarUrl || 'https://lh3.googleusercontent.com/aida-public/AB6AXuApy05bQf0n4X_3prqg9yRnz1Up26ewX2j1XKbV6Xt4a-hJZehP0j72pEsQwNuUzh_nPoWXQGNOgFkC2Me0lALOeEj0dQADljvkwQMdtiZQzuASphPArI_NMYnujwIu8_vxfXfLlucOEC-ZSM50VINW56baL0PSL5VAHyQNPkgrhhNC18YFXZgdM9I51O-AR2Xn0aYBoy4fwCLeh5tLezRdOv5KlpxttMInEo_NnrWTT7t_2jRPIDcxwQ'}" alt="${app.studentName}" class="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-200" />
+                                                <span class="w-8 h-8 rounded-full shrink-0 ring-1 ring-slate-200 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xs font-bold">${getUserInitial(app.studentName)}</span>
                                                 <div class="flex flex-col min-w-0">
                                                     <span class="font-semibold text-slate-900 dark:text-white group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors truncate">${app.studentName}</span>
                                                     <span class="text-[11px] text-slate-400 font-mono">${app.mssv} • ${app.major}</span>
@@ -1186,7 +1156,7 @@ const KtxApp = (function () {
                                                 <span>${app.roomPreference}</span>
                                             </div>
                                         </td>
-                                        <td class="py-3.5 px-4 text-center font-bold text-base text-[#0B2A5B] dark:text-blue-400 font-headline">${app.scoreDX}</td>
+                                        <td class="py-3.5 px-4 text-center font-bold text-base text-[#0B2A5B] dark:text-blue-400 font-headline">${app.scoreDX ?? '—'}</td>
                                         <td class="py-3.5 px-4 text-slate-500 text-[11px]">${app.submittedAt}</td>
                                         <td class="py-3.5 px-4 text-right" onclick="event.stopPropagation()">
                                             ${app.status === 'Chờ duyệt' ? `
@@ -1216,6 +1186,9 @@ const KtxApp = (function () {
     // 3. Contracts View Renderer (Quản lý hợp đồng)
     function renderContractsView() {
         const contracts = state.contracts || [];
+        const validCount = contracts.filter(c => c.status === 'Hiệu lực').length;
+        const expiringCount = contracts.filter(c => c.status === 'Sắp hết hạn').length;
+        const endedCount = contracts.filter(c => c.status === 'Đã thanh lý').length;
         let filtered = contracts;
 
         if (state.contractsTab === 'valid') filtered = filtered.filter(c => c.status === 'Hiệu lực');
@@ -1240,9 +1213,9 @@ const KtxApp = (function () {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theo dõi thời hạn lưu trú, tiền cọc bảo lãnh và gia hạn tự động</p>
                     </div>
                     <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
-                        <button type="button" onclick="KtxApp.showToast('Đang quét và gửi thông báo gia hạn hàng loạt cho 45 hợp đồng sắp hết hạn!', 'info')" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-slate-100 dark:bg-[#1E293B] hover:bg-slate-200 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700">
+                        <button type="button" onclick="KtxApp.setContractsTab('expiring')" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-slate-100 dark:bg-[#1E293B] hover:bg-slate-200 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700">
                             <span class="material-symbols-outlined text-[18px] text-[#375ba9] dark:text-blue-400">update</span>
-                            <span>Gia hạn hàng loạt</span>
+                            <span>Xem sắp hết hạn (${expiringCount})</span>
                         </button>
                         <button type="button" onclick="KtxApp.openNewContractModal()" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs transition-all shadow-sm">
                             <span class="material-symbols-outlined text-[18px]">add_circle</span>
@@ -1262,11 +1235,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                3.240 <span class="text-sm font-normal text-slate-500">hợp đồng</span>
+                                ${validCount.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">hợp đồng</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Tỷ lệ bao phủ: 94.7% SV</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Đang hiệu lực</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1280,7 +1253,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
-                                45 <span class="text-sm font-normal text-slate-500">hợp đồng</span>
+                                ${expiringCount.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">hợp đồng</span>
                             </div>
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
@@ -1298,11 +1271,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                180 <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                                ${endedCount.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">hợp đồng</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-slate-600 dark:text-slate-400 font-semibold">Đã hoàn trả 100% tiền cọc</span>
+                            <span class="text-slate-600 dark:text-slate-400 font-semibold">Đã thanh lý hợp đồng</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1334,19 +1307,19 @@ const KtxApp = (function () {
                                 state.contractsTab === 'valid' ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
                             }">
                                 <span>Đang hiệu lực</span>
-                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold">3.240</span>
+                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold">${validCount}</span>
                             </button>
                             <button type="button" onclick="KtxApp.setContractsTab('expiring')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-2 ${
                                 state.contractsTab === 'expiring' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
                             }">
                                 <span>Sắp hết hạn</span>
-                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">45</span>
+                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">${expiringCount}</span>
                             </button>
                             <button type="button" onclick="KtxApp.setContractsTab('ended')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-2 ${
                                 state.contractsTab === 'ended' ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
                             }">
                                 <span>Đã thanh lý</span>
-                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700">180</span>
+                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700">${endedCount}</span>
                             </button>
                             <button type="button" onclick="KtxApp.setContractsTab('all')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all ${
                                 state.contractsTab === 'all' ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
@@ -1444,6 +1417,14 @@ const KtxApp = (function () {
     // 4. Students View Renderer (Hồ sơ Sinh viên)
     function renderStudentsView() {
         const students = state.students || [];
+        const cohorts = [...new Set(students.map(student => student.cohort).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'vi'));
+        const majors = [...new Set(students.map(student => student.major).filter(major => major && major !== '—'))]
+            .sort((a, b) => a.localeCompare(b, 'vi'));
+        const residents = students.filter(s => s.residenceStatus === 'Đang ở');
+        const maleResidents = residents.filter(s => s.gender === 'Nam').length;
+        const femaleResidents = residents.filter(s => s.gender === 'Nữ').length;
+        const nonResidentStudents = students.filter(s => s.residenceStatus !== 'Đang ở').length;
         let filtered = students;
 
         if (state.studentsCohort) {
@@ -1488,11 +1469,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                3.420 <span class="text-sm font-normal text-slate-500">sinh viên</span>
+                                ${residents.length.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">3.800 giường · Đạt 97.4% công suất</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Đang ở theo hợp đồng hiện có</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1506,11 +1487,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                1.950 <span class="text-sm font-normal text-slate-500">sinh viên</span>
+                                ${maleResidents.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">57% tổng nội trú · Tòa A1, A2, A3</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Nam sinh đang ở</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1524,29 +1505,29 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                1.470 <span class="text-sm font-normal text-slate-500">sinh viên</span>
+                                ${femaleResidents.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-pink-600 dark:text-pink-400 font-semibold">43% tổng nội trú · Tòa B1, B2</span>
+                            <span class="text-pink-600 dark:text-pink-400 font-semibold">Nữ sinh đang ở</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
 
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TẠM VẮNG / NGHỈ PHÉP</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">CHƯA NỘI TRÚ</span>
                             <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
                                 <span class="material-symbols-outlined text-[18px]">event_busy</span>
                             </div>
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
-                                18 <span class="text-sm font-normal text-slate-500">sinh viên</span>
+                                ${nonResidentStudents.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-amber-600 dark:text-amber-400 font-semibold">Có đơn duyệt · Điểm danh số</span>
+                            <span class="text-amber-600 dark:text-amber-400 font-semibold">Chưa có hợp đồng lưu trú hiệu lực</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1559,18 +1540,11 @@ const KtxApp = (function () {
                     <div class="flex flex-wrap items-center gap-2 shrink-0">
                         <select onchange="KtxApp.setStudentsCohort(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                             <option value="">Tất cả Khóa</option>
-                            <option value="k62">Khóa K62</option>
-                            <option value="k63">Khóa K63</option>
-                            <option value="k64" selected>Khóa K64</option>
-                            <option value="k65">Khóa K65</option>
+                            ${cohorts.map(cohort => `<option value="${cohort}" ${state.studentsCohort === cohort ? 'selected' : ''}>Khóa ${cohort}</option>`).join('')}
                         </select>
                         <select onchange="KtxApp.setStudentsMajor(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                             <option value="">Tất cả Khoa viện</option>
-                            <option value="cntt" selected>CNTT</option>
-                            <option value="cơ khí">Cơ khí</option>
-                            <option value="kinh tế">Kinh tế vận tải</option>
-                            <option value="công trình">Công trình</option>
-                            <option value="logistics">Logistics</option>
+                            ${majors.map(major => `<option value="${major}" ${state.studentsMajor === major ? 'selected' : ''}>${major}</option>`).join('')}
                         </select>
                         <button type="button" onclick="KtxApp.resetStudentsFilters()" class="p-2.5 rounded-xl border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-slate-500 hover:text-slate-900 transition-colors" title="Đặt lại bộ lọc">
                             <span class="material-symbols-outlined text-[18px]">filter_alt_off</span>
@@ -1601,7 +1575,7 @@ const KtxApp = (function () {
                                         <td class="py-3.5 px-4 font-mono font-semibold text-[#0B2A5B] dark:text-blue-400">${s.mssv}</td>
                                         <td class="py-3.5 px-4">
                                             <div class="flex items-center gap-2.5">
-                                                <img src="${s.avatarUrl}" alt="${s.name}" class="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-200" />
+                                                <span class="w-8 h-8 rounded-full shrink-0 ring-1 ring-slate-200 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xs font-bold">${getUserInitial(s.name)}</span>
                                                 <div class="flex flex-col min-w-0">
                                                     <span class="font-semibold text-slate-900 dark:text-white truncate">${s.name}</span>
                                                     <span class="text-[11px] text-slate-400">${s.className}</span>
@@ -1615,7 +1589,7 @@ const KtxApp = (function () {
                                         <td class="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-300">${s.phone}</td>
                                         <td class="py-3.5 px-4">${s.hometown}</td>
                                         <td class="py-3.5 px-4">
-                                            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.paymentStatus === 'Đủ' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}">${s.paymentStatus === 'Đủ' ? 'Đã đóng' : 'Nợ phí'}</span>
+                                            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.paymentStatus === 'Đủ' ? 'bg-emerald-50 text-emerald-700' : s.paymentStatus === 'Nợ' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}">${s.paymentStatus === 'Đủ' ? 'Đã đóng' : s.paymentStatus === 'Nợ' ? 'Nợ phí' : s.paymentStatus}</span>
                                         </td>
                                         <td class="py-3.5 px-4">
                                             <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.residenceStatus === 'Đang ở' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}">${s.residenceStatus}</span>
@@ -1643,6 +1617,11 @@ const KtxApp = (function () {
     // 5. Rooms View Renderer (Sơ đồ Phòng & Giường - Roster vs Grid view)
     function renderRoomsView() {
         const rooms = state.rooms || [];
+        const beds = rooms.flatMap(room => room.beds || []);
+        const occupiedBeds = beds.filter(bed => bed.status === 'Đang ở').length;
+        const vacantBeds = beds.filter(bed => bed.status === 'Giường trống').length;
+        const maintenanceBeds = beds.filter(bed => bed.status === 'Bảo trì').length;
+        const occupancyRate = beds.length ? Math.round(occupiedBeds / beds.length * 100) : 0;
         const isGrid = state.roomsViewMode === 'grid';
         const buildings = [...new Set(rooms.map(room => room.buildingId).filter(Boolean))].sort();
         const filteredByBuilding = state.roomsBuilding === 'all'
@@ -1691,11 +1670,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                48 <span class="text-sm font-normal text-slate-500">phòng</span>
+                                ${rooms.length.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">phòng</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">5 tòa KTX sinh viên (A, B, C)</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">${buildings.length} tòa nhà</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1709,11 +1688,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                384 <span class="text-sm font-normal text-slate-500">giường</span>
+                                ${beds.length.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">giường</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Tỷ lệ lấp đầy bình quân 89%</span>
+                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Tỷ lệ lấp đầy ${occupancyRate}%</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1727,11 +1706,11 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight">
-                                342 <span class="text-sm font-normal text-slate-500">sinh viên</span>
+                                ${occupiedBeds.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Hiện còn trống 38 chỗ</span>
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Còn trống ${vacantBeds.toLocaleString('vi-VN')} giường</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -1745,7 +1724,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
-                                4 <span class="text-sm font-normal text-slate-500">giường</span>
+                                ${maintenanceBeds.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">giường</span>
                             </div>
                         </div>
                         <div class="text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
@@ -1810,7 +1789,7 @@ const KtxApp = (function () {
     }
 
     function renderRoomsGridView(rooms) {
-        const buildings = ['A01', 'A02', 'B01', 'B02', 'C01'];
+        const buildings = [...new Set(rooms.map(room => room.buildingId).filter(Boolean))].sort();
         return `
             <div class="space-y-6">
                 ${buildings.map(bId => {
@@ -1899,7 +1878,7 @@ const KtxApp = (function () {
                                     <td class="py-3.5 px-4 font-mono font-semibold text-[#0B2A5B] dark:text-blue-400">${s.mssv}</td>
                                     <td class="py-3.5 px-4">
                                         <div class="flex items-center gap-2.5 min-w-[190px]">
-                                            <img src="${s.avatarUrl}" alt="${s.name}" class="w-7 h-7 rounded-full object-cover shrink-0 ring-1 ring-slate-200" />
+                                            <span class="w-7 h-7 rounded-full shrink-0 ring-1 ring-slate-200 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-[10px] font-bold">${getUserInitial(s.name)}</span>
                                             <div class="min-w-0">
                                                 <div class="font-semibold text-slate-900 dark:text-white leading-tight truncate">${s.name}</div>
                                                 <div class="text-[11px] text-slate-400 truncate">${s.className}</div>
@@ -1917,7 +1896,7 @@ const KtxApp = (function () {
                                     </td>
                                     <td class="py-3.5 px-3 text-slate-500 text-[11px]">${s.admissionDate}</td>
                                     <td class="py-3.5 px-3">
-                                        <span class="px-2 py-0.5 rounded-full text-[11px] font-medium ${s.paymentStatus === 'Đủ' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}">${s.paymentStatus === 'Đủ' ? 'Đã đóng' : 'Nợ phí'}</span>
+                                        <span class="px-2 py-0.5 rounded-full text-[11px] font-medium ${s.paymentStatus === 'Đủ' ? 'bg-emerald-50 text-emerald-700' : s.paymentStatus === 'Nợ' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}">${s.paymentStatus === 'Đủ' ? 'Đã đóng' : s.paymentStatus === 'Nợ' ? 'Nợ phí' : s.paymentStatus}</span>
                                     </td>
                                     <td class="py-3.5 px-3">
                                         <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${s.residenceStatus === 'Đang ở' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}">${s.residenceStatus}</span>
@@ -1942,6 +1921,11 @@ const KtxApp = (function () {
     function openNewContractModal() {
         const container = document.getElementById('modalsContainer');
         if (!container) return;
+        const students = (state.students || []).filter(student => student.mssv);
+        const availableBeds = (state.rooms || []).flatMap(room =>
+            (room.beds || [])
+                .filter(bed => bed.status === 'Giường trống')
+                .map(bed => ({ ...bed, room })));
         container.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
                 <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B] animate-fade-in">
@@ -1956,48 +1940,41 @@ const KtxApp = (function () {
                     </div>
 
                     <form onsubmit="event.preventDefault(); KtxApp.submitNewContract();" class="py-4 space-y-4 text-xs">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Họ và tên sinh viên</label>
-                                <input type="text" id="ncStudentName" required value="Trần Văn Bình" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0B2A5B]" />
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">MSSV</label>
-                                <input type="text" id="ncMssv" required value="2451080099" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0B2A5B]" />
-                            </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Sinh viên</label>
+                            <select id="ncMssv" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="">Chọn sinh viên</option>
+                                ${students.map(student => `<option value="${student.mssv}">${student.name} · ${student.mssv}</option>`).join('')}
+                            </select>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Phòng</label>
-                                <select id="ncRoomNumber" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
-                                    <option value="A101">A101 (Tòa A)</option>
-                                    <option value="A102" selected>A102 (Tòa A)</option>
-                                    <option value="A205">A205 (Tòa A)</option>
-                                    <option value="B208">B208 (Tòa B)</option>
-                                    <option value="C102">C102 (Tòa C)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Vị trí giường</label>
-                                <select id="ncBedNumber" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
-                                    <option value="G01">G01 (Tầng dưới)</option>
-                                    <option value="G02">G02 (Tầng trên)</option>
-                                    <option value="G03">G03 (Tầng dưới)</option>
-                                    <option value="G04">G04 (Tầng trên)</option>
-                                    <option value="G05" selected>G05 (Tầng dưới)</option>
-                                </select>
-                            </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giường còn trống</label>
+                            <select id="ncBedId" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="">Chọn giường</option>
+                                ${availableBeds.map(bed => `<option value="${bed.id}">${bed.room.buildingId}-${bed.room.roomNumber} · ${bed.bedNumber}</option>`).join('')}
+                            </select>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tiền phòng / tháng (VND)</label>
-                                <input type="number" id="ncMonthlyFee" value="500000" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
+                                <input type="number" id="ncMonthlyFee" required min="0.01" step="0.01" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
                             </div>
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tiền cọc giữ chỗ (VND)</label>
-                                <input type="number" id="ncDepositAmount" value="500000" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
+                                <input type="number" id="ncDepositAmount" required min="0" step="0.01" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày bắt đầu</label>
+                                <input type="date" id="ncStartDate" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày kết thúc</label>
+                                <input type="date" id="ncEndDate" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
                             </div>
                         </div>
 
@@ -2016,26 +1993,24 @@ const KtxApp = (function () {
     }
 
     async function submitNewContract() {
-        const studentName = document.getElementById('ncStudentName').value;
         const mssv = document.getElementById('ncMssv').value;
-        const roomNumber = document.getElementById('ncRoomNumber').value;
-        const bedNumber = document.getElementById('ncBedNumber').value;
-        const monthlyFee = parseFloat(document.getElementById('ncMonthlyFee').value) || 500000;
-        const depositAmount = parseFloat(document.getElementById('ncDepositAmount').value) || 500000;
+        const bedId = document.getElementById('ncBedId').value;
+        const monthlyFee = Number(document.getElementById('ncMonthlyFee').value);
+        const depositAmount = Number(document.getElementById('ncDepositAmount').value);
+        const startDate = document.getElementById('ncStartDate').value;
+        const endDate = document.getElementById('ncEndDate').value;
 
         try {
             const res = await fetch('/api/hopdong', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    studentName,
                     mssv,
-                    roomNumber,
-                    bedNumber,
+                    bedId,
                     monthlyFee,
                     depositAmount,
-                    startDate: '01/10/2026',
-                    endDate: '30/06/2027'
+                    startDate,
+                    endDate
                 })
             });
             const json = await res.json();
@@ -2067,7 +2042,7 @@ const KtxApp = (function () {
                     <div class="w-full max-w-xl bg-white dark:bg-[#121826] rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B] animate-fade-in">
                         <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
                             <div class="flex items-center gap-3">
-                                <img src="${s.avatarUrl}" alt="${s.name}" class="w-14 h-14 rounded-full object-cover ring-2 ring-[#0B2A5B]/30" />
+                                <span class="w-14 h-14 rounded-full ring-2 ring-[#0B2A5B]/30 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xl font-bold">${getUserInitial(s.name)}</span>
                                 <div>
                                     <h3 class="text-lg font-bold text-slate-900 dark:text-white">${s.name}</h3>
                                     <p class="text-xs text-slate-500 font-mono">MSSV: ${s.mssv} • ${s.className}</p>
@@ -2107,8 +2082,8 @@ const KtxApp = (function () {
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-slate-400">Tình trạng nộp phí:</span>
-                                    <span class="font-semibold ${s.paymentStatus === 'Đủ' ? 'text-emerald-600' : 'text-red-600'}">
-                                        ${s.paymentStatus === 'Đủ' ? 'Đã hoàn tất phí KTX' : 'Còn nợ phí'}
+                                    <span class="font-semibold ${s.paymentStatus === 'Đủ' ? 'text-emerald-600' : s.paymentStatus === 'Nợ' ? 'text-red-600' : 'text-slate-500'}">
+                                        ${s.paymentStatus === 'Đủ' ? 'Đã hoàn tất phí KTX' : s.paymentStatus === 'Nợ' ? 'Còn nợ phí' : s.paymentStatus}
                                     </span>
                                 </div>
                             </div>
@@ -2360,25 +2335,13 @@ const KtxApp = (function () {
     }
 
     async function actionTask(taskId, taskType) {
-        try {
-            await fetch(`/api/dashboard/tasks/${taskId}/resolve`, { method: 'POST' });
-            if (taskType === 'application') {
-                showToast('Đã duyệt đơn đăng ký khẩn! Đang tạo hồ sơ nội trú.', 'success');
-            } else if (taskType === 'repair') {
-                showToast('Đã điều phối đội ngũ thợ điện nước khắc phục sự cố!', 'info');
-            } else if (taskType === 'debt') {
-                showToast('Đã gửi thông báo nhắc nợ tự động đến ban cán sự phòng!', 'info');
-            } else if (taskType === 'checkout') {
-                navigate('phong-va-giuong');
-                showToast('Chuyển đến sơ đồ buồng phòng kiểm tra thủ tục trả phòng!', 'info');
-                return;
-            } else {
-                showToast('Đã ghi nhận xử lý biên bản vi phạm kỷ luật KTX!', 'success');
-            }
-            await loadDashboard();
-            if (state.currentTab === 'dashboard') renderActiveView();
-        } catch (e) {
-            console.error(e);
+        if (taskType === 'application') {
+            state.admissionsTab = 'pending';
+            navigate('don-dang-ky');
+        } else if (taskType === 'repair') {
+            navigate('sua-chua');
+        } else {
+            showToast('Không hỗ trợ thao tác cho đầu việc này', 'error');
         }
     }
 
@@ -2412,7 +2375,8 @@ const KtxApp = (function () {
     }
 
     function showNotificationToast() {
-        showToast('Có 86 hồ sơ K65 đang chờ duyệt và 1 yêu cầu sửa vòi nước khẩn cấp tại phòng A302', 'info');
+        const taskCount = state.dashboardSummary?.urgentTasks?.filter(task => !task.completed).length || 0;
+        showToast(taskCount ? `Có ${taskCount} đầu việc cần xử lý` : 'Hiện không có đầu việc cần xử lý', 'info');
     }
 
     function openSearch() {
@@ -2436,7 +2400,7 @@ const KtxApp = (function () {
                             </button>
                             <button onclick="KtxApp.navigate('don-dang-ky'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">how_to_reg</span>
-                                <span>Xét duyệt đơn K65</span>
+                                <span>Xét duyệt đơn đăng ký</span>
                             </button>
                             <button onclick="KtxApp.navigate('hop-dong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">edit_document</span>
@@ -2626,9 +2590,8 @@ const KtxApp = (function () {
         closeSearch,
         handlePaletteInput,
         showToast,
-        fillDemo,
         handleLoginForm,
-        switchUser,
+        skipLogin,
         logout,
         openRegistrationModal,
         closeRegistrationModal,

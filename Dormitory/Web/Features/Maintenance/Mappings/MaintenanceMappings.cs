@@ -7,10 +7,10 @@ namespace Dormitory.Web.Features.Maintenance.Mappings
     {
         public static MaintenanceTicketDto ToMaintenanceTicketDto(this YeuCauSuaChua t)
         {
-            string bld = t.Phong?.MaToaNha ?? "A2";
-            string roomLabel = t.Phong != null ? $"{t.Phong.MaToaNha}-{t.Phong.MaPhong.Split('_').Last()}" : "A2-308";
-            string rep = t.SinhVienGui?.HoTen ?? "Lê Quốc Bảo";
-            string phone = t.SinhVienGui?.DienThoai ?? "0918.442.190";
+            string bld = t.Phong?.MaToaNha ?? string.Empty;
+            string roomLabel = t.Phong != null ? $"{t.Phong.MaToaNha}-{t.Phong.MaPhong.Split('_').Last()}" : string.Empty;
+            string rep = t.SinhVienGui?.HoTen ?? string.Empty;
+            string phone = t.SinhVienGui?.DienThoai ?? string.Empty;
 
             string cat = "Điện dân dụng";
             if (t.MoTa.Contains("nước") || t.MoTa.Contains("lavabo") || t.MoTa.Contains("van")) cat = "Nước / Vệ sinh";
@@ -30,7 +30,7 @@ namespace Dormitory.Web.Features.Maintenance.Mappings
             return new MaintenanceTicketDto
             {
                 Id = t.MaYeuCau.ToString(),
-                Code = $"SC-{2600 + t.MaYeuCau}",
+                Code = $"SC-{t.MaYeuCau:D6}",
                 Room = roomLabel,
                 Building = bld,
                 Category = cat,
@@ -46,4 +46,3 @@ namespace Dormitory.Web.Features.Maintenance.Mappings
         }
     }
 }
-

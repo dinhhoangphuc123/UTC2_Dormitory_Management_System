@@ -10,8 +10,8 @@ namespace Dormitory.Web.Features.Staff.Mappings
             var tk = n.TaiKhoan;
             var vt = tk?.VaiTro;
 
-            string dKey = "bql";
-            string dept = "Ban Quản trị KTX";
+            string dKey = "other";
+            string dept = "Chưa phân công";
             string pos = n.ChucVu;
 
             if (pos.Contains("Giám thị")) { dKey = "gt"; dept = "Tổ Giám thị & Sinh viên"; }
@@ -19,14 +19,13 @@ namespace Dormitory.Web.Features.Staff.Mappings
             else if (pos.Contains("Kế toán") || pos.Contains("Thu chi")) { dKey = "tc"; dept = "Tổ Thu chi & Hóa đơn"; }
             else if (pos.Contains("Bảo vệ") || pos.Contains("An ninh")) { dKey = "bv"; dept = "Tổ An ninh Trật tự"; }
 
-            string rName = vt?.TenVaiTro ?? (n.MaNhanVien == "NV001" ? "System Admin" : "Ban Quản lý");
-            string rKey = rName switch
+            string rName = vt?.TenVaiTro ?? "Chưa phân quyền";
+            string rKey = vt?.MaVaiTro switch
             {
-                "System Admin" => "admin",
-                "Kỹ thuật viên" => "operator",
-                "Kế toán" => "operator",
-                "Chỉ xem (Viewer)" => "viewer",
-                _ => "manager"
+                "admin" => "admin",
+                "quanLy" => "manager",
+                "keToan" or "nhanVien" => "operator",
+                _ => "other"
             };
 
             bool isActive = (tk == null || tk.LaDangHoat) && n.TrangThai == "dangLam";
@@ -44,46 +43,17 @@ namespace Dormitory.Web.Features.Staff.Mappings
                 Code = n.MaNhanVien.StartsWith("NV-") ? n.MaNhanVien : $"NV-{n.MaNhanVien}",
                 Name = n.HoTen,
                 AvatarText = string.IsNullOrEmpty(initials) ? "NV" : initials,
-                LastLogin = tk?.LanDangNhapCuoi?.ToString("dd/MM/yyyy HH:mm") ?? "10 phút trước",
+                LastLogin = tk?.LanDangNhapCuoi?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa đăng nhập",
                 Position = n.ChucVu,
                 Department = dept,
                 DepartmentKey = dKey,
-                ManagedArea = n.ToaNhaPhuTrach != null ? $"Tòa {n.ToaNhaPhuTrach.MaToaNha}" : "Toàn bộ KTX",
-                Phone = n.DienThoai ?? "0918.234.567",
-                Email = n.Email ?? $"{n.MaNhanVien.ToLower()}@utc2.edu.vn",
+                ManagedArea = n.ToaNhaPhuTrach != null ? $"Tòa {n.ToaNhaPhuTrach.MaToaNha}" : "Chưa phân công",
+                Phone = n.DienThoai ?? "—",
+                Email = n.Email ?? "—",
                 Role = rName,
                 RoleKey = rKey,
                 Status = isActive ? "active" : "locked"
             };
         }
-
-        public static StaffItemDto ToStaffItemDto(this NhanVien entity, CreateStaffDto req)
-        {
-            string initials = string.Concat(
-                req.Name.Trim()
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .TakeLast(2)
-                    .Select(w => char.ToUpper(w[0]))
-            );
-
-            return new StaffItemDto
-            {
-                Id = entity.MaNhanVien,
-                Code = entity.MaNhanVien,
-                Name = req.Name,
-                AvatarText = string.IsNullOrEmpty(initials) ? "NV" : initials,
-                LastLogin = "Chưa đăng nhập",
-                Position = req.Position,
-                Department = req.Department,
-                DepartmentKey = req.DepartmentKey,
-                ManagedArea = req.ManagedArea,
-                Phone = req.Phone,
-                Email = req.Email,
-                Role = req.Role,
-                RoleKey = req.Role == "System Admin" ? "admin" : "manager",
-                Status = "active"
-            };
-        }
     }
 }
-

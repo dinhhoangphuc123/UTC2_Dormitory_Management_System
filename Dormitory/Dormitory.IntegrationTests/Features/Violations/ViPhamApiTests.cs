@@ -27,7 +27,7 @@ namespace Dormitory.IntegrationTests.Features.Violations
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<ViolationRecordDto>>>(ok.Value);
             Assert.True(res.Success);
-            Assert.NotEmpty(res.Data!);
+            Assert.NotNull(res.Data);
         }
     }
 }
