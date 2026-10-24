@@ -5,9 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Dormitory.Web</RootNamespace>
+    <UserSecretsId>d291e7d5-0e6c-407c-8f19-24470ffc1c65</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>

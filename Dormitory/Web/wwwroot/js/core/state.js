@@ -5,7 +5,7 @@ const State = {
     currentUser: null,
     currentTab: 'dashboard',
     darkMode: localStorage.getItem('ktx_dark_mode') === 'true',
-    selectedSemester: 'Năm học 2026-2027 · HK1',
+    selectedSemester: localStorage.getItem('ktx_selected_semester') || null,
     listeners: [],
 
     subscribe(fn) {
@@ -21,6 +21,12 @@ const State = {
         this.notify();
     },
 
+    setSemester(code) {
+        this.selectedSemester = code;
+        localStorage.setItem('ktx_selected_semester', code || '');
+        this.notify();
+    },
+
     toggleDarkMode() {
         this.darkMode = !this.darkMode;
         localStorage.setItem('ktx_dark_mode', this.darkMode);
@@ -30,4 +36,3 @@ const State = {
 };
 
 window.State = State;
-

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * KTX UTC2 - Application Frontend Controller
  * Connects directly to C# .NET Core Web APIs
  */
@@ -8,8 +8,11 @@ const KtxApp = (function () {
     const state = {
         currentUser: null,
         currentTab: 'dashboard',
+        authMode: 'login',
+        resetUsername: null,
+        resetCode: null,
         darkMode: false,
-        selectedSemester: 'Năm học 2026-2027 · HK1',
+        selectedSemester: null,
         isMobileMenuOpen: false,
         isSearchOpen: false,
         toasts: [],
@@ -241,10 +244,10 @@ const KtxApp = (function () {
 
     async function loadContracts() {
         try {
-            state.contracts = await fetchApiData('/api/hopdong');
+            const sem = state.selectedSemester ? `&semester=${encodeURIComponent(state.selectedSemester)}` : '';
+            state.contracts = await fetchApiData(`/api/hopdong?${sem}`);
         } catch (e) {
             state.contracts = [];
-            reportLoadFailure('Không tải được danh sách hợp đồng', e);
         }
     }
 
@@ -448,14 +451,13 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- Right: Semester, Dark mode, Notifications, Profile -->
-                <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 ml-3">
+                <div class="flex items-center gap-2 sm:gap-3 ml-3 shrink-0">
                     <!-- Semester Selector -->
-                    <div class="relative hidden md:block flex-1 min-w-0">
-                        <button type="button" onclick="KtxApp.toggleSemesterMenu()" class="flex w-full items-center justify-between gap-1.5 h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-2xs">
-                            <span class="material-symbols-outlined text-[17px] text-[#0B2A5B] dark:text-blue-400">calendar_today</span>
-                            <span class="truncate flex-1 text-left">${state.selectedSemester}</span>
-                            <span class="material-symbols-outlined text-[16px] text-slate-400">expand_more</span>
-                        </button>
+                    <div class="relative hidden md:flex items-center gap-2 shrink-0">
+                        <select id="semesterSelect" onchange="KtxApp.changeSemester(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold max-w-[180px]">
+                            <option value="">Chọn kỳ học</option>
+                        </select>
+                        <button type="button" onclick="KtxApp.toggleSemesterMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold">Quản lý</button>
                     </div>
 
                     <!-- Dark Mode Button -->
@@ -465,10 +467,19 @@ const KtxApp = (function () {
 
                     <!-- Notifications Dropdown -->
                     <div class="relative">
-                        <button type="button" onclick="KtxApp.showNotificationToast()" class="relative w-10 h-10 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shadow-2xs" title="Thông báo hệ thống">
+                        <button type="button" onclick="KtxApp.toggleNotifications()" class="relative w-10 h-10 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shadow-2xs" title="Thông báo hệ thống">
                             <span class="material-symbols-outlined text-[20px]">notifications</span>
-                            <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                            <span id="notifBadge" class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                         </button>
+                        <div id="notificationDropdown" class="hidden absolute right-0 mt-2 w-80 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-2xl p-3 z-50 animate-fade-in">
+                            <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                                <span class="text-xs font-bold text-slate-800 dark:text-white">Thông báo</span>
+                                <button onclick="KtxApp.closeNotifications()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[16px]">close</span></button>
+                            </div>
+                            <div id="notificationList" class="max-h-72 overflow-y-auto py-2 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                                <div class="text-center text-slate-400 py-4">Đang tải...</div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Profile Dropdown & Switcher -->
@@ -476,7 +487,7 @@ const KtxApp = (function () {
                         <button type="button" onclick="KtxApp.toggleProfileMenu()" class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                             <span class="w-8 h-8 rounded-full ring-1 ring-slate-200 dark:ring-slate-700 bg-blue-100 dark:bg-blue-900 text-[#0B2A5B] dark:text-white flex items-center justify-center text-xs font-bold" aria-label="${state.currentUser.name}">${getUserInitial(state.currentUser.name)}</span>
                             <div class="hidden sm:flex flex-col text-left">
-                                <span class="text-xs font-bold text-slate-900 dark:text-white leading-tight">${state.currentUser.name}</span>
+                                <span class="text-xs font-bold text-slate-900 dark:text-white leading-tight max-w-[140px] truncate">${state.currentUser.name}</span>
                                 <span class="text-[10px] text-slate-400">${state.currentUser.role}</span>
                             </div>
                             <span class="material-symbols-outlined text-[16px] text-slate-400">expand_more</span>
@@ -549,6 +560,39 @@ const KtxApp = (function () {
                 <!-- CỘT PHẢI (45%): Form Đăng nhập & Nút Demo -->
                 <div class="lg:w-[45%] flex flex-col justify-center px-6 sm:px-12 xl:px-16 py-12 bg-white dark:bg-[#121826] transition-colors duration-200">
                     <div class="w-full max-w-md mx-auto">
+                        ${state.authMode === 'reset' ? `
+                        <div class="mb-8">
+                            <h2 class="text-2xl sm:text-3xl font-bold text-[#0B0F1A] dark:text-white">Đặt lại mật khẩu</h2>
+                        </div>
+                        <form id="resetForm" class="space-y-5">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">Mã xác nhận</label>
+                                <input type="text" id="resetCode" required class="w-full px-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">Mật khẩu mới</label>
+                                <input type="password" id="resetPassword" required class="w-full px-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                            </div>
+                            <button type="submit" onclick="event.preventDefault(); KtxApp.submitResetForm();" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-sm shadow-sm transition">Đặt lại</button>
+                            <div class="mt-4 text-center text-xs text-[#667085] dark:text-slate-400">
+                                <button type="button" onclick="KtxApp.setAuthMode('login'); KtxApp.renderApp();" class="font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Quay lại đăng nhập</button>
+                            </div>
+                        </form>
+                        ` : state.authMode === 'forgot' ? `
+                        <div class="mb-8">
+                            <h2 class="text-2xl sm:text-3xl font-bold text-[#0B0F1A] dark:text-white">Quên mật khẩu</h2>
+                        </div>
+                        <form id="forgotForm" class="space-y-5">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">Tên đăng nhập / Email</label>
+                                <input type="text" id="forgotUsername" required class="w-full px-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                            </div>
+                            <button type="submit" onclick="event.preventDefault(); KtxApp.submitForgotForm();" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-sm shadow-sm transition">Gửi mã xác nhận</button>
+                            <div class="mt-4 text-center text-xs text-[#667085] dark:text-slate-400">
+                                <button type="button" onclick="KtxApp.setAuthMode('login'); KtxApp.renderApp();" class="font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Quay lại đăng nhập</button>
+                            </div>
+                        </form>
+                        ` : `
                         <div class="mb-8">
                             <h2 class="text-2xl sm:text-3xl font-bold text-[#0B0F1A] dark:text-white">Đăng nhập</h2>
                         </div>
@@ -579,7 +623,7 @@ const KtxApp = (function () {
                                     <input type="checkbox" checked class="w-4 h-4 rounded border-[#E4E7EC] text-[#0B2A5B] focus:ring-[#0B2A5B]" />
                                     <span class="text-xs text-[#667085] dark:text-slate-400 font-medium">Ghi nhớ đăng nhập</span>
                                 </label>
-                                <button type="button" onclick="alert('Vui lòng liên hệ Văn phòng Quản lý KTX UTC2 (Phòng 102 - Tòa A) hoặc hotline 028.3896.6780 để cấp lại mật khẩu.')" class="text-xs font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Quên mật khẩu?</button>
+                                <button type="button" onclick="KtxApp.setAuthMode('forgot'); KtxApp.renderApp();" class="text-xs font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Quên mật khẩu?</button>
                             </div>
 
                             <button type="submit" id="loginSubmitBtn" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] active:scale-[0.99] text-white font-semibold text-sm shadow-sm transition flex items-center justify-center gap-2" style="background-color:#0B2A5B">
@@ -599,12 +643,9 @@ const KtxApp = (function () {
                             </div>
                         ` : ''}
 
-                        <div class="mt-8 text-center">
-                            <p class="text-xs text-[#667085] dark:text-slate-400">
-                                Chưa có tài khoản?
-                                <button type="button" onclick="KtxApp.openRegistrationModal()" class="font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Đăng ký nội trú</button>
-                            </p>
-                        </div>
+                    </div>
+                </div>
+                        `}
                     </div>
                 </div>
 
@@ -636,6 +677,8 @@ const KtxApp = (function () {
                     </div>
                 </div>
             </div>
+            <div id="modalsContainer"></div>
+            <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
         `;
     }
 
@@ -768,7 +811,7 @@ const KtxApp = (function () {
                 <!-- 2. Hàng 4 Chỉ số KPI Cốt Lõi -->
                 <section class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <!-- KPI 1 -->
-                    <div onclick="KtxApp.navigate('sinh-vien')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">SINH VIÊN NỘI TRÚ</span>
                             <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#0b2a5b] dark:text-blue-400">
@@ -787,7 +830,7 @@ const KtxApp = (function () {
                     </div>
 
                     <!-- KPI 2 -->
-                    <div onclick="KtxApp.navigate('hoa-don')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">THU PHÍ THÁNG</span>
                             <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#375ba9] dark:text-blue-400">
@@ -809,7 +852,7 @@ const KtxApp = (function () {
                     </div>
 
                     <!-- KPI 3 -->
-                    <div onclick="KtxApp.navigate('don-dang-ky')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐƠN CHỜ DUYỆT</span>
                             <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
@@ -828,7 +871,7 @@ const KtxApp = (function () {
                     </div>
 
                     <!-- KPI 4 -->
-                    <div onclick="KtxApp.showToast('Mở trung tâm điều phối kỹ thuật & bảo trì sự cố', 'info')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">YÊU CẦU SỬA CHỮA</span>
                             <div class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-red-600 dark:text-red-400">
@@ -995,7 +1038,7 @@ const KtxApp = (function () {
                             <span class="material-symbols-outlined text-[18px] text-slate-500">file_download</span>
                             <span>Xuất danh sách</span>
                         </button>
-                        <button type="button" onclick="KtxApp.showToast('Mở form tạo đợt đăng ký mới cho học kỳ tiếp theo', 'info')" class="h-10 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs transition-all shadow-sm flex items-center gap-1.5">
+                        <button type="button" onclick="KtxApp.openCreateRoundModal()" class="h-10 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs transition-all shadow-sm flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-[18px]">add</span>
                             <span>Tạo đợt mới</span>
                         </button>
@@ -1022,7 +1065,7 @@ const KtxApp = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxApp.setAdmissionsTab('approved')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">HỒ SƠ ĐÃ DUYỆT</span>
                             <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -1040,7 +1083,7 @@ const KtxApp = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxApp.setAdmissionsTab('pending')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">CHỜ XÉT DUYỆT</span>
                             <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
@@ -1058,7 +1101,7 @@ const KtxApp = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxApp.setAdmissionsTab('rejected')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỪ CHỐI / HỦY</span>
                             <div class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
@@ -1226,7 +1269,7 @@ const KtxApp = (function () {
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
                 <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div onclick="KtxApp.setContractsTab('valid')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">HỢP ĐỒNG ĐANG HIỆU LỰC</span>
                             <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#0b2a5b] dark:text-blue-400">
@@ -1244,7 +1287,7 @@ const KtxApp = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxApp.setContractsTab('expiring')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">SẮP HẾT HẠN (≤ 15 NGÀY)</span>
                             <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
@@ -1262,7 +1305,7 @@ const KtxApp = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxApp.setContractsTab('ended')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐÃ THANH LÝ TRẢ PHÒNG</span>
                             <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
@@ -1280,7 +1323,7 @@ const KtxApp = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxApp.navigate('hoa-don')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG TIỀN CỌC GIỮ</span>
                             <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -1447,11 +1490,11 @@ const KtxApp = (function () {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý thông tin, tình trạng nội trú và hồ sơ sinh viên</p>
                     </div>
                     <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
-                        <button type="button" onclick="KtxApp.exportReport('Danh sách Sinh viên')" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700">
+                        <button type="button" onclick="KtxApp.importStudentsExcel()" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700">
                             <span class="material-symbols-outlined text-[18px] text-slate-500">upload_file</span>
                             <span>Nhập Excel</span>
                         </button>
-                        <button type="button" onclick="KtxApp.showToast('Mở biểu mẫu tiếp nhận sinh viên mới vào KTX', 'info')" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs transition-all shadow-sm">
+                        <button type="button" onclick="KtxApp.openCreateStudentModal()" class="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs transition-all shadow-sm">
                             <span class="material-symbols-outlined text-[18px]">person_add</span>
                             <span>Tiếp nhận SV mới</span>
                         </button>
@@ -1652,8 +1695,8 @@ const KtxApp = (function () {
                             <span class="material-symbols-outlined text-[18px] text-[#375ba9] dark:text-blue-400">table_view</span>
                             <span>Xuất file Excel</span>
                         </button>
-                        <button type="button" onclick="KtxApp.showToast('Mở cửa sổ cấu hình thêm phòng buồng mới', 'info')" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white shadow-sm transition-all text-xs font-semibold">
-                            <span class="material-symbols-outlined text-[18px]">add</span>
+                        <button type="button" onclick="KtxApp.openCreateRoomModal()" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white shadow-sm transition-all text-xs font-semibold">
+                            <span class="material-symbols-outlined text-[16px]">add</span>
                             <span>Thêm phòng mới</span>
                         </button>
                     </div>
@@ -1715,7 +1758,7 @@ const KtxApp = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxApp.navigate('sua-chua')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">GIƯỜNG CẦN BẢO TRÌ</span>
                             <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
@@ -2370,9 +2413,570 @@ const KtxApp = (function () {
         if (d) d.classList.toggle('hidden');
     }
 
-    function toggleSemesterMenu() {
-        showToast(`Học kỳ hiện tại: ${state.selectedSemester}`, 'info');
+    async function openCreateRoundModal() {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        let sems = [];
+        try {
+            const res = await fetch('/api/namhoc');
+            const years = await res.json();
+            (years || []).forEach(y => {
+                (y.kyHocs || y.KyHocs || []).forEach(k => {
+                    sems.push({ code: k.maKyHoc || k.MaKyHoc, name: k.tenKyHoc || k.TenKyHoc });
+                });
+            });
+        } catch (e) {
+            sems = [];
+        }
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+                <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Tạo Đợt Đăng Ký Mới</h3>
+                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxApp.submitCreateRound();" class="space-y-3.5 pt-4 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mã Đợt *</label>
+                            <input id="roundCode" required type="text" placeholder="VD: DOT_K66_2027" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tên Đợt *</label>
+                            <input id="roundName" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Kỳ Học *</label>
+                            <select id="roundSemester" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                <option value="">Chọn kỳ học</option>
+                                ${sems.map(s => `<option value="${s.code}">${s.name} (${s.code})</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày Mở</label>
+                                <input id="roundOpen" required type="date" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày Đóng</label>
+                                <input id="roundClose" required type="date" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Tạo Đợt</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
     }
+
+    async function submitCreateRound() {
+        const body = {
+            maDotDangKy: document.getElementById('roundCode').value.trim(),
+            tenDot: document.getElementById('roundName').value.trim(),
+            maKyHoc: document.getElementById('roundSemester').value,
+            ngayMo: document.getElementById('roundOpen').value,
+            ngayDong: document.getElementById('roundClose').value
+        };
+        const res = await fetch('/api/dotdangky-rounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const json = await res.json().catch(() => ({}));
+        KtxApp.showToast(res.ok ? 'Đã tạo đợt đăng ký.' : (json?.message || json?.title || 'Tạo đợt thất bại.'), res.ok ? 'success' : 'error');
+        if (res.ok) {
+            KtxApp.closeModal();
+            await loadApplications();
+            if (state.currentTab === 'don-dang-ky') renderActiveView();
+        }
+    }
+
+    async function openCreateStudentModal() {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        let classes = [];
+        try {
+            const res = await fetch('/api/lophoc');
+            const json = await res.json();
+            classes = json?.data || json || [];
+        } catch (e) {
+            classes = [];
+        }
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+                <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Tiếp Nhận Sinh Viên Mới</h3>
+                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxApp.submitCreateStudent();" class="space-y-3.5 pt-4 text-xs">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">MSSV *</label>
+                                <input id="stuId" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Họ Tên *</label>
+                                <input id="stuName" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày Sinh *</label>
+                                <input id="stuBirth" required type="date" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giới Tính</label>
+                                <select id="stuGender" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                    <option value="nam">Nam</option>
+                                    <option value="nu">Nữ</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">CCCD *</label>
+                            <input id="stuCccd" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Điện Thoại</label>
+                                <input id="stuPhone" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                                <input id="stuEmail" type="email" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Địa Chỉ Thường Trú</label>
+                            <input id="stuAddress" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Lớp *</label>
+                                <select id="stuClass" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                    <option value="">Chọn lớp</option>
+                                    ${classes.map(c => `<option value="${c.code || c.Code}">${c.name || c.Name} (${c.code || c.Code})</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Năm Nhập Học *</label>
+                                <input id="stuYear" required type="number" value="2026" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Đối Tượng Ưu Tiên</label>
+                            <input id="stuPriority" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Tiếp Nhận</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitCreateStudent() {
+        const body = {
+            maSinhVien: document.getElementById('stuId').value.trim(),
+            hoTen: document.getElementById('stuName').value.trim(),
+            ngaySinh: document.getElementById('stuBirth').value,
+            gioiTinh: document.getElementById('stuGender').value,
+            cccd: document.getElementById('stuCccd').value.trim(),
+            dienThoai: document.getElementById('stuPhone').value.trim(),
+            email: document.getElementById('stuEmail').value.trim(),
+            diaChiThuongTru: document.getElementById('stuAddress').value.trim(),
+            maLop: document.getElementById('stuClass').value,
+            namNhapHoc: parseInt(document.getElementById('stuYear').value, 10),
+            doiTuongUuTien: document.getElementById('stuPriority').value.trim()
+        };
+        const res = await fetch('/api/sinhvien', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const json = await res.json().catch(() => ({}));
+        KtxApp.showToast(res.ok ? 'Đã tiếp nhận sinh viên.' : (json?.message || json?.title || 'Tiếp nhận thất bại.'), res.ok ? 'success' : 'error');
+        if (res.ok) {
+            KtxApp.closeModal();
+            await loadStudents();
+            if (state.currentTab === 'sinh-vien') renderActiveView();
+        }
+    }
+
+    function importStudentsExcel() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.xlsx';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const res = await fetch('/api/sinhvien/import', { method: 'POST', body: fd });
+                const json = await res.json().catch(() => ({}));
+                KtxApp.showToast(json.message || (res.ok ? 'Import thành công.' : 'Import thất bại.'), res.ok ? 'success' : 'error');
+                if (res.ok) {
+                    await loadStudents();
+                    if (state.currentTab === 'sinh-vien') renderActiveView();
+                }
+            } catch (err) {
+                KtxApp.showToast('Import thất bại.', 'error');
+            }
+        };
+        input.click();
+    }
+
+    async function openCreateRoomModal() {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        let buildings = [];
+        let roomTypes = [];
+        try {
+            const bRes = await fetch('/api/toanha');
+            const bJson = await bRes.json();
+            buildings = bJson?.data || bJson || [];
+        } catch (e) { buildings = []; }
+        try {
+            const rRes = await fetch('/api/loaiphong');
+            roomTypes = await rRes.json();
+        } catch (e) { roomTypes = []; }
+
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+                <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Thêm Phòng Mới</h3>
+                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxApp.submitCreateRoom();" class="space-y-3.5 pt-4 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mã Phòng *</label>
+                            <input id="roomCode" required type="text" placeholder="VD: A01_A105" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tòa Nhà *</label>
+                                <select id="roomBuilding" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                    <option value="">Chọn tòa</option>
+                                    ${buildings.map(b => `<option value="${b.id || b.Id || b.code || b.MaToaNha}">${b.name || b.Name || b.id || b.MaToaNha}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Loại Phòng *</label>
+                                <select id="roomType" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                    <option value="">Chọn loại</option>
+                                    ${roomTypes.map(t => `<option value="${t.maLoaiPhong || t.MaLoaiPhong}">${t.tenLoaiPhong || t.TenLoaiPhong}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tầng</label>
+                                <input id="roomFloor" type="number" value="1" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Số Giường</label>
+                                <input id="roomBeds" type="number" value="8" min="1" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Thêm Phòng</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitCreateRoom() {
+        const body = {
+            maPhong: document.getElementById('roomCode').value.trim(),
+            maToaNha: document.getElementById('roomBuilding').value,
+            maLoaiPhong: document.getElementById('roomType').value,
+            soTang: parseInt(document.getElementById('roomFloor').value, 10) || 1,
+            soGiuong: parseInt(document.getElementById('roomBeds').value, 10) || 8,
+            trangThai: 'hoatDong'
+        };
+        const res = await fetch('/api/phong', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const json = await res.json().catch(() => ({}));
+        KtxApp.showToast(res.ok ? 'Đã thêm phòng.' : (json?.message || json?.title || 'Thêm phòng thất bại.'), res.ok ? 'success' : 'error');
+        if (res.ok) {
+            KtxApp.closeModal();
+            await loadRooms();
+            if (state.currentTab === 'phong') renderActiveView();
+        }
+    }
+    function openForgotModal() {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+                <div class="w-full max-w-md bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Quên Mật Khẩu</h3>
+                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxApp.submitForgot();" class="space-y-3.5 pt-4 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tên đăng nhập hoặc email *</label>
+                            <input id="forgotUsername" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Gửi mã</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitForgot() {
+        const username = document.getElementById('forgotUsername').value.trim();
+        try {
+            const res = await fetch('/api/auth/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                KtxApp.showToast(json.message || 'Gửi mã thất bại.', 'error');
+                return;
+            }
+
+            KtxApp.showToast(json.message || 'Đã gửi mã xác nhận về email.', 'success');
+            KtxApp.openVerifyModal(username);
+        } catch (error) {
+            console.error('Password reset email request failed:', error);
+            KtxApp.showToast('Không kết nối được máy chủ để gửi mã xác nhận.', 'error');
+        }
+    }
+
+    function openVerifyModal(username) {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+                <div class="w-full max-w-md bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Xác Nhận Mã</h3>
+                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxApp.submitVerify('${username}');" class="space-y-3.5 pt-4 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mã xác nhận *</label>
+                            <input id="verifyCode" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mật khẩu mới *</label>
+                            <input id="verifyNewPassword" required type="password" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Xác nhận</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitVerify(username) {
+        const body = {
+            username,
+            code: document.getElementById('verifyCode').value.trim(),
+            newPassword: document.getElementById('verifyNewPassword').value
+        };
+        const res = await fetch('/api/auth/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const json = await res.json().catch(() => ({}));
+        KtxApp.showToast(res.ok ? (json.message || 'Đặt lại mật khẩu thành công.') : (json.message || 'Xác nhận thất bại.'), res.ok ? 'success' : 'error');
+        if (res.ok) KtxApp.closeModal();
+    }
+
+    function setAuthMode(mode) {
+        state.authMode = ['forgot', 'reset'].includes(mode) ? mode : 'login';
+        renderApp();
+    }
+    async function submitForgotForm() {
+        const username = document.getElementById('forgotUsername').value.trim();
+        try {
+            const res = await fetch('/api/auth/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(json.message || 'Gửi mã thất bại.', 'error');
+                return;
+            }
+
+            state.resetUsername = username;
+            state.resetCode = null;
+            showToast(json.message || 'Đã gửi mã xác nhận về email.', 'success');
+            setAuthMode('reset');
+        } catch (error) {
+            console.error('Password reset email request failed:', error);
+            showToast('Không kết nối được máy chủ để gửi mã xác nhận.', 'error');
+        }
+    }
+
+    async function submitResetForm() {
+        const body = {
+            username: state.resetUsername,
+            code: document.getElementById('resetCode').value.trim() || state.resetCode,
+            newPassword: document.getElementById('resetPassword').value
+        };
+        const res = await fetch('/api/auth/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const json = await res.json().catch(() => ({}));
+        showToast(res.ok ? (json.message || 'Đặt lại mật khẩu thành công.') : (json.message || 'Đặt lại thất bại.'), res.ok ? 'success' : 'error');
+        if (res.ok) setAuthMode('login');
+    }
+
+    async function toggleNotifications() {
+        const dropdown = document.getElementById('notificationDropdown');
+        if (!dropdown) return;
+        const isHidden = dropdown.classList.contains('hidden');
+        if (isHidden) {
+            dropdown.classList.remove('hidden');
+            await loadNotifications();
+        } else {
+            dropdown.classList.add('hidden');
+        }
+    }
+
+    function closeNotifications() {
+        const dropdown = document.getElementById('notificationDropdown');
+        if (dropdown) dropdown.classList.add('hidden');
+    }
+
+    async function loadNotifications() {
+        const list = document.getElementById('notificationList');
+        if (!list) return;
+        list.innerHTML = '<div class="text-center text-slate-400 py-4">Đang tải...</div>';
+        const items = [];
+        try {
+            const apps = await fetchApiData('/api/dondangky?status=pending');
+            (apps || []).slice(0, 5).forEach(a => items.push({ text: `Đơn đăng ký chờ duyệt: ${a.studentName || a.mssv || a.applicationCode}`, tab: 'don-dang-ky' }));
+        } catch (e) {}
+        try {
+            const tickets = await fetchApiData('/api/suachua?status=choXuLy');
+            (tickets?.data || tickets || []).slice(0, 5).forEach(t => items.push({ text: `Phiếu sửa chữa chờ xử lý: ${t.code || t.id}`, tab: 'suachua' }));
+        } catch (e) {}
+        try {
+            const invs = await fetchApiData('/api/hoadon?status=chuaThu');
+            (invs?.data || invs || []).slice(0, 5).forEach(i => items.push({ text: `Hóa đơn chưa thu: ${i.code || i.id}`, tab: 'hoadon' }));
+        } catch (e) {}
+
+        if (items.length === 0) {
+            list.innerHTML = '<div class="text-center text-slate-400 py-4">Không có thông báo mới.</div>';
+            const badge = document.getElementById('notifBadge');
+            if (badge) badge.classList.add('hidden');
+        } else {
+            list.innerHTML = items.map(i => `<button type="button" onclick="KtxApp.closeNotifications(); KtxApp.navigate('${i.tab}');" class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">${i.text}</button>`).join('');
+        }
+    }
+
+    async function toggleSemesterMenu() {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        let years = [];
+        try {
+            const res = await fetch('/api/namhoc');
+            const json = await res.json();
+            years = json || [];
+        } catch (e) {
+            years = [];
+        }
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onclick="KtxApp.closeModal()">
+                <div class="w-full max-w-6xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden animate-fade-in" onclick="event.stopPropagation()">
+                    <div class="px-5 py-4 border-b border-slate-200 dark:border-[#232B3B] flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white">Quản lý năm học & kỳ học</h3>
+                        <button type="button" onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+                    </div>
+                    <div class="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                        <form onsubmit="KtxApp.createAcademicYear(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                            <input name="maNamHoc" placeholder="Mã năm học (NH2027-2028)" class="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                            <input name="ngayBatDau" type="date" class="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                            <input name="ngayKetThuc" type="date" class="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                            <button type="submit" class="h-9 px-3 rounded-lg bg-[#0B2A5B] text-white text-xs font-semibold">Thêm năm học</button>
+                        </form>
+                        ${years.map(y => `
+                            <div class="border border-slate-200 dark:border-[#232B3B] rounded-xl p-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-semibold text-xs text-slate-800 dark:text-white">${y.maNamHoc || y.MaNamHoc}</span>
+                                    <form onsubmit="KtxApp.createSemester(event, '${y.maNamHoc || y.MaNamHoc}')" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                        <input name="maKyHoc" placeholder="Mã kỳ (HK1_2027_2028)" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                                        <input name="tenKyHoc" placeholder="Tên kỳ" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                                        <input name="ngayBatDau" type="date" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                                        <input name="ngayKetThuc" type="date" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                                        <button type="submit" class="h-8 px-2 rounded bg-[#0B2A5B] text-white text-xs md:col-span-3">Thêm kỳ</button>
+                                    </form>
+                                </div>
+                                <div class="text-xs text-slate-500">${(y.kyHocs || y.KyHocs || []).map(k => `<button type="button" onclick="KtxApp.selectSemester('${k.maKyHoc || k.MaKyHoc}')" class="inline-block px-2 py-0.5 mr-1 mb-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 text-slate-700 dark:text-slate-200">${(k.tenKyHoc || k.TenKyHoc)} (${(k.maKyHoc || k.MaKyHoc)})</button>`).join('') || 'Chưa có kỳ học'}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function selectSemester(code) {
+        state.selectedSemester = code;
+        localStorage.setItem('ktx_selected_semester', code || '');
+        closeModal();
+        loadContracts();
+        showToast(`Đã chọn kỳ học: ${code}`, 'success');
+    }
+
+    function changeSemester(code) {
+        state.selectedSemester = code || null;
+        loadContracts();
+    }
+
+    async function loadSemesterOptions() {
+        const select = document.getElementById('semesterSelect');
+        if (!select) return;
+        try {
+            const res = await fetch('/api/namhoc');
+            const years = await res.json();
+            const sems = [];
+            (years || []).forEach(y => {
+                (y.kyHocs || y.KyHocs || []).forEach(k => {
+                    sems.push({ code: k.maKyHoc || k.MaKyHoc, name: k.tenKyHoc || k.TenKyHoc });
+                });
+            });
+            select.innerHTML = '<option value="">Chọn kỳ học</option>' + sems.map(s => `<option value="${s.code}" ${state.selectedSemester === s.code ? 'selected' : ''}>${s.name} (${s.code})</option>`).join('');
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    async function createAcademicYear(e) {
+        e.preventDefault();
+        const form = e.target;
+        const fd = new FormData(form);
+        const body = {
+            maNamHoc: fd.get('maNamHoc'),
+            ngayBatDau: fd.get('ngayBatDau'),
+            ngayKetThuc: fd.get('ngayKetThuc'),
+            laDangHoat: true
+        };
+        const res = await fetch('/api/namhoc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const json = await res.json();
+        showToast(res.ok ? 'Đã thêm năm học.' : (json?.message || 'Thêm năm học thất bại.'), res.ok ? 'success' : 'error');
+        if (res.ok) { toggleSemesterMenu(); loadSemesterOptions(); }
+    }
+
+    async function createSemester(e, maNamHoc) {
+        e.preventDefault();
+        const form = e.target;
+        const fd = new FormData(form);
+        const body = {
+            maKyHoc: fd.get('maKyHoc'),
+            tenKyHoc: fd.get('tenKyHoc'),
+            ngayBatDau: fd.get('ngayBatDau'),
+            ngayKetThuc: fd.get('ngayKetThuc')
+        };
+        const res = await fetch(`/api/namhoc/${encodeURIComponent(maNamHoc)}/kyhoc`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        showToast(res.ok ? 'Đã thêm kỳ học.' : 'Thêm kỳ học thất bại.', res.ok ? 'success' : 'error');
+        if (res.ok) { toggleSemesterMenu(); loadSemesterOptions(); }
+    }
+
 
     function showNotificationToast() {
         const taskCount = state.dashboardSummary?.urgentTasks?.filter(task => !task.completed).length || 0;
@@ -2558,8 +3162,56 @@ const KtxApp = (function () {
         renderActiveView();
     }
 
-    function exportReport(title = 'Báo cáo') {
-        showToast(`Đã trích xuất ${title} KTX ra file Excel (.xlsx) thành công!`, 'success');
+    async function exportReport(title = 'Báo cáo') {
+        const tab = state.currentTab;
+        let rows = null;
+        let headers = null;
+        if (tab === 'sinh-vien' && Array.isArray(state.students) && state.students.length) {
+            headers = ['MSSV', 'Họ tên', 'Giới tính', 'Lớp', 'Trạng thái', 'Điện thoại'];
+            rows = state.students.map(s => [s.mssv || s.id, s.name, s.gender, s.className || s.major, s.residenceStatus, s.phone]);
+        } else if (tab === 'hop-dong' && Array.isArray(state.contracts) && state.contracts.length) {
+            headers = ['Mã HĐ', 'Sinh viên', 'MSSV', 'Phòng', 'Trạng thái'];
+            rows = state.contracts.map(c => [c.contractNumber || c.id, c.studentName, c.studentId, c.room, c.status]);
+        } else if (tab === 'don-dang-ky' && Array.isArray(state.applications) && state.applications.length) {
+            headers = ['Mã đơn', 'Sinh viên', 'MSSV', 'Trạng thái', 'Ưu tiên'];
+            rows = state.applications.map(a => [a.applicationCode, a.studentName, a.mssv, a.status, a.priorityCategory]);
+        } else {
+            try {
+                const sem = state.selectedSemester ? `?semester=${encodeURIComponent(state.selectedSemester)}` : '';
+                const res = await fetch(`/api/baocao/export${sem}`);
+                if (!res.ok) throw new Error('fail');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'BaoCaoKTX.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                showToast(`Đã xuất ${title} ra file Excel.`, 'success');
+                return;
+            } catch (e) {
+                showToast('Xuất báo cáo thất bại.', 'error');
+                return;
+            }
+        }
+
+        try {
+            const csv = [headers.join(','), ...rows.map(r => r.map(v => `\"${String(v ?? '').replace(/\"/g, '\"\"')}\"`).join(','))].join('\\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title || 'DanhSach'}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            showToast(`Đã xuất ${title} ra file CSV.`, 'success');
+        } catch (e) {
+            showToast('Xuất danh sách thất bại.', 'error');
+        }
     }
 
     // Keyboard Shortcuts (Cmd+K)
@@ -2579,18 +3231,40 @@ const KtxApp = (function () {
             initTheme();
             await initUser();
             renderApp();
+            await loadSemesterOptions();
         },
         navigate,
         toggleDarkMode,
         toggleMobileMenu,
         toggleProfileMenu,
         toggleSemesterMenu,
+        toggleNotifications,
+        closeNotifications,
+        openForgotModal,
+        submitForgot,
+        openVerifyModal,
+        submitVerify,
+        openCreateRoomModal,
+        submitCreateRoom,
+        importStudentsExcel,
+        openCreateStudentModal,
+        submitCreateStudent,
+        openCreateRoundModal,
+        submitCreateRound,
+        changeSemester,
+        loadSemesterOptions,
+        selectSemester,
+        createAcademicYear,
+        createSemester,
         showNotificationToast,
         openSearch,
         closeSearch,
         handlePaletteInput,
         showToast,
         handleLoginForm,
+        setAuthMode,
+        submitForgotForm,
+        submitResetForm,
         skipLogin,
         logout,
         openRegistrationModal,

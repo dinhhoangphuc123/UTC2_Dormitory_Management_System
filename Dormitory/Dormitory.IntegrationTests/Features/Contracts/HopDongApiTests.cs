@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Contracts
             var service = new HopDongService(context);
             var controller = new HopDongApiController(service);
 
-            var result = await controller.GetAll(null, null, null);
+            var result = await controller.GetAll(null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<ContractListItemDto>>>(ok.Value);
             Assert.True(res.Success);
@@ -31,4 +31,3 @@ namespace Dormitory.IntegrationTests.Features.Contracts
         }
     }
 }
-

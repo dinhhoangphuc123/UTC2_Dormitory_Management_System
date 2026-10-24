@@ -162,6 +162,7 @@ namespace Dormitory.Web.Data.Seeding
                 {
                     MaLoaiViPham = "VP_BEPDIEN",
                     TenLoaiViPham = "Sử dụng thiết bị nhiệt / bếp điện trái phép",
+                    MucDo = "trungBinh",
                     DiemTru = 5,
                     MucPhatTien = 200000
                 };

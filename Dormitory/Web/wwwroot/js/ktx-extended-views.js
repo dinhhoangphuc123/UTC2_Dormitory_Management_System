@@ -52,7 +52,7 @@ window.KtxExtendedViews = (function () {
         reportScope: 'ALL'
     };
 
-    function renderMetricCard({ label, value, unit, icon, tone = 'blue', footer, footerRight = '', onclick = '' }) {
+    function renderMetricCard({ label, value, unit, icon, tone = 'blue', footer, footerRight = '' }) {
         const tones = {
             blue: {
                 iconBg: 'bg-blue-50 dark:bg-blue-950/40',
@@ -86,11 +86,8 @@ window.KtxExtendedViews = (function () {
             }
         };
         const colors = tones[tone] || tones.blue;
-        const clickable = onclick ? 'cursor-pointer' : '';
-        const action = onclick ? `onclick="${onclick}"` : '';
-
         return `
-            <div ${action} class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all ${clickable}">
+            <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                 <div class="flex items-center justify-between">
                     <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">${label}</span>
                     <span class="w-8 h-8 rounded-lg ${colors.iconBg} ${colors.iconText} flex items-center justify-center shrink-0">
@@ -540,7 +537,7 @@ window.KtxExtendedViews = (function () {
 
                 <!-- 4 KPI Metrics (Image 1 Standard Design) -->
                 <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div onclick="KtxExtendedViews.filterUtilityStatus('RECORDED')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐÃ CHỐT CHỈ SỐ</span>
                             <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -558,7 +555,7 @@ window.KtxExtendedViews = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxExtendedViews.filterUtilityStatus('PENDING')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">CHƯA GHI SỐ</span>
                             <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
@@ -576,7 +573,7 @@ window.KtxExtendedViews = (function () {
                         </div>
                     </div>
 
-                    <div onclick="KtxExtendedViews.filterUtilityStatus('EXCEEDED')" class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
+                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">VƯỢT ĐỊNH MỨC</span>
                             <div class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
@@ -931,7 +928,7 @@ window.KtxExtendedViews = (function () {
                                                         Thu tiền
                                                     </button>
                                                 ` : ''}
-                                                <button onclick="KtxExtendedViews.printInvoice('${inv.code}')" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white" title="In phiếu">
+                                                <button onclick="KtxExtendedViews.printInvoiceDirect('${inv.code}')" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white" title="In phiếu">
                                                     <span class="material-symbols-outlined text-[17px]">print</span>
                                                 </button>
                                             </td>
@@ -990,11 +987,85 @@ window.KtxExtendedViews = (function () {
                     </div>
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
                         <button onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold">Đóng</button>
-                        <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-xs font-semibold">In biên lai</button>
+                        <button onclick="KtxExtendedViews.printInvoiceDirect('${code}')" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-xs font-semibold">In biên lai</button>
                     </div>
                 </div>
             </div>
         `;
+    }
+
+    function printInvoiceWindow(code) {
+        const inv = extState.invoices.find(i => i.code === code);
+        if (!inv) return;
+        const w = window.open('', '_blank', 'width=800,height=900');
+        if (!w) return;
+        w.document.write(`
+            <html><head><title>Biên lai ${inv.code}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20mm; color: #111; }
+                .title { text-align: center; font-weight: bold; font-size: 14px; }
+                .sub { text-align: center; font-size: 11px; color: #555; }
+                .row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 12px; }
+                .total { font-weight: bold; font-size: 14px; color: #0B2A5B; border-top: 1px solid #ccc; padding-top: 6px; margin-top: 8px; }
+                @page { size: A4; margin: 15mm; }
+            </style></head><body>
+            <div class="title">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI - PHÂN HIỆU TP.HCM</div>
+            <div class="sub">BAN QUẢN LÝ KÝ TÚC XÁ</div>
+            <h3 style="text-align:center;text-transform:uppercase;margin:12px 0 4px;">Biên lai thu phí nội trú</h3>
+            <div class="sub">Mã phiếu: ${inv.code}</div>
+            <div style="margin-top:12px;">
+                <div class="row"><span>Sinh viên:</span><strong>${inv.studentName}</strong></div>
+                <div class="row"><span>MSSV:</span><span>${inv.studentId}</span></div>
+                <div class="row"><span>Phòng lưu trú:</span><span>${inv.room}</span></div>
+                <div class="row"><span>Khoản thu:</span><span>${inv.title}</span></div>
+                <div class="row total"><span>Tổng tiền:</span><span>${inv.amount.toLocaleString('vi-VN')} đ</span></div>
+            </div>
+            <script>window.onload = function(){ window.print(); };</script>
+            </body></html>
+        `);
+        w.document.close();
+    }
+
+    function printInvoiceDirect(code) {
+        const inv = extState.invoices.find(i => i.code === code);
+        if (!inv) return;
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(`
+            <html><head><title>Biên lai ${inv.code}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20mm; color: #111; }
+                .title { text-align: center; font-weight: bold; font-size: 14px; }
+                .sub { text-align: center; font-size: 11px; color: #555; }
+                .row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 12px; }
+                .total { font-weight: bold; font-size: 14px; color: #0B2A5B; border-top: 1px solid #ccc; padding-top: 6px; margin-top: 8px; }
+                @page { size: A4; margin: 15mm; }
+            </style></head><body>
+            <div class="title">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI - PHÂN HIỆU TP.HCM</div>
+            <div class="sub">BAN QUẢN LÝ KÝ TÚC XÁ</div>
+            <h3 style="text-align:center;text-transform:uppercase;margin:12px 0 4px;">Biên lai thu phí nội trú</h3>
+            <div class="sub">Mã phiếu: ${inv.code}</div>
+            <div style="margin-top:12px;">
+                <div class="row"><span>Sinh viên:</span><strong>${inv.studentName}</strong></div>
+                <div class="row"><span>MSSV:</span><span>${inv.studentId}</span></div>
+                <div class="row"><span>Phòng lưu trú:</span><span>${inv.room}</span></div>
+                <div class="row"><span>Khoản thu:</span><span>${inv.title}</span></div>
+                <div class="row total"><span>Tổng tiền:</span><span>${inv.amount.toLocaleString('vi-VN')} đ</span></div>
+            </div>
+            </body></html>
+        `);
+        doc.close();
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => document.body.removeChild(iframe), 1000);
     }
 
     function openCreateInvoiceModal() {
@@ -1133,10 +1204,10 @@ window.KtxExtendedViews = (function () {
 
                 <!-- 4 KPI Metric Cards -->
                 <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    ${renderMetricCard({ label: 'Tổng yêu cầu', value: totalCount, unit: 'phiếu', icon: 'assignment', tone: 'blue', footer: 'Tất cả yêu cầu sửa chữa', onclick: "KtxExtendedViews.setTicketTab('ALL')" })}
-                    ${renderMetricCard({ label: 'Chờ tiếp nhận', value: pendingCount, unit: 'phiếu', icon: 'pending_actions', tone: 'amber', footer: 'Xem yêu cầu chờ xử lý', onclick: "KtxExtendedViews.setTicketTab('PENDING')" })}
-                    ${renderMetricCard({ label: 'Đang xử lý / sửa', value: inProgressCount, unit: 'phiếu', icon: 'handyman', tone: 'blue', footer: 'Xem yêu cầu đang sửa', onclick: "KtxExtendedViews.setTicketTab('IN_PROGRESS')" })}
-                    ${renderMetricCard({ label: 'Đã hoàn thành', value: completedCount, unit: 'phiếu', icon: 'task_alt', tone: 'green', footer: 'Xem yêu cầu đã hoàn tất', onclick: "KtxExtendedViews.setTicketTab('COMPLETED')" })}
+                    ${renderMetricCard({ label: 'Tổng yêu cầu', value: totalCount, unit: 'phiếu', icon: 'assignment', tone: 'blue', footer: 'Tất cả yêu cầu sửa chữa' })}
+                    ${renderMetricCard({ label: 'Chờ tiếp nhận', value: pendingCount, unit: 'phiếu', icon: 'pending_actions', tone: 'amber', footer: 'Xem yêu cầu chờ xử lý' })}
+                    ${renderMetricCard({ label: 'Đang xử lý / sửa', value: inProgressCount, unit: 'phiếu', icon: 'handyman', tone: 'blue', footer: 'Xem yêu cầu đang sửa' })}
+                    ${renderMetricCard({ label: 'Đã hoàn thành', value: completedCount, unit: 'phiếu', icon: 'task_alt', tone: 'green', footer: 'Xem yêu cầu đã hoàn tất' })}
                 </div>
 
                 <!-- Filter & Search Strip -->
@@ -2021,6 +2092,8 @@ window.KtxExtendedViews = (function () {
         filterInvoiceStatus,
         confirmPaymentPrompt,
         printInvoice,
+        printInvoiceWindow,
+        printInvoiceDirect,
         openCreateInvoiceModal,
         submitCreateInvoice,
         // Ticket methods

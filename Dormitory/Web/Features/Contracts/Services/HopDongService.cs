@@ -18,7 +18,8 @@ namespace Dormitory.Web.Features.Contracts.Services
         public async Task<List<ContractListItemDto>> GetAllContractsAsync(
             string? statusTab = null,
             string? building = null,
-            string? search = null)
+            string? search = null,
+            string? semester = null)
         {
             var query = _context.HopDongs
                 .Include(h => h.SinhVien)
@@ -40,6 +41,11 @@ namespace Dormitory.Web.Features.Contracts.Services
             if (!string.IsNullOrWhiteSpace(building) && building != "all")
             {
                 query = query.Where(h => h.Giuong != null && h.Giuong.Phong != null && h.Giuong.Phong.MaToaNha.Contains(building));
+            }
+
+            if (!string.IsNullOrWhiteSpace(semester))
+            {
+                query = query.Where(h => h.MaKyHoc == semester);
             }
 
             var entities = await query.ToListAsync();

@@ -20,9 +20,10 @@ namespace Dormitory.Web.Features.Contracts.Api
         public async Task<IActionResult> GetAll(
             [FromQuery] string? statusTab,
             [FromQuery] string? building,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] string? semester)
         {
-            var contracts = await _hopDongService.GetAllContractsAsync(statusTab, building, search);
+            var contracts = await _hopDongService.GetAllContractsAsync(statusTab, building, search, semester);
             return Ok(ApiResponse<List<ContractListItemDto>>.Ok(contracts));
         }
 
