@@ -357,7 +357,7 @@ window.KtxExtendedViews = (function () {
                                 `).join('')}
                                 ${filtered.length === 0 ? `
                                     <tr>
-                                        <td colspan="7" class="py-8 text-center text-slate-400">Không tìm thấy lớp nào phù hợp bộ lọc.</td>
+                                        <td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td>
                                     </tr>
                                 ` : ''}
                             </tbody>
@@ -689,6 +689,7 @@ window.KtxExtendedViews = (function () {
                                         </tr>
                                     `;
                                 }).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="6" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -935,6 +936,7 @@ window.KtxExtendedViews = (function () {
                                         </tr>
                                     `;
                                 }).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1180,7 +1182,6 @@ window.KtxExtendedViews = (function () {
         const pendingCount    = extState.tickets.filter(t => t.status === 'PENDING').length;
         const inProgressCount = extState.tickets.filter(t => t.status === 'IN_PROGRESS').length;
         const completedCount  = extState.tickets.filter(t => t.status === 'COMPLETED').length;
-        const urgentCount     = extState.tickets.filter(t => t.priority === 'Khẩn cấp' && t.status !== 'COMPLETED').length;
 
         return `
             <div class="flex flex-col w-full space-y-6 animate-fade-in">
@@ -1268,7 +1269,7 @@ window.KtxExtendedViews = (function () {
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                                 ${filtered.length === 0 ? `
-                                    <tr><td colspan="9" class="py-10 text-center text-slate-400 text-xs">Không có phiếu nào phù hợp bộ lọc.</td></tr>
+                                    <tr><td colspan="9" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>
                                 ` : filtered.map(t => {
                                     const priBadge = t.priority === 'Khẩn cấp'
                                         ? '<span class="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>Khẩn cấp</span>'
@@ -1325,11 +1326,6 @@ window.KtxExtendedViews = (function () {
                                 }).join('')}
                             </tbody>
                         </table>
-                    </div>
-                    <!-- Table Footer -->
-                    <div class="px-4 py-3 bg-slate-50/40 dark:bg-slate-900/40 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
-                        <span>Hiển thị <strong class="text-slate-800 dark:text-slate-200">${filtered.length}</strong> / ${totalCount} phiếu</span>
-                        ${urgentCount > 0 ? `<span class="text-rose-600 font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>${urgentCount} phiếu khẩn cấp cần xử lý ngay</span>` : ''}
                     </div>
                 </div>
             </div>
@@ -1611,6 +1607,7 @@ window.KtxExtendedViews = (function () {
                                         </tr>
                                     `;
                                 }).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="6" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1830,6 +1827,7 @@ window.KtxExtendedViews = (function () {
                                         </tr>
                                     `;
                                 }).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -2028,6 +2026,7 @@ window.KtxExtendedViews = (function () {
                                         </td>
                                     </tr>
                                 `).join('')}
+                                ${(r.buildingOperations || []).length === 0 ? '<tr><td colspan="8" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>

@@ -196,3 +196,55 @@ body {
 .animate-bounce-in {
     animation: bounceIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
+
+@keyframes ktxLoadingSweep {
+    from { transform: translateX(-110%); }
+    to { transform: translateX(220%); }
+}
+
+.page-loading-sweep {
+    animation: ktxLoadingSweep 1.1s ease-in-out infinite;
+}
+
+@keyframes ktxPageEnter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.page-content-enter {
+    animation: ktxPageEnter 0.28s ease-out both;
+}
+
+.material-symbols-outlined {
+    transform-origin: center;
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.material-symbols-outlined:not(.animate-spin):not(.animate-pulse):hover,
+button:hover .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+a:hover .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+[onclick]:hover .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+[role="button"]:hover .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+.group:hover .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+.cursor-pointer:hover .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+.dashboard-kpi-grid .group:hover .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+button:focus-visible .material-symbols-outlined:not(.animate-spin):not(.animate-pulse),
+a:focus-visible .material-symbols-outlined:not(.animate-spin):not(.animate-pulse) {
+    animation: ktxIconWiggle 0.75s ease-in-out infinite !important;
+}
+
+@keyframes ktxIconWiggle {
+    0%, 100% { transform: rotate(0) scale(1.04); }
+    20% { transform: rotate(-11deg) scale(1.1); }
+    40% { transform: rotate(9deg) scale(1.1); }
+    60% { transform: rotate(-7deg) scale(1.08); }
+    80% { transform: rotate(5deg) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .page-loading-sweep,
+    .page-content-enter {
+        animation-duration: 0.01ms;
+    }
+
+}

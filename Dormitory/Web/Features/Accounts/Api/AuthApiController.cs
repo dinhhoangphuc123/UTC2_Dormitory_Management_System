@@ -18,7 +18,9 @@ namespace Dormitory.Web.Features.Accounts.Api
         private readonly IPasswordHasher _passwordHasher;
         private readonly IConfiguration _config;
         private readonly ILogger<AuthApiController> _logger;
-        private static readonly Dictionary<string, string> _resetCodes = new();
+        private static readonly object _resetCodesLock = new();
+        private static readonly Dictionary<string, string> _resetCodes = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> _verifiedResetIdentifiers = new(StringComparer.OrdinalIgnoreCase);
 
         public AuthApiController(
             IAuthService authService,
@@ -89,22 +91,42 @@ namespace Dormitory.Web.Features.Accounts.Api
             if (string.IsNullOrWhiteSpace(recipient))
                 return BadRequest(new { success = false, message = "Không tìm thấy tài khoản hoặc tài khoản chưa có email." });
 
-            var host = _config["Smtp:Host"];
-            var smtpUsername = _config["Smtp:Username"];
-            var password = _config["Smtp:Password"];
-            var from = _config["Smtp:From"];
-            var port = int.TryParse(_config["Smtp:Port"], out var p) ? p : 587;
-            var enableSsl = bool.TryParse(_config["Smtp:EnableSsl"], out var s) ? s : true;
+            var gmailSmtp = _config.GetSection("GmailSMTP");
+            var legacySmtp = _config.GetSection("Smtp");
+            var host = FirstConfiguredValue(gmailSmtp["Host"], legacySmtp["Host"]);
+            var from = FirstConfiguredValue(gmailSmtp["From"], legacySmtp["From"]);
+            var smtpUsername = FirstConfiguredValue(
+                gmailSmtp["Username"],
+                gmailSmtp["From"],
+                legacySmtp["Username"],
+                legacySmtp["From"]);
+            var rawPassword = FirstConfiguredValue(
+                gmailSmtp["AppPassword"],
+                gmailSmtp["Password"],
+                legacySmtp["Password"]);
+            var password = new string((rawPassword ?? string.Empty)
+                .Where(character => !char.IsWhiteSpace(character))
+                .ToArray());
+            var configuredPort = FirstConfiguredValue(gmailSmtp["Port"], legacySmtp["Port"]);
+            var port = int.TryParse(configuredPort, out var parsedPort) ? parsedPort : 587;
+            var configuredEnableSsl = FirstConfiguredValue(gmailSmtp["EnableSsl"], legacySmtp["EnableSsl"]);
+            var enableSsl = bool.TryParse(configuredEnableSsl, out var parsedEnableSsl)
+                ? parsedEnableSsl
+                : true;
 
-            if (string.IsNullOrWhiteSpace(host)
-                || string.IsNullOrWhiteSpace(smtpUsername)
-                || string.IsNullOrWhiteSpace(password)
-                || string.IsNullOrWhiteSpace(from))
+            var missingSettings = new List<string>();
+            if (string.IsNullOrWhiteSpace(host)) missingSettings.Add("Host");
+            if (string.IsNullOrWhiteSpace(from)) missingSettings.Add("From");
+            if (string.IsNullOrWhiteSpace(smtpUsername)) missingSettings.Add("Username");
+            if (string.IsNullOrWhiteSpace(password)) missingSettings.Add("AppPassword/Password");
+
+            if (missingSettings.Count > 0)
             {
+                _logger.LogWarning("SMTP configuration is missing required keys: {MissingSettings}", string.Join(", ", missingSettings));
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, new
                 {
                     success = false,
-                    message = "Chức năng gửi email chưa được cấu hình SMTP. Vui lòng liên hệ Ban quản lý."
+                    message = $"Thiếu cấu hình SMTP: {string.Join(", ", missingSettings)}. Kiểm tra mục GmailSMTP hoặc Smtp trong cấu hình ứng dụng."
                 });
             }
 
@@ -116,12 +138,16 @@ namespace Dormitory.Web.Features.Accounts.Api
                     Credentials = new NetworkCredential(smtpUsername, password),
                     EnableSsl = enableSsl
                 };
-                using var mail = new MailMessage(from, recipient, "Mã xác nhận đặt lại mật khẩu KTX", $"Mã xác nhận của bạn là: {code}")
+                using var mail = new MailMessage(from!, recipient, "Mã xác nhận đặt lại mật khẩu KTX", $"Mã xác nhận của bạn là: {code}")
                 {
                     IsBodyHtml = false
                 };
                 await client.SendMailAsync(mail);
-                _resetCodes[identifier] = code;
+                lock (_resetCodesLock)
+                {
+                    _resetCodes[identifier] = code;
+                    _verifiedResetIdentifiers.Remove(identifier);
+                }
                 return Ok(new { success = true, message = "Đã gửi mã xác nhận về email." });
             }
             catch (Exception ex)
@@ -138,7 +164,16 @@ namespace Dormitory.Web.Features.Accounts.Api
         [HttpPost("verify")]
         public IActionResult Verify([FromBody] VerifyRequestDto req)
         {
-            if (_resetCodes.TryGetValue(req.Username?.Trim() ?? "", out var code) && code == req.Code)
+            var identifier = req.Username?.Trim() ?? "";
+            var isValid = false;
+            lock (_resetCodesLock)
+            {
+                isValid = _resetCodes.TryGetValue(identifier, out var code) && code == req.Code;
+                if (isValid)
+                    _verifiedResetIdentifiers.Add(identifier);
+            }
+
+            if (isValid)
                 return Ok(new { success = true, message = "Mã xác nhận đúng." });
             return BadRequest(new { success = false, message = "Mã xác nhận không đúng." });
         }
@@ -149,8 +184,15 @@ namespace Dormitory.Web.Features.Accounts.Api
             if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.NewPassword))
                 return BadRequest(new { success = false, message = "Vui lòng nhập đầy đủ thông tin." });
             var identifier = req.Username.Trim();
-            if (!_resetCodes.TryGetValue(identifier, out var code) || code != req.Code)
-                return BadRequest(new { success = false, message = "Mã xác nhận không đúng." });
+            var isVerified = false;
+            lock (_resetCodesLock)
+            {
+                isVerified = _verifiedResetIdentifiers.Contains(identifier)
+                    && _resetCodes.TryGetValue(identifier, out var code)
+                    && code == req.Code;
+            }
+            if (!isVerified)
+                return BadRequest(new { success = false, message = "Vui lòng xác minh đúng mã OTP trước khi đổi mật khẩu." });
 
             var account = await _context.TaiKhoans.FirstOrDefaultAsync(t =>
                 t.TenDangNhap == identifier
@@ -161,8 +203,17 @@ namespace Dormitory.Web.Features.Accounts.Api
 
             account.MatKhauHash = _passwordHasher.HashPassword(req.NewPassword);
             await _context.SaveChangesAsync();
-            _resetCodes.Remove(identifier);
+            lock (_resetCodesLock)
+            {
+                _resetCodes.Remove(identifier);
+                _verifiedResetIdentifiers.Remove(identifier);
+            }
             return Ok(new { success = true, message = "Đặt lại mật khẩu thành công." });
+        }
+
+        private static string? FirstConfiguredValue(params string?[] values)
+        {
+            return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
         }
     }
 

@@ -21,6 +21,8 @@ const KtxApp = (function () {
         dashboardSummary: null,
         students: [],
         contracts: [],
+        contractBuildings: [],
+        contractBuildingsLoaded: false,
         applications: [],
         rooms: [],
 
@@ -42,7 +44,6 @@ const KtxApp = (function () {
         roomsBuilding: 'all',
         roomsFloor: 'all',
         roomsRoomNumber: 'all',
-        isRoomsRoomMenuOpen: false,
         roomsSearch: '',
 
         // Active modals data
@@ -51,6 +52,21 @@ const KtxApp = (function () {
         selectedApplication: null,
         selectedRoom: null
     };
+
+    let otpResendTimer = null;
+    let otpResendSeconds = 54;
+    let isResendingOtp = false;
+    let activeViewRenderId = 0;
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, character => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[character]);
+    }
 
     // Helper: Currency format
     function formatVND(amount, compact = false) {
@@ -129,7 +145,7 @@ const KtxApp = (function () {
         if (saved) {
             try {
                 state.currentUser = JSON.parse(saved);
-                if (state.currentUser?.isDevelopmentGuest && !window.ktxDevelopmentBypassEnabled) {
+                if (state.currentUser?.isDevelopmentGuest) {
                     state.currentUser = null;
                     localStorage.removeItem('utc2_current_user');
                 }
@@ -139,23 +155,6 @@ const KtxApp = (function () {
             }
         } else {
             state.currentUser = null;
-        }
-    }
-
-    function skipLogin() {
-        if (!window.ktxDevelopmentBypassEnabled) return;
-
-        state.currentUser = {
-            name: 'Khách xem thử',
-            role: 'Chế độ xem thử',
-            isDevelopmentGuest: true
-        };
-        localStorage.setItem('utc2_current_user', JSON.stringify(state.currentUser));
-
-        if (window.location.pathname.toLowerCase().includes('/account/login')) {
-            window.location.href = '/';
-        } else {
-            renderApp();
         }
     }
 
@@ -205,7 +204,7 @@ const KtxApp = (function () {
     function navigate(tab) {
         state.currentTab = tab;
         state.isMobileMenuOpen = false;
-        renderApp();
+        renderApp(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -251,6 +250,18 @@ const KtxApp = (function () {
         }
     }
 
+    async function loadContractBuildings() {
+        if (state.contractBuildingsLoaded) return;
+        try {
+            state.contractBuildings = await fetchApiData('/api/toanha');
+            state.contractBuildingsLoaded = true;
+        } catch (error) {
+            state.contractBuildings = [];
+            state.contractBuildingsLoaded = true;
+            reportLoadFailure('danh sách tòa nhà', error);
+        }
+    }
+
     async function loadApplications() {
         try {
             state.applications = await fetchApiData('/api/dondangky');
@@ -270,7 +281,7 @@ const KtxApp = (function () {
     }
 
     // View Renderers
-    function renderApp() {
+    function renderApp(showPageLoader = false) {
         const root = document.getElementById('appRoot');
         if (!root) return;
 
@@ -311,7 +322,7 @@ const KtxApp = (function () {
 
         renderSidebar();
         renderTopNav();
-        renderActiveView();
+        renderActiveView(showPageLoader);
         renderToasts();
     }
 
@@ -551,43 +562,75 @@ const KtxApp = (function () {
                         </p>
                     </div>
 
-                    <!-- Footer Bên Trái -->
-                    <div class="relative z-10 flex flex-wrap items-center justify-between gap-4 text-xs text-blue-200/60 pt-6 border-t border-white/10">
-                        <div class="text-blue-200/70">© Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh</div>
-                    </div>
                 </div>
 
-                <!-- CỘT PHẢI (45%): Form Đăng nhập & Nút Demo -->
-                <div class="lg:w-[45%] flex flex-col justify-center px-6 sm:px-12 xl:px-16 py-12 bg-white dark:bg-[#121826] transition-colors duration-200">
+                <!-- CỘT PHẢI (45%): Form Đăng nhập -->
+                <div class="lg:w-[45%] flex flex-col justify-center px-6 sm:px-12 xl:px-16 py-12 ${state.authMode === 'otp' ? 'bg-[#FCFDFE]' : 'bg-white dark:bg-[#121826]'} transition-colors duration-200">
                     <div class="w-full max-w-md mx-auto">
                         ${state.authMode === 'reset' ? `
                         <div class="mb-8">
                             <h2 class="text-2xl sm:text-3xl font-bold text-[#0B0F1A] dark:text-white">Đặt lại mật khẩu</h2>
+                            <p class="mt-2 text-sm text-[#667085] dark:text-slate-400">Mã xác nhận đã được kiểm tra. Hãy nhập mật khẩu mới của bạn.</p>
                         </div>
-                        <form id="resetForm" class="space-y-5">
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">Mã xác nhận</label>
-                                <input type="text" id="resetCode" required class="w-full px-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
-                            </div>
+                        <form id="resetForm" class="space-y-5" onsubmit="event.preventDefault(); KtxApp.submitResetForm();">
                             <div>
                                 <label class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">Mật khẩu mới</label>
-                                <input type="password" id="resetPassword" required class="w-full px-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                                <div class="relative">
+                                    <input type="password" id="resetPassword" required autocomplete="new-password" class="w-full pl-4 pr-11 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                                    <button type="button" onclick="KtxApp.togglePasswordVisibility('resetPassword', this)" aria-label="Hiện mật khẩu" aria-pressed="false" class="absolute inset-y-0 right-0 flex items-center px-3 text-[#98A2B3] hover:text-[#0B2A5B] dark:hover:text-blue-300 transition">
+                                        <span class="material-symbols-outlined text-[19px]">visibility</span>
+                                    </button>
+                                </div>
                             </div>
-                            <button type="submit" onclick="event.preventDefault(); KtxApp.submitResetForm();" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-sm shadow-sm transition">Đặt lại</button>
+                            <button type="submit" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-sm shadow-sm transition">Đổi mật khẩu</button>
                             <div class="mt-4 text-center text-xs text-[#667085] dark:text-slate-400">
                                 <button type="button" onclick="KtxApp.setAuthMode('login'); KtxApp.renderApp();" class="font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Quay lại đăng nhập</button>
                             </div>
                         </form>
+                        ` : state.authMode === 'otp' ? `
+                        <div class="w-full max-w-md mx-auto text-[#0B0F1A]">
+                            <button type="button" onclick="KtxApp.setAuthMode('forgot')" class="inline-flex items-center gap-1.5 mb-7 text-sm font-medium text-[#526783] hover:text-[#0B2A5B] transition">
+                                <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                                <span>Quay lại</span>
+                            </button>
+                            <div class="mb-7">
+                                <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B0F1A]">Nhập mã OTP</h2>
+                                <p class="mt-2 text-sm leading-6 text-[#667085]">Mã xác nhận 6 số gửi đến: <span class="font-semibold text-[#0B2A5B]">${escapeHtml(state.resetUsername)}</span></p>
+                            </div>
+                            <form id="verifyForm" class="space-y-6" onsubmit="event.preventDefault(); KtxApp.submitVerifyForm();">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-[0.12em] text-[#526783] mb-2.5">Mã xác thực</label>
+                                    <div class="flex items-center justify-between gap-2" onpaste="KtxApp.handleOtpPaste(event)">
+                                        ${Array.from({ length: 6 }, (_, index) => `
+                                            <input type="text" inputmode="numeric" maxlength="${index === 0 ? 6 : 1}" pattern="${index === 0 ? '[0-9]{1,6}' : '[0-9]'}" required ${index === 0 ? 'autocomplete="one-time-code"' : 'autocomplete="off"'} aria-label="Chữ số ${index + 1} của mã OTP" data-otp-digit="${index}" oninput="KtxApp.handleOtpInput(${index}, this)" onkeydown="KtxApp.handleOtpKeydown(${index}, event)" placeholder="•" class="flex-1 min-w-0 h-14 rounded-xl border border-[#E3E9F1] bg-white text-center text-lg font-semibold text-[#0B0F1A] placeholder:text-[#CBD5E1] focus:border-[#0B2A5B] focus:outline-none focus:ring-1 focus:ring-[#0B2A5B] transition" />
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between -mt-1 text-xs">
+                                    <span class="text-[#718096]">Chưa nhận được mã?</span>
+                                    <button id="otpResendButton" type="button" onclick="KtxApp.submitResendCode()" disabled class="font-semibold text-[#0B2A5B] disabled:cursor-not-allowed disabled:opacity-50">
+                                        <span id="otpResendLabel">Gửi lại mã</span> <span id="otpCountdown" class="font-normal text-[#94A3B8]">(54s)</span>
+                                    </button>
+                                </div>
+                                <button type="submit" class="w-full h-12 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-sm shadow-[0_2px_5px_rgba(11,42,91,0.24)] transition inline-flex items-center justify-center gap-2">
+                                    <span>Xác nhận OTP</span>
+                                    <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                                </button>
+                            </form>
+                            <div class="mt-7 border-t border-[#EDF0F4] pt-4 flex justify-center" aria-hidden="true">
+                                <span class="w-1 h-1 rounded-full bg-[#D9E0E8]"></span>
+                            </div>
+                        </div>
                         ` : state.authMode === 'forgot' ? `
                         <div class="mb-8">
                             <h2 class="text-2xl sm:text-3xl font-bold text-[#0B0F1A] dark:text-white">Quên mật khẩu</h2>
                         </div>
-                        <form id="forgotForm" class="space-y-5">
+                        <form id="forgotForm" class="space-y-5" onsubmit="event.preventDefault(); KtxApp.submitForgotForm();">
                             <div>
                                 <label class="block text-xs font-semibold uppercase tracking-wider text-[#667085] dark:text-slate-300 mb-1.5">Tên đăng nhập / Email</label>
-                                <input type="text" id="forgotUsername" required class="w-full px-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                                <input type="text" id="forgotUsername" value="${escapeHtml(state.resetUsername)}" required autocomplete="username" class="w-full px-4 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
                             </div>
-                            <button type="submit" onclick="event.preventDefault(); KtxApp.submitForgotForm();" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-sm shadow-sm transition">Gửi mã xác nhận</button>
+                            <button type="submit" class="w-full py-3 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-sm shadow-sm transition">Gửi mã xác nhận</button>
                             <div class="mt-4 text-center text-xs text-[#667085] dark:text-slate-400">
                                 <button type="button" onclick="KtxApp.setAuthMode('login'); KtxApp.renderApp();" class="font-semibold text-[#0B2A5B] dark:text-[#4C7DD9] hover:underline">Quay lại đăng nhập</button>
                             </div>
@@ -615,6 +658,9 @@ const KtxApp = (function () {
                                         <span class="material-symbols-outlined text-[18px]">key</span>
                                     </div>
                                     <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="Nhập mật khẩu" class="w-full pl-10 pr-11 py-2.5 text-sm bg-white dark:bg-[#0B0F1A] border border-[#E4E7EC] dark:border-[#232B3B] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B2A5B] text-[#0B0F1A] dark:text-[#E8EAF0]" />
+                                    <button type="button" onclick="KtxApp.togglePasswordVisibility('loginPassword', this)" aria-label="Hiện mật khẩu" aria-pressed="false" class="absolute inset-y-0 right-0 flex items-center px-3 text-[#98A2B3] hover:text-[#0B2A5B] dark:hover:text-blue-300 transition">
+                                        <span class="material-symbols-outlined text-[19px]">visibility</span>
+                                    </button>
                                 </div>
                             </div>
 
@@ -631,17 +677,6 @@ const KtxApp = (function () {
                                 <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
                             </button>
                         </form>
-
-                        ${window.ktxDevelopmentBypassEnabled ? `
-                            <div class="mt-5 border-t border-slate-200 dark:border-slate-700 pt-5">
-                                <button type="button" onclick="KtxApp.skipLogin()" class="w-full py-3 px-4 rounded-xl border border-[#0B2A5B] dark:border-blue-400 text-[#0B2A5B] dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-semibold text-sm transition">
-                                    Bỏ qua đăng nhập — xem dữ liệu database
-                                </button>
-                                <p class="mt-2 text-center text-[11px] text-amber-700 dark:text-amber-300">
-                                    Chỉ dùng trong Development; các thao tác sẽ dùng dữ liệu thật.
-                                </p>
-                            </div>
-                        ` : ''}
 
                     </div>
                 </div>
@@ -727,35 +762,59 @@ const KtxApp = (function () {
     }
 
     // Active View Router
-    async function renderActiveView() {
+    function renderPageLoading() {
+        return `
+            <div class="min-h-[60vh] flex flex-col items-center justify-center text-center" role="status" aria-live="polite">
+                <div class="relative flex h-14 w-14 items-center justify-center">
+                    <span class="absolute inset-0 rounded-full border-[3px] border-[#DCE5F0] border-t-[#0B2A5B] animate-spin"></span>
+                    <span class="material-symbols-outlined text-[22px] text-[#0B2A5B]">apartment</span>
+                </div>
+                <h2 class="mt-5 text-base font-semibold text-slate-800 dark:text-white">Đang tải trang...</h2>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Vui lòng chờ trong giây lát</p>
+                <div class="mt-5 h-1 w-48 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div class="page-loading-sweep h-full w-1/2 rounded-full bg-[#0B2A5B]"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function renderActiveView(showPageLoader = false) {
         const content = document.getElementById('mainContent');
         if (!content) return;
+        const renderId = ++activeViewRenderId;
+        const tab = state.currentTab;
+        const startedAt = performance.now();
+        if (showPageLoader) content.innerHTML = renderPageLoading();
 
-        if (state.currentTab === 'dashboard') {
+        let viewHtml = '';
+
+        if (tab === 'dashboard') {
             await loadDashboard();
-            content.innerHTML = renderDashboardView();
-        } else if (state.currentTab === 'don-dang-ky') {
+            viewHtml = renderDashboardView();
+        } else if (tab === 'don-dang-ky') {
             await loadApplications();
-            content.innerHTML = renderAdmissionsView();
-        } else if (state.currentTab === 'hop-dong') {
-            await loadContracts();
-            content.innerHTML = renderContractsView();
-        } else if (state.currentTab === 'sinh-vien') {
+            viewHtml = renderAdmissionsView();
+        } else if (tab === 'hop-dong') {
+            await Promise.all([loadContracts(), loadContractBuildings()]);
+            viewHtml = renderContractsView();
+        } else if (tab === 'sinh-vien') {
             await loadStudents();
-            content.innerHTML = renderStudentsView();
-        } else if (state.currentTab === 'phong-va-giuong') {
+            viewHtml = renderStudentsView();
+        } else if (tab === 'phong-va-giuong') {
             await loadRooms();
-            content.innerHTML = renderRoomsView();
-        } else if (window.KtxExtendedViews && window.KtxExtendedViews.hasView(state.currentTab)) {
-            await window.KtxExtendedViews.renderView(state.currentTab, content, state);
+            viewHtml = renderRoomsView();
+        } else if (window.KtxExtendedViews && window.KtxExtendedViews.hasView(tab)) {
+            const viewContainer = document.createElement('div');
+            await window.KtxExtendedViews.renderView(tab, viewContainer, state);
+            viewHtml = viewContainer.innerHTML;
         } else {
             // Secondary fallback tabs
-            content.innerHTML = `
+            viewHtml = `
                 <div class="bg-white dark:bg-[#121826] rounded-2xl p-8 shadow-xs border border-slate-200 dark:border-[#232B3B] text-center space-y-4">
                     <div class="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/40 text-[#0B2A5B] dark:text-blue-400 mx-auto flex items-center justify-center">
                         <span class="material-symbols-outlined text-[32px]">dataset</span>
                     </div>
-                    <h2 class="text-xl font-bold text-slate-900 dark:text-white capitalize">${state.currentTab.replace(/-/g, ' ')}</h2>
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white capitalize">${tab.replace(/-/g, ' ')}</h2>
                     <p class="text-xs text-slate-500 max-w-md mx-auto">
                         Mô-đun đang đồng bộ dữ liệu thời gian thực từ cơ sở dữ liệu SQL Server DO_AN_QUAN_LY_KTX. Bạn có thể sử dụng các phân hệ chính: <strong>Hồ sơ sinh viên</strong>, <strong>Quản lý hợp đồng</strong>, <strong>Đợt & đơn đăng ký</strong>, và <strong>Sơ đồ buồng phòng</strong>.
                     </p>
@@ -767,6 +826,16 @@ const KtxApp = (function () {
                 </div>
             `;
         }
+
+        if (showPageLoader) {
+            const remainingLoadTime = 550 - (performance.now() - startedAt);
+            if (remainingLoadTime > 0) {
+                await new Promise(resolve => setTimeout(resolve, remainingLoadTime));
+            }
+        }
+
+        if (renderId !== activeViewRenderId || tab !== state.currentTab) return;
+        content.innerHTML = showPageLoader ? `<div class="page-content-enter">${viewHtml}</div>` : viewHtml;
     }
 
     // 1. Dashboard View Renderer
@@ -784,7 +853,9 @@ const KtxApp = (function () {
             urgentTasks: []
         };
 
-        const activeTaskCount = (d.urgentTasks || []).filter(t => !t.completed).length;
+        const zoneOccupancies = d.zoneOccupancies || [];
+        const urgentTasks = d.urgentTasks || [];
+        const activeTaskCount = urgentTasks.filter(t => !t.completed).length;
 
         return `
             <div class="flex flex-col w-full space-y-6">
@@ -905,7 +976,9 @@ const KtxApp = (function () {
                             </div>
 
                             <div class="space-y-4 pt-1">
-                                ${(d.zoneOccupancies || []).map(z => `
+                                ${zoneOccupancies.length === 0 ? `
+                                    <div class="min-h-[112px] flex items-center justify-center text-xs text-slate-400">Không có dữ liệu.</div>
+                                ` : zoneOccupancies.map(z => `
                                     <div class="space-y-1.5">
                                         <div class="flex items-center justify-between text-xs">
                                             <span class="font-semibold text-slate-800 dark:text-slate-200">${z.zoneName}</span>
@@ -959,7 +1032,9 @@ const KtxApp = (function () {
                             </div>
 
                             <div class="divide-y divide-slate-100 dark:divide-slate-800/80 pt-1">
-                                ${(d.urgentTasks || []).map(task => `
+                                ${urgentTasks.length === 0 ? `
+                                    <div class="min-h-[112px] flex items-center justify-center text-xs text-slate-400">Không có dữ liệu.</div>
+                                ` : urgentTasks.map(task => `
                                     <div class="py-3 flex items-center justify-between gap-3 transition-opacity ${task.completed ? 'opacity-40 line-through' : ''}">
                                         <div class="flex items-center gap-3 min-w-0">
                                             <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
@@ -1218,6 +1293,7 @@ const KtxApp = (function () {
                                         </td>
                                     </tr>
                                 `).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1239,7 +1315,7 @@ const KtxApp = (function () {
         else if (state.contractsTab === 'ended') filtered = filtered.filter(c => c.status === 'Đã thanh lý');
 
         if (state.contractsBuilding !== 'all') {
-            filtered = filtered.filter(c => c.buildingId.includes(state.contractsBuilding) || c.roomNumber.startsWith(state.contractsBuilding));
+            filtered = filtered.filter(c => c.buildingId === state.contractsBuilding);
         }
 
         if (state.contractsSearch) {
@@ -1373,9 +1449,12 @@ const KtxApp = (function () {
                             <input type="text" oninput="KtxApp.setContractsSearch(this.value)" placeholder="Số HĐ hoặc tên/MSSV..." class="flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs text-slate-800 dark:text-white focus:outline-none" />
                             <select onchange="KtxApp.setContractsBuilding(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                                 <option value="all">Tất cả Tòa</option>
-                                <option value="A">Khu Tòa A</option>
-                                <option value="B">Khu Tòa B</option>
-                                <option value="C">Khu Tòa C</option>
+                                ${(state.contractBuildings || []).map(building => {
+                                    const buildingId = building.id ?? building.code ?? building.maToaNha ?? building.MaToaNha;
+                                    const buildingName = building.name ?? building.tenToaNha ?? building.TenToaNha ?? buildingId;
+                                    if (!buildingId) return '';
+                                    return `<option value="${escapeHtml(buildingId)}" ${state.contractsBuilding === buildingId ? 'selected' : ''}>${escapeHtml(buildingName)}</option>`;
+                                }).join('')}
                             </select>
                         </div>
                     </div>
@@ -1449,6 +1528,7 @@ const KtxApp = (function () {
                                         </td>
                                     </tr>
                                 `).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="8" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1649,6 +1729,7 @@ const KtxApp = (function () {
                                         </td>
                                     </tr>
                                 `).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1778,7 +1859,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- Toggle Roster vs Grid View -->
-                <div class="flex flex-nowrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs overflow-x-auto">
+                <div class="relative z-20 flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs overflow-visible">
                     <div class="flex items-center p-1 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs shrink-0">
                         <button type="button" onclick="KtxApp.setRoomsViewMode('roster')" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             !isGrid ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
@@ -1794,7 +1875,7 @@ const KtxApp = (function () {
                         </button>
                     </div>
 
-                    <div class="flex flex-nowrap items-center gap-2 shrink-0">
+                    <div class="flex flex-wrap items-center gap-2 shrink-0">
                         <select aria-label="Lọc theo tòa" onchange="KtxApp.setRoomsBuilding(this.value)" class="${selectClass}">
                             <option value="all">Tòa: Tất cả</option>
                             ${buildings.map(building => `<option value="${building}" ${state.roomsBuilding === building ? 'selected' : ''}>Tòa ${building}</option>`).join('')}
@@ -1803,22 +1884,13 @@ const KtxApp = (function () {
                             <option value="all">Tầng: Tất cả</option>
                             ${floors.map(floor => `<option value="${floor}" ${state.roomsFloor === floor ? 'selected' : ''}>Tầng ${floor}</option>`).join('')}
                         </select>
-                        <div class="relative">
-                            ${state.isRoomsRoomMenuOpen ? '<button type="button" aria-label="Đóng danh sách phòng" onclick="KtxApp.closeRoomsRoomMenu()" class="fixed inset-0 z-40 cursor-default"></button>' : ''}
-                            <button type="button" aria-label="Lọc theo phòng" aria-haspopup="listbox" aria-expanded="${state.isRoomsRoomMenuOpen}" onclick="KtxApp.toggleRoomsRoomMenu()" class="${selectClass} relative z-50 flex items-center justify-between gap-3 text-left">
-                                <span>${state.roomsRoomNumber === 'all' ? 'Phòng: Tất cả' : `Phòng ${state.roomsRoomNumber}`}</span>
-                                <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
-                            </button>
-                            ${state.isRoomsRoomMenuOpen ? `
-                                <div role="listbox" aria-label="Chọn phòng" class="absolute top-full left-0 z-50 mt-1 max-h-60 w-full min-w-[160px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] py-1 shadow-lg">
-                                    <button type="button" role="option" aria-selected="${state.roomsRoomNumber === 'all'}" onclick="KtxApp.setRoomsRoomNumber('all')" class="w-full px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">Phòng: Tất cả</button>
-                                    ${roomNumbers.map(roomNumber => `<button type="button" role="option" aria-selected="${state.roomsRoomNumber === roomNumber}" onclick="KtxApp.setRoomsRoomNumber('${roomNumber}')" class="w-full px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">Phòng ${roomNumber}</button>`).join('')}
-                                </div>
-                            ` : ''}
-                        </div>
+                        <select aria-label="Lọc theo phòng" onchange="KtxApp.setRoomsRoomNumber(this.value)" class="${selectClass}">
+                            <option value="all" ${state.roomsRoomNumber === 'all' ? 'selected' : ''}>Phòng: Tất cả</option>
+                            ${roomNumbers.map(roomNumber => `<option value="${roomNumber}" ${state.roomsRoomNumber === roomNumber ? 'selected' : ''}>Phòng ${roomNumber}</option>`).join('')}
+                        </select>
                     </div>
 
-                    <div class="flex flex-nowrap items-center gap-4 text-xs text-slate-600 dark:text-slate-400 shrink-0">
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600 dark:text-slate-400 shrink-0">
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#375ba9]"></span> Đang ở (342)</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Giường trống (38)</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Bảo trì (4)</span>
@@ -1835,6 +1907,7 @@ const KtxApp = (function () {
         const buildings = [...new Set(rooms.map(room => room.buildingId).filter(Boolean))].sort();
         return `
             <div class="space-y-6">
+                ${rooms.length === 0 ? '<div class="rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] p-10 text-center text-xs text-slate-400 shadow-xs">Không có dữ liệu.</div>' : ''}
                 ${buildings.map(bId => {
                     const bRooms = rooms.filter(r => r.buildingId === bId);
                     if (bRooms.length === 0) return '';
@@ -1953,6 +2026,7 @@ const KtxApp = (function () {
                                     </td>
                                 </tr>
                             `).join('')}
+                            ${students.length === 0 ? '<tr><td colspan="10" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                         </tbody>
                     </table>
                 </div>
@@ -2740,6 +2814,8 @@ const KtxApp = (function () {
                 return;
             }
 
+            state.resetUsername = username;
+            state.resetCode = null;
             KtxApp.showToast(json.message || 'Đã gửi mã xác nhận về email.', 'success');
             KtxApp.openVerifyModal(username);
         } catch (error) {
@@ -2749,6 +2825,7 @@ const KtxApp = (function () {
     }
 
     function openVerifyModal(username) {
+        state.resetUsername = username || state.resetUsername;
         const container = document.getElementById('modalsContainer');
         if (!container) return;
         container.innerHTML = `
@@ -2758,18 +2835,14 @@ const KtxApp = (function () {
                         <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Xác Nhận Mã</h3>
                         <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
                     </div>
-                    <form onsubmit="event.preventDefault(); KtxApp.submitVerify('${username}');" class="space-y-3.5 pt-4 text-xs">
+                    <form onsubmit="event.preventDefault(); KtxApp.submitVerify();" class="space-y-3.5 pt-4 text-xs">
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mã xác nhận *</label>
-                            <input id="verifyCode" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
-                        </div>
-                        <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mật khẩu mới *</label>
-                            <input id="verifyNewPassword" required type="password" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            <input id="verifyCode" required type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                         </div>
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                             <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
-                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Xác nhận</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Xác nhận mã</button>
                         </div>
                     </form>
                 </div>
@@ -2778,21 +2851,135 @@ const KtxApp = (function () {
     }
 
     async function submitVerify(username) {
-        const body = {
-            username,
-            code: document.getElementById('verifyCode').value.trim(),
-            newPassword: document.getElementById('verifyNewPassword').value
-        };
-        const res = await fetch('/api/auth/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const json = await res.json().catch(() => ({}));
-        KtxApp.showToast(res.ok ? (json.message || 'Đặt lại mật khẩu thành công.') : (json.message || 'Xác nhận thất bại.'), res.ok ? 'success' : 'error');
-        if (res.ok) KtxApp.closeModal();
+        const identifier = username || state.resetUsername;
+        const codeInput = document.getElementById('verifyCode');
+        if (!identifier || !codeInput) return;
+
+        const code = codeInput.value.trim();
+        try {
+            const res = await fetch('/api/auth/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: identifier, code })
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                KtxApp.showToast(json.message || 'Mã xác nhận không đúng.', 'error');
+                return;
+            }
+
+            state.resetUsername = identifier;
+            state.resetCode = code;
+            KtxApp.showToast(json.message || 'Mã xác nhận đúng.', 'success');
+            KtxApp.openResetPasswordModal();
+        } catch (error) {
+            console.error('Password reset code verification failed:', error);
+            KtxApp.showToast('Không kết nối được máy chủ để xác minh mã.', 'error');
+        }
+    }
+
+    function openResetPasswordModal() {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+                <div class="w-full max-w-md bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Đặt lại mật khẩu</h3>
+                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxApp.submitModalReset();" class="space-y-3.5 pt-4 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mật khẩu mới *</label>
+                            <div class="relative">
+                                <input id="modalResetPassword" required type="password" autocomplete="new-password" class="w-full px-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                                <button type="button" onclick="KtxApp.togglePasswordVisibility('modalResetPassword', this)" aria-label="Hiện mật khẩu" aria-pressed="false" class="absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400 hover:text-[#0B2A5B] transition">
+                                    <span class="material-symbols-outlined text-[18px]">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Đổi mật khẩu</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitModalReset() {
+        const passwordInput = document.getElementById('modalResetPassword');
+        if (!state.resetUsername || !state.resetCode || !passwordInput) return;
+
+        try {
+            const res = await fetch('/api/auth/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: state.resetUsername, code: state.resetCode, newPassword: passwordInput.value })
+            });
+            const json = await res.json().catch(() => ({}));
+            KtxApp.showToast(res.ok ? (json.message || 'Đặt lại mật khẩu thành công.') : (json.message || 'Đặt lại mật khẩu thất bại.'), res.ok ? 'success' : 'error');
+            if (res.ok) {
+                state.resetUsername = null;
+                state.resetCode = null;
+                KtxApp.closeModal();
+            }
+        } catch (error) {
+            console.error('Password reset failed:', error);
+            KtxApp.showToast('Không kết nối được máy chủ để đổi mật khẩu.', 'error');
+        }
     }
 
     function setAuthMode(mode) {
-        state.authMode = ['forgot', 'reset'].includes(mode) ? mode : 'login';
+        state.authMode = ['forgot', 'otp', 'reset'].includes(mode) ? mode : 'login';
+        if (state.authMode === 'login') {
+            state.resetUsername = null;
+            state.resetCode = null;
+        } else if (state.authMode === 'forgot') {
+            state.resetCode = null;
+        }
+        if (state.authMode !== 'otp') {
+            stopOtpResendCountdown();
+        }
         renderApp();
+        if (state.authMode === 'otp') {
+            startOtpResendCountdown();
+        }
     }
+
+    function updateOtpResendButton() {
+        const button = document.getElementById('otpResendButton');
+        const label = document.getElementById('otpResendLabel');
+        const countdown = document.getElementById('otpCountdown');
+        if (!button || !label || !countdown) return;
+
+        const isWaiting = otpResendSeconds > 0;
+        button.disabled = isWaiting || isResendingOtp;
+        label.textContent = isResendingOtp ? 'Đang gửi...' : 'Gửi lại mã';
+        countdown.textContent = isWaiting ? `(${otpResendSeconds}s)` : '';
+    }
+
+    function stopOtpResendCountdown() {
+        if (otpResendTimer) {
+            clearInterval(otpResendTimer);
+            otpResendTimer = null;
+        }
+    }
+
+    function startOtpResendCountdown() {
+        updateOtpResendButton();
+        if (otpResendTimer || otpResendSeconds <= 0) return;
+
+        otpResendTimer = setInterval(() => {
+            otpResendSeconds = Math.max(0, otpResendSeconds - 1);
+            updateOtpResendButton();
+            if (otpResendSeconds === 0) {
+                stopOtpResendCountdown();
+            }
+        }, 1000);
+    }
+
     async function submitForgotForm() {
         const username = document.getElementById('forgotUsername').value.trim();
         try {
@@ -2805,24 +2992,157 @@ const KtxApp = (function () {
 
             state.resetUsername = username;
             state.resetCode = null;
+            otpResendSeconds = 54;
             showToast(json.message || 'Đã gửi mã xác nhận về email.', 'success');
-            setAuthMode('reset');
+            setAuthMode('otp');
         } catch (error) {
             console.error('Password reset email request failed:', error);
             showToast('Không kết nối được máy chủ để gửi mã xác nhận.', 'error');
         }
     }
 
+    async function submitVerifyForm() {
+        const code = Array.from(document.querySelectorAll('#verifyForm [data-otp-digit]'))
+            .map(input => input.value.trim())
+            .join('');
+        if (!state.resetUsername || !code) {
+            showToast('Vui lòng nhập mã xác nhận.', 'error');
+            return;
+        }
+        if (code.length !== 6) {
+            showToast('Vui lòng nhập đủ 6 chữ số của mã OTP.', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/auth/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: state.resetUsername, code })
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(json.message || 'Mã xác nhận không đúng.', 'error');
+                return;
+            }
+
+            state.resetCode = code;
+            showToast(json.message || 'Mã xác nhận đúng.', 'success');
+            setAuthMode('reset');
+        } catch (error) {
+            console.error('Password reset code verification failed:', error);
+            showToast('Không kết nối được máy chủ để xác minh mã.', 'error');
+        }
+    }
+
+    function handleOtpInput(index, input) {
+        const digits = input.value.replace(/\D/g, '').slice(0, 6);
+        if (index === 0 && digits.length > 1) {
+            const inputs = document.querySelectorAll('#verifyForm [data-otp-digit]');
+            digits.split('').forEach((digit, digitIndex) => {
+                if (inputs[digitIndex]) inputs[digitIndex].value = digit;
+            });
+            inputs[Math.min(digits.length, 5)]?.focus();
+            return;
+        }
+
+        input.value = digits.slice(-1);
+        if (input.value) {
+            document.querySelector(`[data-otp-digit="${Math.min(index + 1, 5)}"]`)?.focus();
+        }
+    }
+
+    function handleOtpPaste(event) {
+        const digits = event.clipboardData?.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (!digits) return;
+
+        event.preventDefault();
+        const inputs = document.querySelectorAll('#verifyForm [data-otp-digit]');
+        digits.split('').forEach((digit, index) => {
+            if (inputs[index]) inputs[index].value = digit;
+        });
+        inputs[Math.min(digits.length, 5)]?.focus();
+    }
+
+    function handleOtpKeydown(index, event) {
+        if (event.key === 'Backspace' && !event.currentTarget.value && index > 0) {
+            document.querySelector(`[data-otp-digit="${index - 1}"]`)?.focus();
+        } else if (event.key === 'ArrowLeft' && index > 0) {
+            document.querySelector(`[data-otp-digit="${index - 1}"]`)?.focus();
+        } else if (event.key === 'ArrowRight' && index < 5) {
+            document.querySelector(`[data-otp-digit="${index + 1}"]`)?.focus();
+        }
+    }
+
+    function togglePasswordVisibility(inputId, button) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+
+        const shouldShowPassword = input.type === 'password';
+        input.type = shouldShowPassword ? 'text' : 'password';
+        button.querySelector('.material-symbols-outlined').textContent = shouldShowPassword ? 'visibility_off' : 'visibility';
+        button.setAttribute('aria-label', shouldShowPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+        button.setAttribute('aria-pressed', String(shouldShowPassword));
+    }
+
+    async function submitResendCode() {
+        if (otpResendSeconds > 0 || isResendingOtp) return;
+        if (!state.resetUsername) {
+            showToast('Vui lòng nhập lại email để nhận mã xác nhận.', 'error');
+            setAuthMode('forgot');
+            return;
+        }
+
+        isResendingOtp = true;
+        updateOtpResendButton();
+        try {
+            const res = await fetch('/api/auth/forgot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: state.resetUsername })
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(json.message || 'Gửi lại mã thất bại.', 'error');
+                return;
+            }
+
+            state.resetCode = null;
+            otpResendSeconds = 54;
+            document.querySelectorAll('#verifyForm [data-otp-digit]').forEach(input => { input.value = ''; });
+            document.querySelector('#verifyForm [data-otp-digit="0"]')?.focus();
+            showToast(json.message || 'Đã gửi lại mã xác nhận.', 'success');
+            startOtpResendCountdown();
+        } catch (error) {
+            console.error('Password reset code resend failed:', error);
+            showToast('Không kết nối được máy chủ để gửi lại mã.', 'error');
+        } finally {
+            isResendingOtp = false;
+            updateOtpResendButton();
+        }
+    }
+
     async function submitResetForm() {
+        if (!state.resetUsername || !state.resetCode) {
+            showToast('Vui lòng xác minh mã OTP trước khi đổi mật khẩu.', 'error');
+            setAuthMode('otp');
+            return;
+        }
+
         const body = {
             username: state.resetUsername,
-            code: document.getElementById('resetCode').value.trim() || state.resetCode,
+            code: state.resetCode,
             newPassword: document.getElementById('resetPassword').value
         };
-        const res = await fetch('/api/auth/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const json = await res.json().catch(() => ({}));
-        showToast(res.ok ? (json.message || 'Đặt lại mật khẩu thành công.') : (json.message || 'Đặt lại thất bại.'), res.ok ? 'success' : 'error');
-        if (res.ok) setAuthMode('login');
+        try {
+            const res = await fetch('/api/auth/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const json = await res.json().catch(() => ({}));
+            showToast(res.ok ? (json.message || 'Đặt lại mật khẩu thành công.') : (json.message || 'Đặt lại thất bại.'), res.ok ? 'success' : 'error');
+            if (res.ok) setAuthMode('login');
+        } catch (error) {
+            console.error('Password reset failed:', error);
+            showToast('Không kết nối được máy chủ để đổi mật khẩu.', 'error');
+        }
     }
 
     async function toggleNotifications() {
@@ -3138,27 +3458,15 @@ const KtxApp = (function () {
         state.roomsBuilding = building;
         state.roomsFloor = 'all';
         state.roomsRoomNumber = 'all';
-        state.isRoomsRoomMenuOpen = false;
         renderActiveView();
     }
     function setRoomsFloor(floor) {
         state.roomsFloor = floor;
         state.roomsRoomNumber = 'all';
-        state.isRoomsRoomMenuOpen = false;
-        renderActiveView();
-    }
-    function toggleRoomsRoomMenu() {
-        state.isRoomsRoomMenuOpen = !state.isRoomsRoomMenuOpen;
-        renderActiveView();
-    }
-    function closeRoomsRoomMenu() {
-        if (!state.isRoomsRoomMenuOpen) return;
-        state.isRoomsRoomMenuOpen = false;
         renderActiveView();
     }
     function setRoomsRoomNumber(roomNumber) {
         state.roomsRoomNumber = roomNumber;
-        state.isRoomsRoomMenuOpen = false;
         renderActiveView();
     }
 
@@ -3230,7 +3538,7 @@ const KtxApp = (function () {
         init: async function () {
             initTheme();
             await initUser();
-            renderApp();
+            renderApp(Boolean(state.currentUser));
             await loadSemesterOptions();
         },
         navigate,
@@ -3244,6 +3552,8 @@ const KtxApp = (function () {
         submitForgot,
         openVerifyModal,
         submitVerify,
+        openResetPasswordModal,
+        submitModalReset,
         openCreateRoomModal,
         submitCreateRoom,
         importStudentsExcel,
@@ -3264,8 +3574,13 @@ const KtxApp = (function () {
         handleLoginForm,
         setAuthMode,
         submitForgotForm,
+        submitVerifyForm,
+        submitResendCode,
+        handleOtpInput,
+        handleOtpPaste,
+        handleOtpKeydown,
+        togglePasswordVisibility,
         submitResetForm,
-        skipLogin,
         logout,
         openRegistrationModal,
         closeRegistrationModal,
@@ -3293,8 +3608,6 @@ const KtxApp = (function () {
         setRoomsViewMode,
         setRoomsBuilding,
         setRoomsFloor,
-        toggleRoomsRoomMenu,
-        closeRoomsRoomMenu,
         setRoomsRoomNumber,
         inspectRoom,
         toggleBedMaintenance,
