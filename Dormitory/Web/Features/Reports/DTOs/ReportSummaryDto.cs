@@ -2,7 +2,7 @@ namespace Dormitory.Web.Features.Reports.DTOs
 {
     public class ReportSummaryDto
     {
-        public string Semester { get; set; } = string.Empty;
+        public string AcademicYear { get; set; } = string.Empty;
         public int TotalRooms { get; set; }
         public int TotalBeds { get; set; }
         public int OccupiedBeds { get; set; }

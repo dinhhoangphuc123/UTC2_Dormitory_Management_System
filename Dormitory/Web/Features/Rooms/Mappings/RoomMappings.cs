@@ -5,7 +5,7 @@ namespace Dormitory.Web.Features.Rooms.Mappings
 {
     public static class RoomMappings
     {
-        public static RoomListItemDto ToRoomListItemDto(this Phong p)
+        public static RoomListItemDto ToRoomListItemDto(this Phong p, DateTime yearStart, DateTime yearEnd)
         {
             string roomNum = p.MaPhong.Split('_').Last();
             int capacity = p.LoaiPhong?.SoNguoiToiDa ?? p.DanhSachGiuong.Count;
@@ -13,7 +13,10 @@ namespace Dormitory.Web.Features.Rooms.Mappings
 
             var beds = p.DanhSachGiuong.OrderBy(g => g.SoThuTu).Select(g =>
             {
-                var activeContract = g.DanhSachHopDong?.FirstOrDefault(h => h.TrangThai == "hieuLuc");
+                var activeContract = g.DanhSachHopDong?
+                    .Where(h => h.NgayBatDau <= yearEnd && (h.NgayTraPhongThucTe ?? h.NgayKetThuc) >= yearStart)
+                    .OrderByDescending(h => h.NgayBatDau)
+                    .FirstOrDefault();
                 string bedStatus = !g.LaDangHoat
                     ? "Bảo trì"
                     : (activeContract != null ? "Đang ở" : "Giường trống");

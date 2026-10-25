@@ -19,11 +19,19 @@ namespace Dormitory.Web.Features.Violations.Services
             string? building = null,
             string? penaltyType = null,
             string? violationType = null,
-            string? search = null)
+            string? search = null,
+            string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return new List<ViolationRecordDto>();
+
+            var endExclusive = year.NgayKetThuc.Date.AddDays(1);
             var list = await _context.ViPhams
+                .Where(v => v.NgayViPham >= year.NgayBatDau && v.NgayViPham < endExclusive)
                 .Include(v => v.SinhVien)
-                    .ThenInclude(s => s!.DanhSachHopDong)
+                    .ThenInclude(s => s!.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
                         .ThenInclude(h => h.Giuong)
                             .ThenInclude(g => g!.Phong)
                                 .ThenInclude(p => p!.ToaNha)
@@ -58,18 +66,31 @@ namespace Dormitory.Web.Features.Violations.Services
             return result;
         }
 
-        public async Task<List<ViolationTypeOptionDto>> GetViolationTypesAsync()
+        public async Task<List<ViolationTypeOptionDto>> GetViolationTypesAsync(string? academicYear = null)
         {
+            if (string.IsNullOrWhiteSpace(academicYear) ||
+                !await _context.NamHocs.AnyAsync(n => n.MaNamHoc == academicYear))
+                return new List<ViolationTypeOptionDto>();
+
             return await _context.LoaiViPhams
                 .OrderBy(v => v.TenLoaiViPham)
                 .Select(v => new ViolationTypeOptionDto { Id = v.MaLoaiViPham, Name = v.TenLoaiViPham })
                 .ToListAsync();
         }
 
-        public async Task<ViolationRecordDto?> CreateViolationAsync(CreateViolationDto req)
+        public async Task<ViolationRecordDto?> CreateViolationAsync(CreateViolationDto req, string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null || DateTime.Today < year.NgayBatDau.Date || DateTime.Today > year.NgayKetThuc.Date)
+                return null;
+
             var student = await _context.SinhViens
-                .FirstOrDefaultAsync(s => s.MaSinhVien == req.StudentId);
+                .FirstOrDefaultAsync(s => s.MaSinhVien == req.StudentId &&
+                    ((s.NamNhapHoc >= year.NgayBatDau.Year && s.NamNhapHoc <= year.NgayKetThuc.Year) ||
+                     s.DanhSachHopDong.Any(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear) ||
+                     s.DanhSachDonDangKy.Any(d => d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)));
             var violationType = await _context.LoaiViPhams
                 .FirstOrDefaultAsync(v => v.MaLoaiViPham == req.ViolationTypeId);
             if (student == null || violationType == null)
@@ -98,7 +119,7 @@ namespace Dormitory.Web.Features.Violations.Services
 
             return (await _context.ViPhams
                 .Include(v => v.SinhVien)
-                    .ThenInclude(s => s!.DanhSachHopDong)
+                    .ThenInclude(s => s!.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
                         .ThenInclude(h => h.Giuong)
                             .ThenInclude(g => g!.Phong)
                                 .ThenInclude(p => p!.ToaNha)

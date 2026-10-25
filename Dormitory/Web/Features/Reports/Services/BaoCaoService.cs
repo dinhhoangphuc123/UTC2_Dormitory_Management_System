@@ -13,12 +13,19 @@ namespace Dormitory.Web.Features.Reports.Services
             _context = context;
         }
 
-        public async Task<ReportSummaryDto> GetReportSummaryAsync(string? semester = null, string? scope = null)
+        public async Task<ReportSummaryDto> GetReportSummaryAsync(string? academicYear = null, string? scope = null)
         {
+            var yearCode = string.IsNullOrWhiteSpace(academicYear) ? null : academicYear.Trim();
+            var year = yearCode == null
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == yearCode);
+            if (year == null) return new ReportSummaryDto();
+
             var buildings = await _context.ToaNhas
                 .Include(t => t.DanhSachPhong)
                     .ThenInclude(p => p.DanhSachGiuong)
                         .ThenInclude(g => g.DanhSachHopDong)
+                            .ThenInclude(h => h.KyHoc)
                 .AsSplitQuery()
                 .ToListAsync();
 
@@ -27,17 +34,25 @@ namespace Dormitory.Web.Features.Reports.Services
                 .Include(h => h.HopDong)
                     .ThenInclude(hd => hd!.Giuong)
                         .ThenInclude(g => g!.Phong)
+                .Include(h => h.HopDong)
+                    .ThenInclude(hd => hd!.KyHoc)
                 .ToListAsync();
+            if (yearCode != null)
+            {
+                invoices = invoices
+                    .Where(invoice => invoice.HopDong?.KyHoc?.MaNamHoc == yearCode)
+                    .ToList();
+            }
             var revenueByBuilding = invoices
                 .Where(h => h.HopDong?.Giuong?.Phong != null)
                 .GroupBy(h => h.HopDong!.Giuong!.Phong!.MaToaNha)
                 .ToDictionary(
                     group => group.Key,
                     group => group.Sum(h => h.DanhSachThanhToan.Sum(payment => payment.SoTien)));
-            var currentSemester = await _context.KyHocs
-                .Where(k => k.NgayBatDau <= DateTime.Today && k.NgayKetThuc >= DateTime.Today)
-                .OrderByDescending(k => k.NgayBatDau)
-                .Select(k => k.TenKyHoc)
+            var currentAcademicYear = await _context.NamHocs
+                .Where(n => n.NgayBatDau <= DateTime.Today && n.NgayKetThuc >= DateTime.Today)
+                .OrderByDescending(n => n.NgayBatDau)
+                .Select(n => new { n.MaNamHoc, n.NgayBatDau, n.NgayKetThuc })
                 .FirstOrDefaultAsync();
 
             var buildingOps = new List<BuildingOperationDto>();
@@ -50,7 +65,9 @@ namespace Dormitory.Web.Features.Reports.Services
             {
                 int rCount = b.DanhSachPhong.Count;
                 int bCount = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count);
-                int occCount = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count(g => g.DanhSachHopDong.Any(hd => hd.TrangThai == "hieuLuc")));
+                int occCount = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count(g => g.DanhSachHopDong.Any(hd =>
+                    hd.KyHoc?.MaNamHoc == yearCode &&
+                    hd.NgayBatDau <= year.NgayKetThuc && (hd.NgayTraPhongThucTe ?? hd.NgayKetThuc) >= year.NgayBatDau)));
 
                 int vacant = Math.Max(0, bCount - occCount);
                 double rate = bCount > 0 ? Math.Round((double)occCount / bCount * 100, 1) : 0;
@@ -76,11 +93,16 @@ namespace Dormitory.Web.Features.Reports.Services
 
             int vacantBeds = Math.Max(0, totalBeds - totalOccupied);
             double totalRate = totalBeds > 0 ? Math.Round((double)totalOccupied / totalBeds * 100, 1) : 0.0;
-            decimal totalRevenue = await _context.ThanhToans.SumAsync(t => (decimal?)t.SoTien) ?? 0;
+            decimal totalRevenue = invoices.Sum(invoice => invoice.DanhSachThanhToan.Sum(payment => payment.SoTien));
+            var yearLabel = year != null
+                ? $"{year.NgayBatDau:yyyy}–{year.NgayKetThuc:yyyy} ({year.MaNamHoc})"
+                : yearCode ?? (currentAcademicYear == null
+                    ? string.Empty
+                    : $"{currentAcademicYear.NgayBatDau:yyyy}–{currentAcademicYear.NgayKetThuc:yyyy} ({currentAcademicYear.MaNamHoc})");
 
             return new ReportSummaryDto
             {
-                Semester = string.IsNullOrWhiteSpace(semester) ? currentSemester ?? string.Empty : semester,
+                AcademicYear = yearLabel,
                 TotalRooms = totalRooms,
                 TotalBeds = totalBeds,
                 OccupiedBeds = totalOccupied,

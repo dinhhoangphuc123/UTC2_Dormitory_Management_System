@@ -43,45 +43,42 @@ namespace Dormitory.Web.Features.Academic.Api
         [HttpPost]
         public async Task<IActionResult> CreateYear([FromBody] CreateNamHocRequest req)
         {
-            if (string.IsNullOrWhiteSpace(req.MaNamHoc))
+            var yearCode = req.MaNamHoc?.Trim();
+            if (string.IsNullOrWhiteSpace(yearCode))
                 return BadRequest("Mã năm học không được để trống.");
-            if (await _context.NamHocs.AnyAsync(n => n.MaNamHoc == req.MaNamHoc))
+            if (yearCode.Length > 20)
+                return BadRequest("Mã năm học không được vượt quá 20 ký tự.");
+            if (req.NgayKetThuc.Date <= req.NgayBatDau.Date)
+                return BadRequest("Ngày kết thúc phải sau ngày bắt đầu.");
+            if (await _context.NamHocs.AnyAsync(n => n.MaNamHoc == yearCode))
                 return BadRequest("Mã năm học đã tồn tại.");
 
             var year = new NamHoc
             {
-                MaNamHoc = req.MaNamHoc.Trim(),
-                NgayBatDau = req.NgayBatDau,
-                NgayKetThuc = req.NgayKetThuc,
+                MaNamHoc = yearCode,
+                NgayBatDau = req.NgayBatDau.Date,
+                NgayKetThuc = req.NgayKetThuc.Date,
                 LaDangHoat = req.LaDangHoat
             };
+
+            // Existing registration and contract records still reference KyHoc.
+            // Create one hidden full-year period so new years remain usable without
+            // asking the manager to create semesters in the UI.
+            var annualPeriod = new KyHoc
+            {
+                MaKyHoc = $"AY{Guid.NewGuid():N}"[..14],
+                MaNamHoc = yearCode,
+                TenKyHoc = $"Cả năm {req.NgayBatDau:yyyy}-{req.NgayKetThuc:yyyy}",
+                NgayBatDau = req.NgayBatDau.Date,
+                NgayKetThuc = req.NgayKetThuc.Date
+            };
+
             _context.NamHocs.Add(year);
+            _context.KyHocs.Add(annualPeriod);
             await _context.SaveChangesAsync();
             return Ok(year);
         }
 
-        [HttpPost("{maNamHoc}/kyhoc")]
-        public async Task<IActionResult> CreateSemester(string maNamHoc, [FromBody] CreateKyHocRequest req)
-        {
-            if (!await _context.NamHocs.AnyAsync(n => n.MaNamHoc == maNamHoc))
-                return NotFound("Không tìm thấy năm học.");
-            if (string.IsNullOrWhiteSpace(req.MaKyHoc))
-                return BadRequest("Mã kỳ học không được để trống.");
-            if (await _context.KyHocs.AnyAsync(k => k.MaKyHoc == req.MaKyHoc))
-                return BadRequest("Mã kỳ học đã tồn tại.");
-
-            var semester = new KyHoc
-            {
-                MaKyHoc = req.MaKyHoc.Trim(),
-                MaNamHoc = maNamHoc,
-                TenKyHoc = req.TenKyHoc.Trim(),
-                NgayBatDau = req.NgayBatDau,
-                NgayKetThuc = req.NgayKetThuc
-            };
-            _context.KyHocs.Add(semester);
-            await _context.SaveChangesAsync();
-            return Ok(semester);
-        }
     }
 
     public class CreateNamHocRequest
@@ -92,11 +89,4 @@ namespace Dormitory.Web.Features.Academic.Api
         public bool LaDangHoat { get; set; } = true;
     }
 
-    public class CreateKyHocRequest
-    {
-        public string MaKyHoc { get; set; } = string.Empty;
-        public string TenKyHoc { get; set; } = string.Empty;
-        public DateTime NgayBatDau { get; set; }
-        public DateTime NgayKetThuc { get; set; }
-    }
 }

@@ -8,8 +8,14 @@ namespace Dormitory.Web.Features.Students.Mappings
     {
         public static SinhVienListItemDto ToSinhVienListItemDto(this SinhVien s)
         {
-            var activeContract = s.DanhSachHopDong?.FirstOrDefault(h => h.TrangThai == "hieuLuc");
-            var phong = activeContract?.Giuong?.Phong;
+            var selectedYearContract = s.DanhSachHopDong?
+                .OrderByDescending(h => h.NgayBatDau)
+                .FirstOrDefault();
+            var activeContract = s.DanhSachHopDong?.FirstOrDefault(h =>
+                h.TrangThai == "hieuLuc" && h.NgayBatDau <= DateTime.Today &&
+                (h.NgayTraPhongThucTe ?? h.NgayKetThuc) >= DateTime.Today);
+            var displayedContract = activeContract ?? selectedYearContract;
+            var phong = displayedContract?.Giuong?.Phong;
             var toa = phong?.ToaNha;
             var invoices = s.DanhSachHopDong?.SelectMany(h => h.DanhSachHoaDon).ToList() ?? [];
             var debtAmount = invoices.Sum(i => Math.Max(
@@ -18,7 +24,7 @@ namespace Dormitory.Web.Features.Students.Mappings
                 i.DanhSachThanhToan.Sum(p => p.SoTien)));
 
             string roomNumber = phong != null ? phong.MaPhong.Split('_').Last() : "Chưa xếp";
-            string bedNumber = activeContract?.Giuong != null ? $"G{activeContract.Giuong.SoThuTu}" : "—";
+            string bedNumber = displayedContract?.Giuong != null ? $"G{displayedContract.Giuong.SoThuTu}" : "—";
             string buildingId = toa?.MaToaNha ?? "";
             int floor = phong?.SoTang ?? 0;
 
@@ -48,8 +54,8 @@ namespace Dormitory.Web.Features.Students.Mappings
                 Hometown = s.DiaChiThuongTru ?? "—",
                 PaymentStatus = invoices.Count == 0 ? "Chưa có hóa đơn" : debtAmount > 0 ? "Nợ" : "Đủ",
                 DebtAmount = debtAmount,
-                ResidenceStatus = activeContract != null ? "Đang ở" : "Chưa nội trú",
-                AdmissionDate = activeContract?.NgayBatDau.ToString("dd/MM/yyyy") ?? "—",
+                ResidenceStatus = activeContract != null ? "Đang ở" : selectedYearContract != null ? "Đã nội trú" : "Chưa nội trú",
+                AdmissionDate = displayedContract?.NgayBatDau.ToString("dd/MM/yyyy") ?? "—",
                 BirthDate = s.NgaySinh.ToString("dd/MM/yyyy"),
                 PriorityCategory = s.DoiTuongUuTien
             };

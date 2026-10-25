@@ -8,9 +8,10 @@ namespace Dormitory.Web.Features.Rooms.Services
             string? buildingId = null,
             int? floor = null,
             string? status = null,
-            string? search = null);
+            string? search = null,
+            string? academicYear = null);
 
-        Task<bool> ToggleBedMaintenanceAsync(string bedId);
+        Task<bool> ToggleBedMaintenanceAsync(string bedId, string? academicYear = null);
     }
 }
 

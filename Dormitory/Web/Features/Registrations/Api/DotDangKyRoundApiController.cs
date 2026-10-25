@@ -17,9 +17,10 @@ namespace Dormitory.Web.Features.Registrations.Api
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] string? academicYear)
         {
             var rounds = await _context.DotDangKys
+                .Where(d => d.KyHoc != null && d.KyHoc.MaNamHoc == academicYear)
                 .Include(d => d.KyHoc)
                 .OrderByDescending(d => d.NgayMo)
                 .Select(d => new
@@ -36,7 +37,7 @@ namespace Dormitory.Web.Features.Registrations.Api
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateDotDangKyRequest req)
+        public async Task<IActionResult> Create([FromBody] CreateDotDangKyRequest req, [FromQuery] string? academicYear)
         {
             if (string.IsNullOrWhiteSpace(req.MaDotDangKy))
                 return BadRequest("Mã đợt không được để trống.");
@@ -44,7 +45,7 @@ namespace Dormitory.Web.Features.Registrations.Api
                 return BadRequest("Tên đợt không được để trống.");
             if (string.IsNullOrWhiteSpace(req.MaKyHoc))
                 return BadRequest("Vui lòng chọn kỳ học.");
-            if (!await _context.KyHocs.AnyAsync(k => k.MaKyHoc == req.MaKyHoc))
+            if (!await _context.KyHocs.AnyAsync(k => k.MaKyHoc == req.MaKyHoc && k.MaNamHoc == academicYear))
                 return BadRequest("Kỳ học không tồn tại.");
             if (await _context.DotDangKys.AnyAsync(d => d.MaDotDangKy == req.MaDotDangKy))
                 return BadRequest("Mã đợt đã tồn tại.");

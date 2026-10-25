@@ -20,16 +20,17 @@ namespace Dormitory.Web.Features.Rooms.Api
             [FromQuery] string? buildingId,
             [FromQuery] int? floor,
             [FromQuery] string? status,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] string? academicYear)
         {
-            var rooms = await _phongService.GetAllRoomsAsync(buildingId, floor, status, search);
+            var rooms = await _phongService.GetAllRoomsAsync(buildingId, floor, status, search, academicYear);
             return Ok(ApiResponse<List<RoomListItemDto>>.Ok(rooms));
         }
 
         [HttpPost("beds/{bedId}/toggle-maintenance")]
-        public async Task<IActionResult> ToggleMaintenance(string bedId)
+        public async Task<IActionResult> ToggleMaintenance(string bedId, [FromQuery] string? academicYear)
         {
-            bool success = await _phongService.ToggleBedMaintenanceAsync(bedId);
+            bool success = await _phongService.ToggleBedMaintenanceAsync(bedId, academicYear);
             if (success)
             {
                 return Ok(ApiResponse.Ok("Đã thay đổi trạng thái bảo trì của giường!"));

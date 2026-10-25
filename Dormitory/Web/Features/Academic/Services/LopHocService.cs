@@ -15,11 +15,27 @@ namespace Dormitory.Web.Features.Academic.Services
             _context = context;
         }
 
-        public async Task<List<ClassItemDto>> GetAllClassesAsync(string? facultyKey = null, string? cohort = null, string? search = null)
+        public async Task<List<ClassItemDto>> GetAllClassesAsync(string? facultyKey = null, string? cohort = null, string? search = null, string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return new List<ClassItemDto>();
+
+            var startYear = year.NgayBatDau.Year;
+            var endYear = year.NgayKetThuc.Year;
             var query = _context.LopHocs
-                .Include(l => l.DanhSachSinhVien)
-                    .ThenInclude(s => s.DanhSachHopDong)
+                .Where(l =>
+                    (l.NienKhoa >= startYear && l.NienKhoa <= endYear) ||
+                    l.DanhSachSinhVien.Any(s =>
+                        (s.NamNhapHoc >= startYear && s.NamNhapHoc <= endYear) ||
+                        s.DanhSachHopDong.Any(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear) ||
+                        s.DanhSachDonDangKy.Any(d => d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)))
+                .Include(l => l.DanhSachSinhVien.Where(s =>
+                    (s.NamNhapHoc >= startYear && s.NamNhapHoc <= endYear) ||
+                    s.DanhSachHopDong.Any(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear) ||
+                    s.DanhSachDonDangKy.Any(d => d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)))
+                    .ThenInclude(s => s.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
                 .AsSplitQuery();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -30,7 +46,7 @@ namespace Dormitory.Web.Features.Academic.Services
 
             var list = await query.ToListAsync();
 
-            var result = list.Select(l => l.ToClassItemDto()).ToList();
+            var result = list.Select(l => l.ToClassItemDto(year.NgayBatDau, year.NgayKetThuc)).ToList();
 
             if (!string.IsNullOrWhiteSpace(facultyKey) && facultyKey != "ALL")
             {

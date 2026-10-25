@@ -15,9 +15,14 @@ namespace Dormitory.Web.Features.Invoices.Services
             _context = context;
         }
 
-        public async Task<List<InvoiceItemDto>> GetAllInvoicesAsync(string? building = null, string? category = null, string? status = null, string? search = null)
+        public async Task<List<InvoiceItemDto>> GetAllInvoicesAsync(string? building = null, string? category = null, string? status = null, string? search = null, string? academicYear = null)
         {
+            if (string.IsNullOrWhiteSpace(academicYear) ||
+                !await _context.NamHocs.AnyAsync(n => n.MaNamHoc == academicYear))
+                return new List<InvoiceItemDto>();
+
             var invoices = await _context.HoaDons
+                .Where(h => h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear)
                 .Include(h => h.HopDong)
                     .ThenInclude(hd => hd!.SinhVien)
                 .Include(h => h.HopDong)
@@ -56,8 +61,9 @@ namespace Dormitory.Web.Features.Invoices.Services
             return result;
         }
 
-        public async Task<InvoiceItemDto?> CreateInvoiceAsync(CreateInvoiceDto req)
+        public async Task<InvoiceItemDto?> CreateInvoiceAsync(CreateInvoiceDto req, string? academicYear = null)
         {
+            if (string.IsNullOrWhiteSpace(academicYear)) return null;
             if (!DateTime.TryParseExact(
                     req.DueDate,
                     new[] { "dd/MM/yyyy", "yyyy-MM-dd" },
@@ -73,7 +79,7 @@ namespace Dormitory.Web.Features.Invoices.Services
                 .Include(h => h.Giuong)
                     .ThenInclude(g => g!.Phong)
                         .ThenInclude(p => p!.ToaNha)
-                .Where(h => h.MaSinhVien == req.StudentId && h.TrangThai == "hieuLuc")
+                .Where(h => h.MaSinhVien == req.StudentId && h.TrangThai == "hieuLuc" && h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear)
                 .ToListAsync();
 
             var requestedRoom = NormalizeCode(req.Room);
@@ -118,12 +124,12 @@ namespace Dormitory.Web.Features.Invoices.Services
             return invoice.ToInvoiceItemDto();
         }
 
-        public async Task<bool> ConfirmPaymentAsync(string invoiceId, string paymentMethod)
+        public async Task<bool> ConfirmPaymentAsync(string invoiceId, string paymentMethod, string? academicYear = null)
         {
             var invoice = await _context.HoaDons
                 .Include(h => h.DanhSachThanhToan)
                 .Include(h => h.DanhSachChiTietHoaDon)
-                .FirstOrDefaultAsync(h => h.MaHoaDon == invoiceId);
+                .FirstOrDefaultAsync(h => h.MaHoaDon == invoiceId && h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear);
 
             if (invoice == null || invoice.TrangThai == "daThanhToan")
             {

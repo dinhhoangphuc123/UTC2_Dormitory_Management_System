@@ -16,9 +16,9 @@ namespace Dormitory.Web.Features.Dashboard.Api
         }
 
         [HttpGet("summary")]
-        public async Task<IActionResult> GetSummary()
+        public async Task<IActionResult> GetSummary([FromQuery] string? academicYear)
         {
-            var summary = await _dashboardService.GetDashboardSummaryAsync();
+            var summary = await _dashboardService.GetDashboardSummaryAsync(academicYear);
             return Ok(ApiResponse<DashboardSummaryDto>.Ok(summary));
         }
     }

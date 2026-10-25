@@ -21,14 +21,15 @@ namespace Dormitory.Web.Features.Utilities.Api
             [FromQuery] string? building,
             [FromQuery] int? floor,
             [FromQuery] string? status,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] string? academicYear)
         {
-            var utilities = await _dienNuocService.GetAllUtilitiesAsync(building, floor, status, search);
+            var utilities = await _dienNuocService.GetAllUtilitiesAsync(building, floor, status, search, academicYear);
             return Ok(ApiResponse<List<UtilityItemDto>>.Ok(utilities));
         }
 
         [HttpPost("record")]
-        public async Task<IActionResult> Record([FromBody] RecordUtilityDto req)
+        public async Task<IActionResult> Record([FromBody] RecordUtilityDto req, [FromQuery] string? academicYear)
         {
             var (isValid, errorMessage) = RecordUtilityValidator.Validate(req);
             if (!isValid)
@@ -36,7 +37,7 @@ namespace Dormitory.Web.Features.Utilities.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var updated = await _dienNuocService.RecordUtilityAsync(req);
+            var updated = await _dienNuocService.RecordUtilityAsync(req, academicYear);
             if (updated == null)
             {
                 return NotFound(ApiResponse.Fail("Không tìm thấy thông tin phòng tương ứng!"));

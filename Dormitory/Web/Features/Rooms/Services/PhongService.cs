@@ -18,13 +18,20 @@ namespace Dormitory.Web.Features.Rooms.Services
             string? buildingId = null,
             int? floor = null,
             string? status = null,
-            string? search = null)
+            string? search = null,
+            string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null)
+                return new List<RoomListItemDto>();
+
             var query = _context.Phongs
                 .Include(p => p.ToaNha)
                 .Include(p => p.LoaiPhong)
                 .Include(p => p.DanhSachGiuong)
-                    .ThenInclude(g => g.DanhSachHopDong)
+                    .ThenInclude(g => g.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
                         .ThenInclude(h => h.SinhVien)
                 .AsSplitQuery();
 
@@ -41,7 +48,7 @@ namespace Dormitory.Web.Features.Rooms.Services
 
             var entities = await query.ToListAsync();
 
-            var list = entities.Select(p => p.ToRoomListItemDto()).ToList();
+            var list = entities.Select(p => p.ToRoomListItemDto(year.NgayBatDau, year.NgayKetThuc)).ToList();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -57,8 +64,12 @@ namespace Dormitory.Web.Features.Rooms.Services
             return list;
         }
 
-        public async Task<bool> ToggleBedMaintenanceAsync(string bedId)
+        public async Task<bool> ToggleBedMaintenanceAsync(string bedId, string? academicYear = null)
         {
+            if (string.IsNullOrWhiteSpace(academicYear) ||
+                !await _context.NamHocs.AnyAsync(n => n.MaNamHoc == academicYear))
+                return false;
+
             var bed = await _context.Giuongs.FirstOrDefaultAsync(g => g.MaGiuong == bedId);
             if (bed != null)
             {

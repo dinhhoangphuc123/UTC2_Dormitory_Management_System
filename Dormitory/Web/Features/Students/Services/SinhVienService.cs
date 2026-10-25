@@ -18,18 +18,30 @@ namespace Dormitory.Web.Features.Students.Services
             string? cohort = null,
             string? major = null,
             string? status = null,
-            string? search = null)
+            string? search = null,
+            string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return new List<SinhVienListItemDto>();
+
+            var yearStart = year.NgayBatDau.Year;
+            var yearEnd = year.NgayKetThuc.Year;
             var query = _context.SinhViens
+                .Where(s =>
+                    (s.NamNhapHoc >= yearStart && s.NamNhapHoc <= yearEnd) ||
+                    s.DanhSachHopDong.Any(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear) ||
+                    s.DanhSachDonDangKy.Any(d => d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear))
                 .Include(s => s.LopHoc)
-                .Include(s => s.DanhSachHopDong)
+                .Include(s => s.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
                     .ThenInclude(h => h.Giuong)
                         .ThenInclude(g => g!.Phong)
                             .ThenInclude(p => p!.ToaNha)
-                .Include(s => s.DanhSachHopDong)
+                .Include(s => s.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
                     .ThenInclude(h => h.DanhSachHoaDon)
                         .ThenInclude(i => i.DanhSachThanhToan)
-                .Include(s => s.DanhSachHopDong)
+                .Include(s => s.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
                     .ThenInclude(h => h.DanhSachHoaDon)
                         .ThenInclude(i => i.DanhSachChiTietHoaDon)
                 .AsSplitQuery();
@@ -60,31 +72,11 @@ namespace Dormitory.Web.Features.Students.Services
             return entities.Select(s => s.ToSinhVienListItemDto()).ToList();
         }
 
-        public async Task<SinhVienListItemDto?> GetStudentByIdAsync(string id)
+        public async Task<SinhVienListItemDto?> GetStudentByIdAsync(string id, string? academicYear = null)
         {
-            var students = await GetAllStudentsAsync();
+            var students = await GetAllStudentsAsync(academicYear: academicYear);
             return students.FirstOrDefault(s => s.Mssv == id || s.Id == id);
         }
 
-        public async Task<bool> TransferRoomAsync(string studentId, string newRoomNumber, string newBedNumber)
-        {
-            var contract = await _context.HopDongs
-                .Include(h => h.Giuong)
-                .FirstOrDefaultAsync(h => h.MaSinhVien == studentId && h.TrangThai == "hieuLuc");
-
-            if (contract == null) return false;
-
-            var targetBed = await _context.Giuongs
-                .FirstOrDefaultAsync(g => g.MaPhong.EndsWith(newRoomNumber) && g.SoThuTu == int.Parse(newBedNumber.Replace("G", "").TrimStart('0')));
-
-            if (targetBed != null)
-            {
-                contract.MaGiuong = targetBed.MaGiuong;
-                await _context.SaveChangesAsync();
-                return true;
-            }
-
-            return false;
-        }
     }
 }

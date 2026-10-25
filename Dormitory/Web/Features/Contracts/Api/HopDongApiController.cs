@@ -21,16 +21,16 @@ namespace Dormitory.Web.Features.Contracts.Api
             [FromQuery] string? statusTab,
             [FromQuery] string? building,
             [FromQuery] string? search,
-            [FromQuery] string? semester)
+            [FromQuery] string? academicYear)
         {
-            var contracts = await _hopDongService.GetAllContractsAsync(statusTab, building, search, semester);
+            var contracts = await _hopDongService.GetAllContractsAsync(statusTab, building, search, academicYear);
             return Ok(ApiResponse<List<ContractListItemDto>>.Ok(contracts));
         }
 
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(string id)
+        public async Task<IActionResult> GetById(string id, [FromQuery] string? academicYear)
         {
-            var contract = await _hopDongService.GetContractByIdAsync(id);
+            var contract = await _hopDongService.GetContractByIdAsync(id, academicYear);
             if (contract == null)
             {
                 return NotFound(ApiResponse.Fail("Không tìm thấy hợp đồng."));
@@ -48,7 +48,7 @@ namespace Dormitory.Web.Features.Contracts.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var created = await _hopDongService.CreateContractAsync(req, null);
+            var created = await _hopDongService.CreateContractAsync(req, null, Request.Query["academicYear"].FirstOrDefault());
             if (created == null)
             {
                 return BadRequest(ApiResponse.Fail("Không tìm thấy sinh viên, giường khả dụng hoặc kỳ học phù hợp với dữ liệu đã chọn."));
@@ -60,7 +60,7 @@ namespace Dormitory.Web.Features.Contracts.Api
         [HttpPost("{id}/renew")]
         public async Task<IActionResult> Renew(string id, [FromQuery] int months = 5)
         {
-            bool success = await _hopDongService.RenewContractAsync(id, months);
+            bool success = await _hopDongService.RenewContractAsync(id, months, Request.Query["academicYear"].FirstOrDefault());
             if (success)
             {
                 return Ok(ApiResponse.Ok($"Đã gia hạn hợp đồng {id} thêm {months} tháng thành công!"));
@@ -77,7 +77,7 @@ namespace Dormitory.Web.Features.Contracts.Api
         [HttpPost("{id}/liquidate")]
         public async Task<IActionResult> Liquidate(string id, [FromBody] LiquidateRequest? req)
         {
-            bool success = await _hopDongService.LiquidateContractAsync(id, req?.Reason);
+            bool success = await _hopDongService.LiquidateContractAsync(id, req?.Reason, Request.Query["academicYear"].FirstOrDefault());
             if (success)
             {
                 return Ok(ApiResponse.Ok($"Đã thanh lý và tất toán tiền cọc hợp đồng {id}!"));

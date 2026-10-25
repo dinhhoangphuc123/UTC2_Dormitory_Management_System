@@ -13,20 +13,42 @@ namespace Dormitory.Web.Features.Dashboard.Services
             _context = context;
         }
 
-        public async Task<DashboardSummaryDto> GetDashboardSummaryAsync()
+        public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(string? academicYear = null)
         {
+            var yearCode = string.IsNullOrWhiteSpace(academicYear) ? null : academicYear.Trim();
+            var year = yearCode == null
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == yearCode);
+            if (year == null) return new DashboardSummaryDto();
+
             int totalBeds = await _context.Giuongs.CountAsync();
-            int occupiedBeds = await _context.Giuongs.CountAsync(g => g.DanhSachHopDong.Any(h => h.TrangThai == "hieuLuc"));
+            int occupiedBeds = await _context.Giuongs.CountAsync(g => g.DanhSachHopDong.Any(h =>
+                h.KyHoc != null && h.KyHoc.MaNamHoc == yearCode &&
+                h.NgayBatDau <= year.NgayKetThuc && (h.NgayTraPhongThucTe ?? h.NgayKetThuc) >= year.NgayBatDau));
             int totalStudents = await _context.HopDongs
-                .Where(h => h.TrangThai == "hieuLuc")
+                .Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == yearCode &&
+                    h.NgayBatDau <= year.NgayKetThuc && (h.NgayTraPhongThucTe ?? h.NgayKetThuc) >= year.NgayBatDau)
                 .Select(h => h.MaSinhVien)
                 .Distinct()
                 .CountAsync();
-            int pendingApps = await _context.DonDangKys.CountAsync(d => d.TrangThai == "choDuyet");
-            int repairCount = await _context.YeuCauSuaChuas.CountAsync(y => y.TrangThai == "moiGui" || y.TrangThai == "dangXuLy");
+            int pendingApps = await _context.DonDangKys.CountAsync(d =>
+                d.TrangThai == "choDuyet" &&
+                d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == yearCode);
 
-            decimal totalFeeRevenue = await _context.ThanhToans.SumAsync(t => (decimal?)t.SoTien) ?? 0;
-            decimal totalInvoiceAmount = await _context.ChiTietHoaDons.SumAsync(line => (decimal?)(line.ThanhTien ?? line.SoLuong * line.DonGia)) ?? 0;
+            var repairQuery = _context.YeuCauSuaChuas
+                .Where(y => y.TrangThai == "moiGui" || y.TrangThai == "dangXuLy");
+            var endExclusive = year.NgayKetThuc.Date.AddDays(1);
+            repairQuery = repairQuery.Where(y => y.NgayGui >= year.NgayBatDau && y.NgayGui < endExclusive);
+            int repairCount = await repairQuery.CountAsync();
+
+            decimal totalFeeRevenue = await _context.ThanhToans
+                .Where(t => t.HoaDon != null && t.HoaDon.HopDong != null &&
+                    t.HoaDon.HopDong.KyHoc != null && t.HoaDon.HopDong.KyHoc.MaNamHoc == yearCode)
+                .SumAsync(t => (decimal?)t.SoTien) ?? 0;
+            decimal totalInvoiceAmount = await _context.ChiTietHoaDons
+                .Where(line => line.HoaDon != null && line.HoaDon.HopDong != null &&
+                    line.HoaDon.HopDong.KyHoc != null && line.HoaDon.HopDong.KyHoc.MaNamHoc == yearCode)
+                .SumAsync(line => (decimal?)(line.ThanhTien ?? line.SoLuong * line.DonGia)) ?? 0;
             decimal debtAmount = Math.Max(0, totalInvoiceAmount - totalFeeRevenue);
             double collectedPct = totalInvoiceAmount > 0 ? (double)Math.Round(totalFeeRevenue / totalInvoiceAmount * 100, 1) : 0.0;
             double occupancyPct = totalBeds > 0 ? (double)Math.Round((double)occupiedBeds / totalBeds * 100, 1) : 0;
@@ -36,13 +58,16 @@ namespace Dormitory.Web.Features.Dashboard.Services
                 .Include(t => t.DanhSachPhong)
                     .ThenInclude(p => p.DanhSachGiuong)
                         .ThenInclude(g => g.DanhSachHopDong)
+                            .ThenInclude(h => h.KyHoc)
                 .AsSplitQuery()
                 .ToListAsync();
 
             var zoneOccupancies = buildings.Select(b =>
             {
                 int bBeds = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count);
-                int bOcc = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count(g => g.DanhSachHopDong.Any(hd => hd.TrangThai == "hieuLuc")));
+                int bOcc = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count(g => g.DanhSachHopDong.Any(hd =>
+                    hd.KyHoc?.MaNamHoc == yearCode &&
+                    hd.NgayBatDau <= year.NgayKetThuc && (hd.NgayTraPhongThucTe ?? hd.NgayKetThuc) >= year.NgayBatDau)));
                 double pct = bBeds > 0 ? Math.Round((double)bOcc / bBeds * 100, 1) : 0;
                 return new ZoneOccupancyDto
                 {
@@ -58,7 +83,8 @@ namespace Dormitory.Web.Features.Dashboard.Services
 
             var pendingAppList = await _context.DonDangKys
                 .Include(d => d.SinhVien)
-                .Where(d => d.TrangThai == "choDuyet")
+                .Where(d => d.TrangThai == "choDuyet" &&
+                    (yearCode == null || (d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == yearCode)))
                 .OrderByDescending(d => d.NgayDangKy)
                 .ThenBy(d => d.MaDonDangKy)
                 .Take(5)
@@ -83,6 +109,7 @@ namespace Dormitory.Web.Features.Dashboard.Services
             var openTickets = await _context.YeuCauSuaChuas
                 .Include(y => y.Phong)
                 .Where(y => y.TrangThai == "moiGui" || y.TrangThai == "dangXuLy")
+                .Where(y => y.NgayGui >= year.NgayBatDau && y.NgayGui < endExclusive)
                 .OrderByDescending(y => y.NgayGui)
                 .ThenBy(y => y.MaYeuCau)
                 .Take(5)

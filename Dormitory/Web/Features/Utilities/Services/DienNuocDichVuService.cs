@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
+using Dormitory.Web.Features.Academic.Entities;
 using Dormitory.Web.Features.Utilities.DTOs;
 using Dormitory.Web.Features.Utilities.Entities;
 using Dormitory.Web.Features.Utilities.Mappings;
@@ -15,25 +16,36 @@ namespace Dormitory.Web.Features.Utilities.Services
             _context = context;
         }
 
-        public async Task<List<UtilityItemDto>> GetAllUtilitiesAsync(string? building = null, int? floor = null, string? status = null, string? search = null)
+        public async Task<List<UtilityItemDto>> GetAllUtilitiesAsync(string? building = null, int? floor = null, string? status = null, string? search = null, string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return new List<UtilityItemDto>();
+
+            var startYear = year.NgayBatDau.Year;
+            var startMonth = year.NgayBatDau.Month;
+            var endYear = year.NgayKetThuc.Year;
+            var endMonth = year.NgayKetThuc.Month;
             var rooms = await _context.Phongs
                 .Include(p => p.ToaNha)
                 .Include(p => p.LoaiPhong)
-                .Include(p => p.DanhSachChiSoDienNuoc)
+                .Include(p => p.DanhSachChiSoDienNuoc.Where(c =>
+                    (c.Nam > startYear || (c.Nam == startYear && c.Thang >= startMonth)) &&
+                    (c.Nam < endYear || (c.Nam == endYear && c.Thang <= endMonth))))
                 .OrderBy(p => p.MaToaNha)
                 .ThenBy(p => p.MaPhong)
                 .ToListAsync();
 
-            var serviceRows = await GetActiveServicesAsync();
+            var serviceRows = await GetActiveServicesAsync(year);
             var servicesByRoom = serviceRows
                 .GroupBy(row => row.RoomId)
                 .ToDictionary(group => group.Key, group => group.Select(row => row.Name).Distinct().ToList());
             var result = rooms.Select(r => r.ToUtilityItemDto(servicesByRoom.GetValueOrDefault(r.MaPhong))).ToList();
             if (result.Count > 0)
             {
-                var electricityRate = await GetCurrentRateAsync("dien", DateTime.Today);
-                var waterRate = await GetCurrentRateAsync("nuoc", DateTime.Today);
+                var electricityRate = await GetCurrentRateAsync("dien", year.NgayKetThuc.Date);
+                var waterRate = await GetCurrentRateAsync("nuoc", year.NgayKetThuc.Date);
                 foreach (var item in result)
                 {
                     item.ElectricityRate = electricityRate?.Gia;
@@ -65,8 +77,14 @@ namespace Dormitory.Web.Features.Utilities.Services
             return result;
         }
 
-        public async Task<UtilityItemDto?> RecordUtilityAsync(RecordUtilityDto req)
+        public async Task<UtilityItemDto?> RecordUtilityAsync(RecordUtilityDto req, string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null || DateTime.Today < year.NgayBatDau.Date || DateTime.Today > year.NgayKetThuc.Date)
+                return null;
+
             var room = await _context.Phongs
                 .Include(p => p.ToaNha)
                 .Include(p => p.LoaiPhong)
@@ -80,15 +98,27 @@ namespace Dormitory.Web.Features.Utilities.Services
             int nowYear = now.Year;
 
             var elecIndex = room.DanhSachChiSoDienNuoc.FirstOrDefault(c => c.Loai == "dien" && c.Thang == nowMonth && c.Nam == nowYear);
-            var latestElec = room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "dien").OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
-            var oldElec = elecIndex?.ChiSoCu ?? latestElec?.ChiSoMoi;
+            var latestElec = room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "dien" &&
+                    (c.Nam > year.NgayBatDau.Year || (c.Nam == year.NgayBatDau.Year && c.Thang >= year.NgayBatDau.Month)) &&
+                    (c.Nam < year.NgayKetThuc.Year || (c.Nam == year.NgayKetThuc.Year && c.Thang <= year.NgayKetThuc.Month)))
+                .OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
+            var previousElec = latestElec ?? room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "dien" &&
+                    (c.Nam < year.NgayBatDau.Year || (c.Nam == year.NgayBatDau.Year && c.Thang < year.NgayBatDau.Month)))
+                .OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
+            var oldElec = elecIndex?.ChiSoCu ?? previousElec?.ChiSoMoi;
             var elecRate = elecIndex == null
                 ? await GetCurrentRateAsync("dien", now.Date)
                 : null;
 
             var waterIndex = room.DanhSachChiSoDienNuoc.FirstOrDefault(c => c.Loai == "nuoc" && c.Thang == nowMonth && c.Nam == nowYear);
-            var latestWat = room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "nuoc").OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
-            var oldWater = waterIndex?.ChiSoCu ?? latestWat?.ChiSoMoi;
+            var latestWat = room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "nuoc" &&
+                    (c.Nam > year.NgayBatDau.Year || (c.Nam == year.NgayBatDau.Year && c.Thang >= year.NgayBatDau.Month)) &&
+                    (c.Nam < year.NgayKetThuc.Year || (c.Nam == year.NgayKetThuc.Year && c.Thang <= year.NgayKetThuc.Month)))
+                .OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
+            var previousWat = latestWat ?? room.DanhSachChiSoDienNuoc.Where(c => c.Loai == "nuoc" &&
+                    (c.Nam < year.NgayBatDau.Year || (c.Nam == year.NgayBatDau.Year && c.Thang < year.NgayBatDau.Month)))
+                .OrderByDescending(c => c.Nam).ThenByDescending(c => c.Thang).FirstOrDefault();
+            var oldWater = waterIndex?.ChiSoCu ?? previousWat?.ChiSoMoi;
             var waterRate = waterIndex == null
                 ? await GetCurrentRateAsync("nuoc", now.Date)
                 : null;
@@ -163,7 +193,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                 OldWater = oldWater,
                 NewWater = req.NewWater,
                 UsageWater = usageWat,
-                Services = await GetServicesForRoomAsync(room.MaPhong),
+                Services = await GetServicesForRoomAsync(room.MaPhong, year),
                 Status = isOver ? "EXCEEDED" : "RECORDED",
                 UpdatedAt = now.ToString("dd/MM/yyyy HH:mm")
             };
@@ -177,25 +207,24 @@ namespace Dormitory.Web.Features.Utilities.Services
                 .OrderByDescending(rate => rate.NgayApDung)
                 .FirstOrDefaultAsync();
 
-        private async Task<List<(string RoomId, string Name)>> GetActiveServicesAsync()
+        private async Task<List<(string RoomId, string Name)>> GetActiveServicesAsync(NamHoc year)
         {
-            var today = DateTime.Today;
             return await _context.DangKyDichVus
                 .Where(registration =>
-                    registration.DichVu!.LaDangHoat &&
-                    registration.HopDong!.TrangThai == "hieuLuc" &&
-                    registration.HopDong.NgayBatDau <= today &&
-                    registration.HopDong.NgayKetThuc >= today &&
-                    registration.NgayBatDau <= today &&
-                    (registration.NgayKetThuc == null || registration.NgayKetThuc >= today))
+                    registration.HopDong != null &&
+                    registration.HopDong.KyHoc != null && registration.HopDong.KyHoc.MaNamHoc == year.MaNamHoc &&
+                    registration.HopDong.NgayBatDau <= year.NgayKetThuc &&
+                    registration.HopDong.NgayKetThuc >= year.NgayBatDau &&
+                    registration.NgayBatDau <= year.NgayKetThuc &&
+                    (registration.NgayKetThuc == null || registration.NgayKetThuc >= year.NgayBatDau))
                 .Select(registration => new ValueTuple<string, string>(
                     registration.HopDong!.Giuong!.MaPhong,
                     registration.DichVu!.TenDichVu))
                 .ToListAsync();
         }
 
-        private async Task<List<string>> GetServicesForRoomAsync(string roomId) =>
-            (await GetActiveServicesAsync())
+        private async Task<List<string>> GetServicesForRoomAsync(string roomId, NamHoc year) =>
+            (await GetActiveServicesAsync(year))
                 .Where(service => service.RoomId == roomId)
                 .Select(service => service.Name)
                 .Distinct()

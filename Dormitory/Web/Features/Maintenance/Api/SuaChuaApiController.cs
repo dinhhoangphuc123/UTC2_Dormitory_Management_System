@@ -22,9 +22,10 @@ namespace Dormitory.Web.Features.Maintenance.Api
             [FromQuery] string? category,
             [FromQuery] string? priority,
             [FromQuery] string? status,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] string? academicYear)
         {
-            var tickets = await _suaChuaService.GetAllTicketsAsync(building, category, priority, status, search);
+            var tickets = await _suaChuaService.GetAllTicketsAsync(building, category, priority, status, search, academicYear);
             return Ok(ApiResponse<List<MaintenanceTicketDto>>.Ok(tickets));
         }
 
@@ -37,7 +38,7 @@ namespace Dormitory.Web.Features.Maintenance.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var ticket = await _suaChuaService.CreateTicketAsync(req);
+            var ticket = await _suaChuaService.CreateTicketAsync(req, Request.Query["academicYear"].FirstOrDefault());
             if (ticket == null)
             {
                 return NotFound(ApiResponse.Fail("Không tìm thấy hợp đồng nội trú đang hiệu lực cho sinh viên này."));
@@ -47,9 +48,9 @@ namespace Dormitory.Web.Features.Maintenance.Api
         }
 
         [HttpPost("assign")]
-        public async Task<IActionResult> Assign([FromBody] AssignTicketDto req)
+        public async Task<IActionResult> Assign([FromBody] AssignTicketDto req, [FromQuery] string? academicYear)
         {
-            bool success = await _suaChuaService.AssignTicketAsync(req);
+            bool success = await _suaChuaService.AssignTicketAsync(req, academicYear);
             if (success)
             {
                 return Ok(ApiResponse.Ok($"Đã điều phối kỹ thuật viên {req.Technician} xử lý phiếu!"));
@@ -59,9 +60,9 @@ namespace Dormitory.Web.Features.Maintenance.Api
         }
 
         [HttpPost("{id}/complete")]
-        public async Task<IActionResult> Complete(string id)
+        public async Task<IActionResult> Complete(string id, [FromQuery] string? academicYear)
         {
-            bool success = await _suaChuaService.CompleteTicketAsync(id);
+            bool success = await _suaChuaService.CompleteTicketAsync(id, academicYear);
             if (success)
             {
                 return Ok(ApiResponse.Ok("Đã nghiệm thu và hoàn tất sửa chữa!"));

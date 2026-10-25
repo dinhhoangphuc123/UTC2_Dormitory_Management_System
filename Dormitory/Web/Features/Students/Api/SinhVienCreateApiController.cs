@@ -18,8 +18,14 @@ namespace Dormitory.Web.Features.Students.Api
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateSinhVienRequest req)
+        public async Task<IActionResult> Create([FromBody] CreateSinhVienRequest req, [FromQuery] string? academicYear)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null || req.NamNhapHoc < year.NgayBatDau.Year || req.NamNhapHoc > year.NgayKetThuc.Year)
+                return BadRequest("Năm nhập học của sinh viên phải thuộc năm học đang chọn.");
+
             if (string.IsNullOrWhiteSpace(req.MaSinhVien))
                 return BadRequest("MSSV không được để trống.");
             if (string.IsNullOrWhiteSpace(req.HoTen))
@@ -52,8 +58,14 @@ namespace Dormitory.Web.Features.Students.Api
         }
 
         [HttpPost("import")]
-        public async Task<IActionResult> Import(IFormFile file)
+        public async Task<IActionResult> Import(IFormFile file, [FromQuery] string? academicYear)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null)
+                return BadRequest("Vui lòng chọn một năm học hợp lệ trước khi nhập dữ liệu.");
+
             if (file == null || file.Length == 0)
                 return BadRequest("Vui lòng chọn file Excel.");
             if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
@@ -80,6 +92,7 @@ namespace Dormitory.Web.Features.Students.Api
 
                     DateTime.TryParse(row.Cell(3).GetString(), out var ngaySinh);
                     int.TryParse(row.Cell(10).GetString(), out var namNhapHoc);
+                    if (namNhapHoc < year.NgayBatDau.Year || namNhapHoc > year.NgayKetThuc.Year) continue;
 
                     var student = new SinhVien
                     {

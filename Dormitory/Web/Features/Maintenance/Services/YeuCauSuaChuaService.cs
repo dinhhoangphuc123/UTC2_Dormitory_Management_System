@@ -20,9 +20,17 @@ namespace Dormitory.Web.Features.Maintenance.Services
             string? category = null,
             string? priority = null,
             string? status = null,
-            string? search = null)
+            string? search = null,
+            string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return new List<MaintenanceTicketDto>();
+
+            var endExclusive = year.NgayKetThuc.Date.AddDays(1);
             var tickets = await _context.YeuCauSuaChuas
+                .Where(y => y.NgayGui >= year.NgayBatDau && y.NgayGui < endExclusive)
                 .Include(y => y.Phong)
                 .Include(y => y.SinhVienGui)
                 .Include(y => y.NhanVienXuLy)
@@ -60,12 +68,19 @@ namespace Dormitory.Web.Features.Maintenance.Services
             return result;
         }
 
-        public async Task<MaintenanceTicketDto?> CreateTicketAsync(CreateTicketDto req)
+        public async Task<MaintenanceTicketDto?> CreateTicketAsync(CreateTicketDto req, string? academicYear = null)
         {
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null || DateTime.Today < year.NgayBatDau.Date || DateTime.Today > year.NgayKetThuc.Date)
+                return null;
+
             var activeContract = await _context.HopDongs
                 .Include(h => h.Giuong)
                 .FirstOrDefaultAsync(h =>
                     h.MaSinhVien == req.StudentId &&
+                    h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear &&
                     h.TrangThai == "hieuLuc" &&
                     h.NgayBatDau <= DateTime.Today &&
                     h.NgayKetThuc >= DateTime.Today);
@@ -94,12 +109,17 @@ namespace Dormitory.Web.Features.Maintenance.Services
                 .ToMaintenanceTicketDto();
         }
 
-        public async Task<bool> AssignTicketAsync(AssignTicketDto req)
+        public async Task<bool> AssignTicketAsync(AssignTicketDto req, string? academicYear = null)
         {
             if (!int.TryParse(req.TicketId, out int id) || string.IsNullOrWhiteSpace(req.Technician))
                 return false;
 
-            var ticket = await _context.YeuCauSuaChuas.FindAsync(id);
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return false;
+            var ticket = await _context.YeuCauSuaChuas.FirstOrDefaultAsync(y => y.MaYeuCau == id &&
+                y.NgayGui >= year.NgayBatDau && y.NgayGui < year.NgayKetThuc.Date.AddDays(1));
             var technician = await _context.NhanViens
                 .FirstOrDefaultAsync(n => n.MaNhanVien == req.Technician && n.TrangThai == "dangLam");
             if (ticket == null || technician == null || ticket.TrangThai == "hoanThanh")
@@ -111,11 +131,16 @@ namespace Dormitory.Web.Features.Maintenance.Services
             return true;
         }
 
-        public async Task<bool> CompleteTicketAsync(string ticketId)
+        public async Task<bool> CompleteTicketAsync(string ticketId, string? academicYear = null)
         {
             if (int.TryParse(ticketId, out int id))
             {
-                var ticket = await _context.YeuCauSuaChuas.FindAsync(id);
+                var year = string.IsNullOrWhiteSpace(academicYear)
+                    ? null
+                    : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+                if (year == null) return false;
+                var ticket = await _context.YeuCauSuaChuas.FirstOrDefaultAsync(y => y.MaYeuCau == id &&
+                    y.NgayGui >= year.NgayBatDau && y.NgayGui < year.NgayKetThuc.Date.AddDays(1));
                 if (ticket == null || ticket.TrangThai != "dangXuLy")
                     return false;
 

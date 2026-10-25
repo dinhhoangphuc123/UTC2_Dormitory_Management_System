@@ -4,6 +4,32 @@
  */
 
 const KtxApp = (function () {
+    // Automatically include the selected year on every business API request.
+    // Authentication and the year selector's own API stay unscoped.
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+        const requestUrl = input instanceof Request ? input.url : input;
+        if (typeof requestUrl !== 'string') return nativeFetch(input, init);
+
+        const url = new URL(requestUrl, window.location.origin);
+        if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/')) {
+            return nativeFetch(input, init);
+        }
+
+        const path = url.pathname.toLowerCase();
+        if (path === '/api/namhoc' || path.startsWith('/api/auth/')) {
+            return nativeFetch(input, init);
+        }
+
+        const academicYear = localStorage.getItem('ktx_user_selected_academic_year');
+        if (academicYear && !url.searchParams.has('academicYear')) {
+            url.searchParams.set('academicYear', academicYear);
+        }
+        return input instanceof Request
+            ? nativeFetch(new Request(url.toString(), input), init)
+            : nativeFetch(url.toString(), init);
+    };
+
     // State
     const state = {
         currentUser: null,
@@ -12,7 +38,8 @@ const KtxApp = (function () {
         resetUsername: null,
         resetCode: null,
         darkMode: false,
-        selectedSemester: null,
+        selectedAcademicYear: localStorage.getItem('ktx_user_selected_academic_year') || '',
+        academicYears: [],
         isMobileMenuOpen: false,
         isSearchOpen: false,
         toasts: [],
@@ -224,59 +251,110 @@ const KtxApp = (function () {
 
     // Data Loaders from C# API
     async function loadDashboard() {
-        try {
-            state.dashboardSummary = await fetchApiData('/api/dashboard/summary');
-        } catch (e) {
+        const academicYear = state.selectedAcademicYear;
+        if (!academicYear) {
             state.dashboardSummary = null;
-            reportLoadFailure('Không tải được tổng quan', e);
+            return;
+        }
+        try {
+            const query = `?academicYear=${encodeURIComponent(academicYear)}`;
+            const summary = await fetchApiData(`/api/dashboard/summary${query}`);
+            if (state.selectedAcademicYear === academicYear) state.dashboardSummary = summary;
+        } catch (e) {
+            if (state.selectedAcademicYear === academicYear) {
+                state.dashboardSummary = null;
+                reportLoadFailure('Không tải được tổng quan', e);
+            }
         }
     }
 
     async function loadStudents() {
-        try {
-            state.students = await fetchApiData('/api/sinhvien');
-        } catch (e) {
+        const academicYear = state.selectedAcademicYear;
+        if (!academicYear) {
             state.students = [];
-            reportLoadFailure('Không tải được danh sách sinh viên', e);
+            return;
+        }
+        try {
+            const students = await fetchApiData('/api/sinhvien');
+            if (state.selectedAcademicYear === academicYear) state.students = students;
+        } catch (e) {
+            if (state.selectedAcademicYear === academicYear) {
+                state.students = [];
+                reportLoadFailure('Không tải được danh sách sinh viên', e);
+            }
         }
     }
 
     async function loadContracts() {
-        try {
-            const sem = state.selectedSemester ? `&semester=${encodeURIComponent(state.selectedSemester)}` : '';
-            state.contracts = await fetchApiData(`/api/hopdong?${sem}`);
-        } catch (e) {
+        const academicYear = state.selectedAcademicYear;
+        if (!academicYear) {
             state.contracts = [];
+            return;
+        }
+        try {
+            const query = new URLSearchParams();
+            query.set('academicYear', academicYear);
+            const contracts = await fetchApiData(`/api/hopdong?${query.toString()}`);
+            if (state.selectedAcademicYear === academicYear) state.contracts = contracts;
+        } catch (e) {
+            if (state.selectedAcademicYear === academicYear) state.contracts = [];
         }
     }
 
     async function loadContractBuildings() {
+        const academicYear = state.selectedAcademicYear;
+        if (!academicYear) {
+            state.contractBuildings = [];
+            state.contractBuildingsLoaded = false;
+            return;
+        }
         if (state.contractBuildingsLoaded) return;
         try {
-            state.contractBuildings = await fetchApiData('/api/toanha');
-            state.contractBuildingsLoaded = true;
+            const buildings = await fetchApiData('/api/toanha');
+            if (state.selectedAcademicYear === academicYear) {
+                state.contractBuildings = buildings;
+                state.contractBuildingsLoaded = true;
+            }
         } catch (error) {
-            state.contractBuildings = [];
-            state.contractBuildingsLoaded = true;
-            reportLoadFailure('danh sách tòa nhà', error);
+            if (state.selectedAcademicYear === academicYear) {
+                state.contractBuildings = [];
+                state.contractBuildingsLoaded = true;
+                reportLoadFailure('danh sách tòa nhà', error);
+            }
         }
     }
 
     async function loadApplications() {
-        try {
-            state.applications = await fetchApiData('/api/dondangky');
-        } catch (e) {
+        const academicYear = state.selectedAcademicYear;
+        if (!academicYear) {
             state.applications = [];
-            reportLoadFailure('Không tải được danh sách đơn đăng ký', e);
+            return;
+        }
+        try {
+            const applications = await fetchApiData('/api/dondangky');
+            if (state.selectedAcademicYear === academicYear) state.applications = applications;
+        } catch (e) {
+            if (state.selectedAcademicYear === academicYear) {
+                state.applications = [];
+                reportLoadFailure('Không tải được danh sách đơn đăng ký', e);
+            }
         }
     }
 
     async function loadRooms() {
-        try {
-            state.rooms = await fetchApiData('/api/phong');
-        } catch (e) {
+        const academicYear = state.selectedAcademicYear;
+        if (!academicYear) {
             state.rooms = [];
-            reportLoadFailure('Không tải được sơ đồ phòng', e);
+            return;
+        }
+        try {
+            const rooms = await fetchApiData('/api/phong');
+            if (state.selectedAcademicYear === academicYear) state.rooms = rooms;
+        } catch (e) {
+            if (state.selectedAcademicYear === academicYear) {
+                state.rooms = [];
+                reportLoadFailure('Không tải được sơ đồ phòng', e);
+            }
         }
     }
 
@@ -461,14 +539,14 @@ const KtxApp = (function () {
                     </div>
                 </div>
 
-                <!-- Right: Semester, Dark mode, Notifications, Profile -->
+                <!-- Right: Academic year, Dark mode, Notifications, Profile -->
                 <div class="flex items-center gap-2 sm:gap-3 ml-3 shrink-0">
-                    <!-- Semester Selector -->
+                    <!-- Academic Year Selector -->
                     <div class="relative hidden md:flex items-center gap-2 shrink-0">
-                        <select id="semesterSelect" onchange="KtxApp.changeSemester(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold max-w-[180px]">
-                            <option value="">Chọn kỳ học</option>
+                        <select id="academicYearSelect" onchange="KtxApp.changeAcademicYear(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold max-w-[220px]">
+                            <option value="">Chọn năm học</option>
                         </select>
-                        <button type="button" onclick="KtxApp.toggleSemesterMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold">Quản lý</button>
+                        <button type="button" onclick="KtxApp.toggleAcademicYearMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold">Quản lý năm học</button>
                     </div>
 
                     <!-- Dark Mode Button -->
@@ -516,6 +594,20 @@ const KtxApp = (function () {
                 </div>
             </header>
         `;
+
+        renderAcademicYearOptions();
+    }
+
+    function renderAcademicYearOptions() {
+        const select = document.getElementById('academicYearSelect');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">Chọn năm học</option>' + state.academicYears.map(year => {
+            const code = getAcademicYearCode(year);
+            const label = `${getAcademicYearLabel(year)} (${code})`;
+            return `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`;
+        }).join('');
+        select.value = state.selectedAcademicYear;
     }
 
     // Login View (Exact 2-column split layout from demo)
@@ -1510,8 +1602,8 @@ const KtxApp = (function () {
                                             <div>${formatVND(c.depositAmount)}</div>
                                             <span class="text-[10px] font-bold uppercase text-blue-600">${c.depositStatus}</span>
                                         </td>
-                                        <td class="py-3.5 px-4 text-center">
-                                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                        <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                                            <span class="inline-flex min-w-max items-center justify-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
                                                 c.status === 'Hiệu lực' ? 'bg-emerald-50 text-emerald-700' :
                                                 c.status === 'Sắp hết hạn' ? 'bg-amber-50 text-amber-700' :
                                                 'bg-slate-100 text-slate-600'
@@ -1721,9 +1813,6 @@ const KtxApp = (function () {
                                             <div class="inline-flex items-center gap-1">
                                                 <button type="button" onclick="KtxApp.openStudentModal('${s.mssv}')" class="p-1 rounded-lg text-slate-400 hover:text-[#0B2A5B]" title="Xem hồ sơ">
                                                     <span class="material-symbols-outlined text-[18px]">visibility</span>
-                                                </button>
-                                                <button type="button" onclick="KtxApp.openTransferModal('${s.mssv}')" class="p-1 rounded-lg text-slate-400 hover:text-[#0B2A5B]" title="Đổi phòng">
-                                                    <span class="material-symbols-outlined text-[18px]">swap_horiz</span>
                                                 </button>
                                             </div>
                                         </td>
@@ -2036,6 +2125,10 @@ const KtxApp = (function () {
 
     // Modal Actions
     function openNewContractModal() {
+        if (!state.selectedAcademicYear) {
+            showToast('Vui lòng chọn năm học trước khi lập hợp đồng.', 'error');
+            return;
+        }
         const container = document.getElementById('modalsContainer');
         if (!container) return;
         const students = (state.students || []).filter(student => student.mssv);
@@ -2206,11 +2299,7 @@ const KtxApp = (function () {
                             </div>
                         </div>
 
-                        <div class="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800">
-                            <button type="button" onclick="KtxApp.closeModal(); KtxApp.openTransferModal('${s.mssv}')" class="px-3.5 py-2 rounded-xl bg-blue-50 text-[#0B2A5B] font-semibold text-xs hover:bg-blue-100 flex items-center gap-1.5">
-                                <span class="material-symbols-outlined text-[16px]">swap_horiz</span>
-                                <span>Điều chuyển buồng phòng</span>
-                            </button>
+                        <div class="flex justify-end items-center pt-3 border-t border-slate-200 dark:border-slate-800">
                             <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white font-semibold text-xs hover:bg-[#143F8C]">Đóng</button>
                         </div>
                     </div>
@@ -2355,10 +2444,6 @@ const KtxApp = (function () {
 
                     <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
                         <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-xs font-semibold text-slate-700">Đóng</button>
-                        <button type="button" onclick="KtxApp.showToast('Đã trích xuất sơ đồ buồng phòng ra file PDF', 'success'); KtxApp.closeModal();" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-xs font-semibold flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-[16px]">print</span>
-                            <span>In sơ đồ phòng</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -2378,10 +2463,6 @@ const KtxApp = (function () {
         } catch (e) {
             console.error(e);
         }
-    }
-
-    function openTransferModal(studentId) {
-        showToast(`Mở giao diện điều chuyển buồng phòng cho sinh viên ${studentId}`, 'info');
     }
 
     function inspectCandidate(appId) {
@@ -2488,13 +2569,17 @@ const KtxApp = (function () {
     }
 
     async function openCreateRoundModal() {
+        if (!state.selectedAcademicYear) {
+            showToast('Vui lòng chọn năm học trước khi tạo đợt đăng ký.', 'error');
+            return;
+        }
         const container = document.getElementById('modalsContainer');
         if (!container) return;
         let sems = [];
         try {
             const res = await fetch('/api/namhoc');
             const years = await res.json();
-            (years || []).forEach(y => {
+            (years || []).filter(y => (y.maNamHoc || y.MaNamHoc) === state.selectedAcademicYear).forEach(y => {
                 (y.kyHocs || y.KyHocs || []).forEach(k => {
                     sems.push({ code: k.maKyHoc || k.MaKyHoc, name: k.tenKyHoc || k.TenKyHoc });
                 });
@@ -2564,6 +2649,10 @@ const KtxApp = (function () {
     }
 
     async function openCreateStudentModal() {
+        if (!state.selectedAcademicYear) {
+            showToast('Vui lòng chọn năm học trước khi tiếp nhận sinh viên.', 'error');
+            return;
+        }
         const container = document.getElementById('modalsContainer');
         if (!container) return;
         let classes = [];
@@ -2574,6 +2663,8 @@ const KtxApp = (function () {
         } catch (e) {
             classes = [];
         }
+        const academicYear = state.academicYears.find(year => getAcademicYearCode(year) === state.selectedAcademicYear);
+        const intakeYear = String(academicYear?.ngayBatDau || academicYear?.NgayBatDau || '').slice(0, 4) || String(new Date().getFullYear());
         container.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
                 <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
@@ -2633,7 +2724,7 @@ const KtxApp = (function () {
                             </div>
                             <div>
                                 <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Năm Nhập Học *</label>
-                                <input id="stuYear" required type="number" value="2026" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                                <input id="stuYear" required type="number" value="${escapeHtml(intakeYear)}" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
                         </div>
                         <div>
@@ -2675,6 +2766,10 @@ const KtxApp = (function () {
     }
 
     function importStudentsExcel() {
+        if (!state.selectedAcademicYear) {
+            showToast('Vui lòng chọn năm học trước khi nhập danh sách sinh viên.', 'error');
+            return;
+        }
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.xlsx';
@@ -2699,6 +2794,10 @@ const KtxApp = (function () {
     }
 
     async function openCreateRoomModal() {
+        if (!state.selectedAcademicYear) {
+            showToast('Vui lòng chọn năm học trước khi thêm phòng.', 'error');
+            return;
+        }
         const container = document.getElementById('modalsContainer');
         if (!container) return;
         let buildings = [];
@@ -3189,81 +3288,120 @@ const KtxApp = (function () {
         }
     }
 
-    async function toggleSemesterMenu() {
+    function getAcademicYearCode(year) {
+        return year?.maNamHoc || year?.MaNamHoc || '';
+    }
+
+    function getAcademicYearLabel(year) {
+        const code = getAcademicYearCode(year);
+        const startDate = String(year?.ngayBatDau || year?.NgayBatDau || '');
+        const endDate = String(year?.ngayKetThuc || year?.NgayKetThuc || '');
+        const startYear = startDate.slice(0, 4);
+        const endYear = endDate.slice(0, 4);
+        return startYear && endYear ? `${startYear}–${endYear}` : code;
+    }
+
+    function formatAcademicYearDate(value) {
+        const date = String(value || '').slice(0, 10);
+        const parts = date.split('-');
+        return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : '—';
+    }
+
+    async function fetchAcademicYears() {
+        const response = await fetch('/api/namhoc');
+        if (!response.ok) throw new Error('Không tải được danh sách năm học.');
+        const years = await response.json();
+        state.academicYears = Array.isArray(years) ? years : [];
+        return state.academicYears;
+    }
+
+    async function toggleAcademicYearMenu() {
         const container = document.getElementById('modalsContainer');
         if (!container) return;
         let years = [];
         try {
-            const res = await fetch('/api/namhoc');
-            const json = await res.json();
-            years = json || [];
-        } catch (e) {
-            years = [];
+            years = await fetchAcademicYears();
+        } catch (error) {
+            showToast(error.message || 'Không tải được danh sách năm học.', 'error');
         }
+
         container.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onclick="KtxApp.closeModal()">
-                <div class="w-full max-w-6xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden animate-fade-in" onclick="event.stopPropagation()">
+                <div class="w-full max-w-4xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden animate-fade-in" onclick="event.stopPropagation()">
                     <div class="px-5 py-4 border-b border-slate-200 dark:border-[#232B3B] flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-slate-800 dark:text-white">Quản lý năm học & kỳ học</h3>
-                        <button type="button" onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white">Quản lý năm học</h3>
+                        <button type="button" onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600" aria-label="Đóng">✕</button>
                     </div>
-                    <div class="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div class="p-5 space-y-5 max-h-[70vh] overflow-y-auto">
                         <form onsubmit="KtxApp.createAcademicYear(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                            <input name="maNamHoc" placeholder="Mã năm học (NH2027-2028)" class="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
-                            <input name="ngayBatDau" type="date" class="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
-                            <input name="ngayKetThuc" type="date" class="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
-                            <button type="submit" class="h-9 px-3 rounded-lg bg-[#0B2A5B] text-white text-xs font-semibold">Thêm năm học</button>
+                            <input name="maNamHoc" maxlength="20" placeholder="Mã năm học (NH2027-2028)" aria-label="Mã năm học" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                            <input name="ngayBatDau" type="date" aria-label="Ngày bắt đầu năm học" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                            <input name="ngayKetThuc" type="date" aria-label="Ngày kết thúc năm học" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
+                            <button type="submit" class="h-10 px-3 rounded-lg bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold">Thêm năm học</button>
                         </form>
-                        ${years.map(y => `
-                            <div class="border border-slate-200 dark:border-[#232B3B] rounded-xl p-3">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-semibold text-xs text-slate-800 dark:text-white">${y.maNamHoc || y.MaNamHoc}</span>
-                                    <form onsubmit="KtxApp.createSemester(event, '${y.maNamHoc || y.MaNamHoc}')" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                                        <input name="maKyHoc" placeholder="Mã kỳ (HK1_2027_2028)" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
-                                        <input name="tenKyHoc" placeholder="Tên kỳ" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
-                                        <input name="ngayBatDau" type="date" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
-                                        <input name="ngayKetThuc" type="date" class="h-8 px-2 rounded border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-xs" required />
-                                        <button type="submit" class="h-8 px-2 rounded bg-[#0B2A5B] text-white text-xs md:col-span-3">Thêm kỳ</button>
-                                    </form>
-                                </div>
-                                <div class="text-xs text-slate-500">${(y.kyHocs || y.KyHocs || []).map(k => `<button type="button" onclick="KtxApp.selectSemester('${k.maKyHoc || k.MaKyHoc}')" class="inline-block px-2 py-0.5 mr-1 mb-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 text-slate-700 dark:text-slate-200">${(k.tenKyHoc || k.TenKyHoc)} (${(k.maKyHoc || k.MaKyHoc)})</button>`).join('') || 'Chưa có kỳ học'}</div>
+
+                        <section class="rounded-xl border border-slate-200 dark:border-[#232B3B] overflow-hidden">
+                            <div class="px-4 py-3 bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200 dark:border-[#232B3B]">
+                                <h4 class="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Danh sách năm học</h4>
                             </div>
-                        `).join('')}
+                            ${years.length ? years.map(year => {
+                                const code = getAcademicYearCode(year);
+                                const codeAttr = escapeHtml(code);
+                                const selected = code === state.selectedAcademicYear;
+                                const isActive = year.laDangHoat ?? year.LaDangHoat;
+                                return `
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b last:border-b-0 border-slate-100 dark:border-slate-800">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="font-semibold text-sm text-slate-800 dark:text-white">Năm học ${escapeHtml(getAcademicYearLabel(year))}</span>
+                                                ${isActive ? '<span class="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">Đang hoạt động</span>' : ''}
+                                            </div>
+                                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">${codeAttr} · ${formatAcademicYearDate(year.ngayBatDau || year.NgayBatDau)} – ${formatAcademicYearDate(year.ngayKetThuc || year.NgayKetThuc)}</p>
+                                        </div>
+                                        <button type="button" data-academic-year="${codeAttr}" onclick="KtxApp.changeAcademicYear(this.dataset.academicYear); KtxApp.closeModal()" class="shrink-0 px-3 py-2 rounded-lg border ${selected ? 'border-[#0B2A5B] bg-blue-50 dark:bg-blue-900/30 text-[#0B2A5B] dark:text-blue-200' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'} text-xs font-semibold">${selected ? 'Đang chọn' : 'Chọn năm học'}</button>
+                                    </div>
+                                `;
+                            }).join('') : '<div class="px-4 py-8 text-center text-xs text-slate-400">Chưa có năm học. Hãy tạo năm học đầu tiên.</div>'}
+                        </section>
                     </div>
                 </div>
             </div>
         `;
     }
 
-    function selectSemester(code) {
-        state.selectedSemester = code;
-        localStorage.setItem('ktx_selected_semester', code || '');
-        closeModal();
-        loadContracts();
-        showToast(`Đã chọn kỳ học: ${code}`, 'success');
-    }
-
-    function changeSemester(code) {
-        state.selectedSemester = code || null;
-        loadContracts();
-    }
-
-    async function loadSemesterOptions() {
-        const select = document.getElementById('semesterSelect');
-        if (!select) return;
+    async function loadAcademicYearOptions(preferredCode = null) {
+        const previousSelection = state.selectedAcademicYear;
         try {
-            const res = await fetch('/api/namhoc');
-            const years = await res.json();
-            const sems = [];
-            (years || []).forEach(y => {
-                (y.kyHocs || y.KyHocs || []).forEach(k => {
-                    sems.push({ code: k.maKyHoc || k.MaKyHoc, name: k.tenKyHoc || k.TenKyHoc });
-                });
-            });
-            select.innerHTML = '<option value="">Chọn kỳ học</option>' + sems.map(s => `<option value="${s.code}" ${state.selectedSemester === s.code ? 'selected' : ''}>${s.name} (${s.code})</option>`).join('');
-        } catch (e) {
-            // ignore
+            const years = await fetchAcademicYears();
+            const codes = years.map(getAcademicYearCode);
+            let selectedCode = preferredCode || state.selectedAcademicYear;
+            if (!codes.includes(selectedCode)) selectedCode = '';
+
+            state.selectedAcademicYear = selectedCode;
+            if (selectedCode) localStorage.setItem('ktx_user_selected_academic_year', selectedCode);
+            else localStorage.removeItem('ktx_user_selected_academic_year');
+            localStorage.removeItem('ktx_selected_semester');
+            renderAcademicYearOptions();
+        } catch (error) {
+            reportLoadFailure('Không tải được danh sách năm học', error);
         }
+        return previousSelection !== state.selectedAcademicYear;
+    }
+
+    async function changeAcademicYear(code) {
+        state.selectedAcademicYear = code || '';
+        if (state.selectedAcademicYear) localStorage.setItem('ktx_user_selected_academic_year', state.selectedAcademicYear);
+        else localStorage.removeItem('ktx_user_selected_academic_year');
+        state.dashboardSummary = null;
+        state.students = [];
+        state.contracts = [];
+        state.contractBuildings = [];
+        state.contractBuildingsLoaded = false;
+        state.applications = [];
+        state.rooms = [];
+        const yearSelect = document.getElementById('academicYearSelect');
+        if (yearSelect) yearSelect.value = state.selectedAcademicYear;
+        await renderActiveView();
     }
 
     async function createAcademicYear(e) {
@@ -3271,30 +3409,39 @@ const KtxApp = (function () {
         const form = e.target;
         const fd = new FormData(form);
         const body = {
-            maNamHoc: fd.get('maNamHoc'),
+            maNamHoc: String(fd.get('maNamHoc') || '').trim(),
             ngayBatDau: fd.get('ngayBatDau'),
             ngayKetThuc: fd.get('ngayKetThuc'),
             laDangHoat: true
         };
-        const res = await fetch('/api/namhoc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const json = await res.json();
-        showToast(res.ok ? 'Đã thêm năm học.' : (json?.message || 'Thêm năm học thất bại.'), res.ok ? 'success' : 'error');
-        if (res.ok) { toggleSemesterMenu(); loadSemesterOptions(); }
-    }
 
-    async function createSemester(e, maNamHoc) {
-        e.preventDefault();
-        const form = e.target;
-        const fd = new FormData(form);
-        const body = {
-            maKyHoc: fd.get('maKyHoc'),
-            tenKyHoc: fd.get('tenKyHoc'),
-            ngayBatDau: fd.get('ngayBatDau'),
-            ngayKetThuc: fd.get('ngayKetThuc')
-        };
-        const res = await fetch(`/api/namhoc/${encodeURIComponent(maNamHoc)}/kyhoc`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        showToast(res.ok ? 'Đã thêm kỳ học.' : 'Thêm kỳ học thất bại.', res.ok ? 'success' : 'error');
-        if (res.ok) { toggleSemesterMenu(); loadSemesterOptions(); }
+        if (body.ngayKetThuc <= body.ngayBatDau) {
+            showToast('Ngày kết thúc phải sau ngày bắt đầu.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/namhoc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const result = await response.json().catch(() => null);
+            if (!response.ok) {
+                const message = typeof result === 'string' ? result : result?.message;
+                showToast(message || 'Thêm năm học thất bại.', 'error');
+                return;
+            }
+
+            state.selectedAcademicYear = body.maNamHoc;
+            localStorage.setItem('ktx_user_selected_academic_year', body.maNamHoc);
+            await loadAcademicYearOptions(body.maNamHoc);
+            await toggleAcademicYearMenu();
+            await renderActiveView();
+            showToast('Đã thêm năm học và cập nhật vào bộ chọn.', 'success');
+        } catch (error) {
+            showToast(error.message || 'Thêm năm học thất bại.', 'error');
+        }
     }
 
 
@@ -3471,6 +3618,10 @@ const KtxApp = (function () {
     }
 
     async function exportReport(title = 'Báo cáo') {
+        if (!state.selectedAcademicYear) {
+            showToast('Vui lòng chọn năm học trước khi xuất báo cáo.', 'error');
+            return;
+        }
         const tab = state.currentTab;
         let rows = null;
         let headers = null;
@@ -3485,8 +3636,10 @@ const KtxApp = (function () {
             rows = state.applications.map(a => [a.applicationCode, a.studentName, a.mssv, a.status, a.priorityCategory]);
         } else {
             try {
-                const sem = state.selectedSemester ? `?semester=${encodeURIComponent(state.selectedSemester)}` : '';
-                const res = await fetch(`/api/baocao/export${sem}`);
+                const academicYear = state.selectedAcademicYear
+                    ? `?academicYear=${encodeURIComponent(state.selectedAcademicYear)}`
+                    : '';
+                const res = await fetch(`/api/baocao/export${academicYear}`);
                 if (!res.ok) throw new Error('fail');
                 const blob = await res.blob();
                 const url = window.URL.createObjectURL(blob);
@@ -3538,14 +3691,15 @@ const KtxApp = (function () {
         init: async function () {
             initTheme();
             await initUser();
+            await loadAcademicYearOptions();
             renderApp(Boolean(state.currentUser));
-            await loadSemesterOptions();
+            await loadAcademicYearOptions();
         },
         navigate,
         toggleDarkMode,
         toggleMobileMenu,
         toggleProfileMenu,
-        toggleSemesterMenu,
+        toggleAcademicYearMenu,
         toggleNotifications,
         closeNotifications,
         openForgotModal,
@@ -3561,11 +3715,8 @@ const KtxApp = (function () {
         submitCreateStudent,
         openCreateRoundModal,
         submitCreateRound,
-        changeSemester,
-        loadSemesterOptions,
-        selectSemester,
+        changeAcademicYear,
         createAcademicYear,
-        createSemester,
         showNotificationToast,
         openSearch,
         closeSearch,
@@ -3604,7 +3755,6 @@ const KtxApp = (function () {
         setStudentsSearch,
         resetStudentsFilters,
         openStudentModal,
-        openTransferModal,
         setRoomsViewMode,
         setRoomsBuilding,
         setRoomsFloor,
@@ -3613,6 +3763,7 @@ const KtxApp = (function () {
         toggleBedMaintenance,
         closeModal,
         getCurrentTab: () => state.currentTab,
+        getSelectedAcademicYear: () => state.selectedAcademicYear,
         exportReport
     };
 })();

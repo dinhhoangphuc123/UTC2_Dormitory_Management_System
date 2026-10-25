@@ -14,12 +14,12 @@ namespace Dormitory.Web.Features.Payments.Services
             _context = context;
         }
 
-        public async Task<bool> ProcessPaymentAsync(ConfirmPaymentDto req)
+        public async Task<bool> ProcessPaymentAsync(ConfirmPaymentDto req, string? academicYear = null)
         {
             var invoice = await _context.HoaDons
                 .Include(h => h.DanhSachThanhToan)
                 .Include(h => h.DanhSachChiTietHoaDon)
-                .FirstOrDefaultAsync(h => h.MaHoaDon == req.InvoiceId);
+                .FirstOrDefaultAsync(h => h.MaHoaDon == req.InvoiceId && h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear);
             if (invoice == null || invoice.TrangThai == "daThanhToan")
             {
                 return false;
@@ -57,9 +57,12 @@ namespace Dormitory.Web.Features.Payments.Services
             return true;
         }
 
-        public async Task<decimal> GetTotalRevenueAsync()
+        public async Task<decimal> GetTotalRevenueAsync(string? academicYear = null)
         {
-            return await _context.ThanhToans.SumAsync(t => t.SoTien);
+            if (string.IsNullOrWhiteSpace(academicYear)) return 0;
+            return await _context.ThanhToans
+                .Where(t => t.HoaDon != null && t.HoaDon.HopDong != null && t.HoaDon.HopDong.KyHoc != null && t.HoaDon.HopDong.KyHoc.MaNamHoc == academicYear)
+                .SumAsync(t => t.SoTien);
         }
     }
 }

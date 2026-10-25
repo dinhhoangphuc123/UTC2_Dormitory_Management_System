@@ -25,10 +25,4 @@ namespace Dormitory.Web.Features.Students.DTOs
         public string? PriorityCategory { get; set; }
     }
 
-    public class TransferRoomDto
-    {
-        public string StudentId { get; set; } = string.Empty;
-        public string NewRoomNumber { get; set; } = string.Empty;
-        public string NewBedNumber { get; set; } = string.Empty;
-    }
 }

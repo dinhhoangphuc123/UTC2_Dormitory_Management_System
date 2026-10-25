@@ -4,6 +4,6 @@ namespace Dormitory.Web.Features.Dashboard.Services
 {
     public interface IDashboardService
     {
-        Task<DashboardSummaryDto> GetDashboardSummaryAsync();
+        Task<DashboardSummaryDto> GetDashboardSummaryAsync(string? academicYear = null);
     }
 }

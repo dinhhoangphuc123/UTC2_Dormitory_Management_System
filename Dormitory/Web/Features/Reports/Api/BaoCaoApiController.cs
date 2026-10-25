@@ -18,25 +18,25 @@ namespace Dormitory.Web.Features.Reports.Api
 
         [HttpGet("summary")]
         public async Task<IActionResult> GetSummary(
-            [FromQuery] string? semester,
+            [FromQuery] string? academicYear,
             [FromQuery] string? scope)
         {
-            var summary = await _baoCaoService.GetReportSummaryAsync(semester, scope);
+            var summary = await _baoCaoService.GetReportSummaryAsync(academicYear, scope);
             return Ok(ApiResponse<ReportSummaryDto>.Ok(summary));
         }
 
         [HttpGet("export")]
         public async Task<IActionResult> Export(
-            [FromQuery] string? semester,
+            [FromQuery] string? academicYear,
             [FromQuery] string? scope)
         {
-            var summary = await _baoCaoService.GetReportSummaryAsync(semester, scope);
+            var summary = await _baoCaoService.GetReportSummaryAsync(academicYear, scope);
 
             using (var workbook = new XLWorkbook())
             {
                 var ws = workbook.Worksheets.Add("BaoCao");
                 ws.Cell(1, 1).Value = "Báo cáo tổng hợp KTX";
-                ws.Cell(2, 1).Value = $"Học kỳ: {summary.Semester}";
+                ws.Cell(2, 1).Value = $"Năm học: {summary.AcademicYear}";
                 ws.Cell(3, 1).Value = $"Tổng phòng: {summary.TotalRooms}";
                 ws.Cell(4, 1).Value = $"Tổng giường: {summary.TotalBeds}";
                 ws.Cell(5, 1).Value = $"Đang ở: {summary.OccupiedBeds}";

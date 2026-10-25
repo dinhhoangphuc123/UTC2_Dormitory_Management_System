@@ -162,7 +162,7 @@ window.KtxExtendedViews = (function () {
                 container.innerHTML = renderStaffView();
                 break;
             case 'bao-cao':
-                await loadReports();
+                await loadReports(appState);
                 container.innerHTML = renderReportsView();
                 break;
             default:
@@ -174,10 +174,16 @@ window.KtxExtendedViews = (function () {
     // 1. LỚP VÀ KHOA VIỆN (Classes View)
     // ========================================================
     async function loadClasses() {
-        try {
-            extState.classes = await fetchApiData('/api/lophoc');
-        } catch (error) {
+        const academicYear = KtxApp.getSelectedAcademicYear();
+        if (!academicYear) {
             extState.classes = [];
+            return;
+        }
+        try {
+            const classes = await fetchApiData('/api/lophoc');
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.classes = classes;
+        } catch (error) {
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.classes = [];
             reportLoadFailure('danh sách lớp học', error);
         }
     }
@@ -493,10 +499,16 @@ window.KtxExtendedViews = (function () {
     // 2. ĐIỆN NƯỚC & DỊCH VỤ (Utilities View)
     // ========================================================
     async function loadUtilities() {
-        try {
-            extState.utilities = await fetchApiData('/api/diennuoc');
-        } catch (error) {
+        const academicYear = KtxApp.getSelectedAcademicYear();
+        if (!academicYear) {
             extState.utilities = [];
+            return;
+        }
+        try {
+            const utilities = await fetchApiData('/api/diennuoc');
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.utilities = utilities;
+        } catch (error) {
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.utilities = [];
             reportLoadFailure('dữ liệu điện nước', error);
         }
     }
@@ -806,10 +818,16 @@ window.KtxExtendedViews = (function () {
     // 3. HÓA ĐƠN & THU PHÍ (Invoices View)
     // ========================================================
     async function loadInvoices() {
-        try {
-            extState.invoices = await fetchApiData('/api/hoadon');
-        } catch (error) {
+        const academicYear = KtxApp.getSelectedAcademicYear();
+        if (!academicYear) {
             extState.invoices = [];
+            return;
+        }
+        try {
+            const invoices = await fetchApiData('/api/hoadon');
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.invoices = invoices;
+        } catch (error) {
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.invoices = [];
             reportLoadFailure('danh sách hóa đơn', error);
         }
     }
@@ -1152,10 +1170,16 @@ window.KtxExtendedViews = (function () {
     // 4. YÊU CẦU SỬA CHỮA (Maintenance View)
     // ========================================================
     async function loadTickets() {
-        try {
-            extState.tickets = await fetchApiData('/api/suachua');
-        } catch (error) {
+        const academicYear = KtxApp.getSelectedAcademicYear();
+        if (!academicYear) {
             extState.tickets = [];
+            return;
+        }
+        try {
+            const tickets = await fetchApiData('/api/suachua');
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.tickets = tickets;
+        } catch (error) {
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.tickets = [];
             reportLoadFailure('danh sách yêu cầu sửa chữa', error);
         }
     }
@@ -1508,10 +1532,17 @@ window.KtxExtendedViews = (function () {
     // 5. VI PHẠM & KỶ LUẬT (Discipline View)
     // ========================================================
     async function loadViolations() {
-        try {
-            extState.violations = await fetchApiData('/api/vipham');
-        } catch (error) {
+        const academicYear = KtxApp.getSelectedAcademicYear();
+        if (!academicYear) {
             extState.violations = [];
+            extState.violationTypes = [];
+            return;
+        }
+        try {
+            const violations = await fetchApiData('/api/vipham');
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.violations = violations;
+        } catch (error) {
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.violations = [];
             reportLoadFailure('danh sách vi phạm', error);
         }
     }
@@ -1706,10 +1737,16 @@ window.KtxExtendedViews = (function () {
     // 6. NHÂN VIÊN & TÀI KHOẢN (Staff View)
     // ========================================================
     async function loadStaff() {
-        try {
-            extState.staff = await fetchApiData('/api/nhanvien');
-        } catch (error) {
+        const academicYear = KtxApp.getSelectedAcademicYear();
+        if (!academicYear) {
             extState.staff = [];
+            return;
+        }
+        try {
+            const staff = await fetchApiData('/api/nhanvien');
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.staff = staff;
+        } catch (error) {
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.staff = [];
             reportLoadFailure('danh sách nhân viên', error);
         }
     }
@@ -1935,18 +1972,25 @@ window.KtxExtendedViews = (function () {
     // ========================================================
     // 7. BÁO CÁO THỐNG KÊ (Reports View)
     // ========================================================
-    async function loadReports() {
-        try {
-            extState.reports = await fetchApiData('/api/baocao/summary');
-        } catch (error) {
+    async function loadReports(appState) {
+        const academicYear = appState?.selectedAcademicYear;
+        if (!academicYear) {
             extState.reports = null;
+            return;
+        }
+        try {
+            const query = `?academicYear=${encodeURIComponent(academicYear)}`;
+            const reports = await fetchApiData(`/api/baocao/summary${query}`);
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.reports = reports;
+        } catch (error) {
+            if (KtxApp.getSelectedAcademicYear() === academicYear) extState.reports = null;
             reportLoadFailure('báo cáo thống kê', error);
         }
     }
 
     function renderReportsView() {
         const r = extState.reports || {
-            semester: '—',
+            academicYear: '—',
             totalRooms: 0,
             totalBeds: 0,
             occupiedBeds: 0,
@@ -1988,7 +2032,7 @@ window.KtxExtendedViews = (function () {
                 <div class="bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B] overflow-hidden shadow-2xs">
                     <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Ma trận Vận hành & Công suất từng Tòa Nhà KTX UTC2</h3>
-                        <span class="text-xs text-slate-400">${r.semester}</span>
+                        <span class="text-xs text-slate-400">${r.academicYear}</span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs">

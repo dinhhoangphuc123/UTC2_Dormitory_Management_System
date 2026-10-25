@@ -6,9 +6,11 @@ namespace Dormitory.Web.Features.Academic.Mappings
 {
     public static class AcademicMappings
     {
-        public static ClassItemDto ToClassItemDto(this LopHoc l)
+        public static ClassItemDto ToClassItemDto(this LopHoc l, DateTime? yearStart = null, DateTime? yearEnd = null)
         {
-            int residents = l.DanhSachSinhVien.Count(sv => sv.DanhSachHopDong.Any(hd => hd.TrangThai == "hieuLuc"));
+            int residents = l.DanhSachSinhVien.Count(sv => sv.DanhSachHopDong.Any(hd => yearStart.HasValue && yearEnd.HasValue
+                ? hd.NgayBatDau <= yearEnd.Value && (hd.NgayTraPhongThucTe ?? hd.NgayKetThuc) >= yearStart.Value
+                : hd.TrangThai == "hieuLuc"));
             int total = l.DanhSachSinhVien.Count;
 
             double rate = total > 0 ? Math.Round((double)residents / total * 100, 1) : 0;

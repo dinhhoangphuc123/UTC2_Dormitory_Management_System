@@ -21,9 +21,10 @@ namespace Dormitory.Web.Features.Invoices.Api
             [FromQuery] string? building,
             [FromQuery] string? category,
             [FromQuery] string? status,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] string? academicYear)
         {
-            var invoices = await _hoaDonService.GetAllInvoicesAsync(building, category, status, search);
+            var invoices = await _hoaDonService.GetAllInvoicesAsync(building, category, status, search, academicYear);
             return Ok(ApiResponse<List<InvoiceItemDto>>.Ok(invoices));
         }
 
@@ -36,7 +37,7 @@ namespace Dormitory.Web.Features.Invoices.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var invoice = await _hoaDonService.CreateInvoiceAsync(req);
+            var invoice = await _hoaDonService.CreateInvoiceAsync(req, Request.Query["academicYear"].FirstOrDefault());
             if (invoice == null)
             {
                 return NotFound(ApiResponse.Fail("Không tìm thấy hợp đồng nội trú đang hiệu lực phù hợp với sinh viên và phòng."));
@@ -52,9 +53,9 @@ namespace Dormitory.Web.Features.Invoices.Api
         }
 
         [HttpPost("confirm-payment")]
-        public async Task<IActionResult> ConfirmPayment([FromBody] ConfirmPaymentRequest req)
+        public async Task<IActionResult> ConfirmPayment([FromBody] ConfirmPaymentRequest req, [FromQuery] string? academicYear)
         {
-            bool success = await _hoaDonService.ConfirmPaymentAsync(req.InvoiceId, req.PaymentMethod);
+            bool success = await _hoaDonService.ConfirmPaymentAsync(req.InvoiceId, req.PaymentMethod, academicYear);
             if (success)
             {
                 return Ok(ApiResponse.Ok($"Đã ghi nhận thanh toán thành công cho hóa đơn {req.InvoiceId}!"));

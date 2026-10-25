@@ -8,7 +8,10 @@ namespace Dormitory.Web.Features.Violations.Mappings
         public static ViolationRecordDto ToViolationRecordDto(this ViPham v)
         {
             var sv = v.SinhVien;
-            var hd = sv?.DanhSachHopDong?.FirstOrDefault(h => h.TrangThai == "hieuLuc");
+            var hd = sv?.DanhSachHopDong?.FirstOrDefault(h =>
+                h.TrangThai == "hieuLuc" && h.NgayBatDau <= DateTime.Today &&
+                (h.NgayTraPhongThucTe ?? h.NgayKetThuc) >= DateTime.Today)
+                ?? sv?.DanhSachHopDong?.OrderByDescending(h => h.NgayBatDau).FirstOrDefault();
             var phong = hd?.Giuong?.Phong;
             string bld = phong?.MaToaNha ?? string.Empty;
             string room = phong != null ? $"P.{phong.MaPhong.Split('_').Last()}" : string.Empty;

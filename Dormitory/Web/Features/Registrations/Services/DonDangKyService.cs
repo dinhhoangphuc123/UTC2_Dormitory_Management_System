@@ -18,9 +18,15 @@ namespace Dormitory.Web.Features.Registrations.Services
             string? statusTab = null,
             string? priority = null,
             string? cohort = null,
-            string? gender = null)
+            string? gender = null,
+            string? academicYear = null)
         {
+            if (string.IsNullOrWhiteSpace(academicYear) ||
+                !await _context.NamHocs.AnyAsync(n => n.MaNamHoc == academicYear))
+                return new List<ApplicationListItemDto>();
+
             var query = _context.DonDangKys
+                .Where(d => d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)
                 .Include(d => d.SinhVien)
                     .ThenInclude(s => s!.LopHoc)
                 .Include(d => d.LoaiPhong)
@@ -50,10 +56,10 @@ namespace Dormitory.Web.Features.Registrations.Services
             return list;
         }
 
-        public async Task<bool> ApproveApplicationAsync(string applicationId, string? staffId)
+        public async Task<bool> ApproveApplicationAsync(string applicationId, string? staffId, string? academicYear = null)
         {
             string cleanId = applicationId.Replace("#", "").Trim();
-            var app = await _context.DonDangKys.FirstOrDefaultAsync(d => d.MaDonDangKy == cleanId);
+            var app = await _context.DonDangKys.FirstOrDefaultAsync(d => d.MaDonDangKy == cleanId && d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear);
             if (app == null || app.TrangThai != "choDuyet")
             {
                 return false;
@@ -66,10 +72,10 @@ namespace Dormitory.Web.Features.Registrations.Services
             return true;
         }
 
-        public async Task<bool> RejectApplicationAsync(string applicationId, string? staffId, string? reason = null)
+        public async Task<bool> RejectApplicationAsync(string applicationId, string? staffId, string? reason = null, string? academicYear = null)
         {
             string cleanId = applicationId.Replace("#", "").Trim();
-            var app = await _context.DonDangKys.FirstOrDefaultAsync(d => d.MaDonDangKy == cleanId);
+            var app = await _context.DonDangKys.FirstOrDefaultAsync(d => d.MaDonDangKy == cleanId && d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear);
             if (app == null || app.TrangThai != "choDuyet")
             {
                 return false;

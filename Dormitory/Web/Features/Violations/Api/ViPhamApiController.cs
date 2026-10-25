@@ -21,9 +21,10 @@ namespace Dormitory.Web.Features.Violations.Api
             [FromQuery] string? building,
             [FromQuery] string? penalty,
             [FromQuery] string? violationType,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] string? academicYear)
         {
-            var violations = await _viPhamService.GetAllViolationsAsync(building, penalty, violationType, search);
+            var violations = await _viPhamService.GetAllViolationsAsync(building, penalty, violationType, search, academicYear);
             return Ok(ApiResponse<List<ViolationRecordDto>>.Ok(violations));
         }
 
@@ -36,7 +37,7 @@ namespace Dormitory.Web.Features.Violations.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var record = await _viPhamService.CreateViolationAsync(req);
+            var record = await _viPhamService.CreateViolationAsync(req, Request.Query["academicYear"].FirstOrDefault());
             if (record == null)
             {
                 return NotFound(ApiResponse.Fail("Không tìm thấy sinh viên hoặc loại vi phạm trong dữ liệu."));
@@ -46,9 +47,9 @@ namespace Dormitory.Web.Features.Violations.Api
         }
 
         [HttpGet("types")]
-        public async Task<IActionResult> GetTypes()
+        public async Task<IActionResult> GetTypes([FromQuery] string? academicYear)
         {
-            var types = await _viPhamService.GetViolationTypesAsync();
+            var types = await _viPhamService.GetViolationTypesAsync(academicYear);
             return Ok(ApiResponse<List<ViolationTypeOptionDto>>.Ok(types));
         }
     }

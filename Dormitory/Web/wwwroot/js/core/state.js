@@ -5,7 +5,7 @@ const State = {
     currentUser: null,
     currentTab: 'dashboard',
     darkMode: localStorage.getItem('ktx_dark_mode') === 'true',
-    selectedSemester: localStorage.getItem('ktx_selected_semester') || null,
+    selectedAcademicYear: localStorage.getItem('ktx_user_selected_academic_year') || null,
     listeners: [],
 
     subscribe(fn) {
@@ -21,9 +21,10 @@ const State = {
         this.notify();
     },
 
-    setSemester(code) {
-        this.selectedSemester = code;
-        localStorage.setItem('ktx_selected_semester', code || '');
+    setAcademicYear(code) {
+        this.selectedAcademicYear = code;
+        if (code) localStorage.setItem('ktx_user_selected_academic_year', code);
+        else localStorage.removeItem('ktx_user_selected_academic_year');
         this.notify();
     },
 

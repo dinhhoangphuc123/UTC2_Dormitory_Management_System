@@ -20,9 +20,10 @@ namespace Dormitory.Web.Features.Academic.Api
         public async Task<IActionResult> GetAll(
             [FromQuery] string? faculty,
             [FromQuery] string? cohort,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] string? academicYear)
         {
-            var classes = await _lopHocService.GetAllClassesAsync(faculty, cohort, search);
+            var classes = await _lopHocService.GetAllClassesAsync(faculty, cohort, search, academicYear);
             return Ok(ApiResponse<List<ClassItemDto>>.Ok(classes));
         }
 

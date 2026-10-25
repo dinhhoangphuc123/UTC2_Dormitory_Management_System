@@ -19,8 +19,12 @@ namespace Dormitory.Web.Features.Contracts.Services
             string? statusTab = null,
             string? building = null,
             string? search = null,
-            string? semester = null)
+            string? academicYear = null)
         {
+            if (string.IsNullOrWhiteSpace(academicYear) ||
+                !await _context.NamHocs.AnyAsync(n => n.MaNamHoc == academicYear))
+                return new List<ContractListItemDto>();
+
             var query = _context.HopDongs
                 .Include(h => h.SinhVien)
                 .Include(h => h.Giuong)
@@ -43,10 +47,7 @@ namespace Dormitory.Web.Features.Contracts.Services
                 query = query.Where(h => h.Giuong != null && h.Giuong.Phong != null && h.Giuong.Phong.MaToaNha.Contains(building));
             }
 
-            if (!string.IsNullOrWhiteSpace(semester))
-            {
-                query = query.Where(h => h.MaKyHoc == semester);
-            }
+            query = query.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear);
 
             var entities = await query.ToListAsync();
 
@@ -62,14 +63,15 @@ namespace Dormitory.Web.Features.Contracts.Services
             return list;
         }
 
-        public async Task<ContractListItemDto?> GetContractByIdAsync(string id)
+        public async Task<ContractListItemDto?> GetContractByIdAsync(string id, string? academicYear = null)
         {
-            var contracts = await GetAllContractsAsync();
+            var contracts = await GetAllContractsAsync(academicYear: academicYear);
             return contracts.FirstOrDefault(c => c.Id == id || c.ContractNumber == id);
         }
 
-        public async Task<ContractListItemDto?> CreateContractAsync(CreateContractRequestDto req, string? staffId)
+        public async Task<ContractListItemDto?> CreateContractAsync(CreateContractRequestDto req, string? staffId, string? academicYear = null)
         {
+            if (string.IsNullOrWhiteSpace(academicYear)) return null;
             var student = await _context.SinhViens
                 .FirstOrDefaultAsync(s => s.MaSinhVien == req.Mssv);
             var bed = await _context.Giuongs
@@ -83,7 +85,8 @@ namespace Dormitory.Web.Features.Contracts.Services
             DateTime.TryParseExact(req.StartDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var start);
             DateTime.TryParseExact(req.EndDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var end);
 
-            var term = await _context.KyHocs.FirstOrDefaultAsync(k => k.NgayBatDau <= start && k.NgayKetThuc >= start);
+            var term = await _context.KyHocs.FirstOrDefaultAsync(k =>
+                k.MaNamHoc == academicYear && k.NgayBatDau <= start && k.NgayKetThuc >= start);
             if (term == null)
             {
                 return null;
@@ -124,9 +127,9 @@ namespace Dormitory.Web.Features.Contracts.Services
             return newContract.ToContractListItemDto();
         }
 
-        public async Task<bool> RenewContractAsync(string contractId, int months = 5)
+        public async Task<bool> RenewContractAsync(string contractId, int months = 5, string? academicYear = null)
         {
-            var contract = await _context.HopDongs.FirstOrDefaultAsync(h => h.MaHopDong == contractId);
+            var contract = await _context.HopDongs.FirstOrDefaultAsync(h => h.MaHopDong == contractId && h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear);
             if (contract == null) return false;
 
             contract.NgayKetThuc = contract.NgayKetThuc.AddMonths(months);
@@ -134,9 +137,9 @@ namespace Dormitory.Web.Features.Contracts.Services
             return true;
         }
 
-        public async Task<bool> LiquidateContractAsync(string contractId, string? reason = null)
+        public async Task<bool> LiquidateContractAsync(string contractId, string? reason = null, string? academicYear = null)
         {
-            var contract = await _context.HopDongs.FirstOrDefaultAsync(h => h.MaHopDong == contractId);
+            var contract = await _context.HopDongs.FirstOrDefaultAsync(h => h.MaHopDong == contractId && h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear);
             if (contract == null) return false;
 
             contract.TrangThai = "daKetThuc";

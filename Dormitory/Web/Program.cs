@@ -18,6 +18,7 @@ builder.Services.AddDormitorySwagger();
 var app = builder.Build();
 
 // Global exception handling
+app.UseMiddleware<ApiRequestLoggingMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Configure the HTTP request pipeline.
@@ -35,6 +36,7 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+app.UseMiddleware<AcademicYearScopeMiddleware>();
 
 app.UseAuthorization();
 
