@@ -1,10 +1,13 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Maintenance.DTOs;
 using Dormitory.Web.Features.Maintenance.Services;
 using Dormitory.Web.Features.Maintenance.Validators;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Maintenance.Api
 {
+    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
     [ApiController]
     [Route("api/suachua")]
     public class SuaChuaApiController : ControllerBase
@@ -60,9 +63,9 @@ namespace Dormitory.Web.Features.Maintenance.Api
         }
 
         [HttpPost("{id}/complete")]
-        public async Task<IActionResult> Complete(string id, [FromQuery] string? academicYear)
+        public async Task<IActionResult> Complete(string id, [FromBody] CompleteTicketDto? req, [FromQuery] string? academicYear)
         {
-            bool success = await _suaChuaService.CompleteTicketAsync(id, academicYear);
+            bool success = await _suaChuaService.CompleteTicketAsync(id, academicYear, req?.PhanHoi);
             if (success)
             {
                 return Ok(ApiResponse.Ok("Đã nghiệm thu và hoàn tất sửa chữa!"));

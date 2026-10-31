@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Registrations.Entities;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Registrations.Api
 {
@@ -16,6 +18,7 @@ namespace Dormitory.Web.Features.Registrations.Api
             _context = context;
         }
 
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] string? academicYear)
         {
@@ -36,6 +39,7 @@ namespace Dormitory.Web.Features.Registrations.Api
             return Ok(rounds);
         }
 
+        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateDotDangKyRequest req, [FromQuery] string? academicYear)
         {

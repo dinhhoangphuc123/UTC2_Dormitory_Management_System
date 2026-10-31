@@ -1,10 +1,13 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ClosedXML.Excel;
 using Dormitory.Web.Features.Reports.DTOs;
 using Dormitory.Web.Features.Reports.Services;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Reports.Api
 {
+    [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
     [ApiController]
     [Route("api/baocao")]
     public class BaoCaoApiController : ControllerBase
@@ -76,4 +79,3 @@ namespace Dormitory.Web.Features.Reports.Api
         }
     }
 }
-

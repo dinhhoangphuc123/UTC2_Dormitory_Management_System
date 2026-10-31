@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Academic.Entities;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Academic.Api
 {
@@ -16,6 +18,7 @@ namespace Dormitory.Web.Features.Academic.Api
             _context = context;
         }
 
+        [Authorize]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -40,6 +43,7 @@ namespace Dormitory.Web.Features.Academic.Api
             return Ok(years);
         }
 
+        [Authorize(Roles = RoleNames.Admin)]
         [HttpPost]
         public async Task<IActionResult> CreateYear([FromBody] CreateNamHocRequest req)
         {
@@ -78,7 +82,6 @@ namespace Dormitory.Web.Features.Academic.Api
             await _context.SaveChangesAsync();
             return Ok(year);
         }
-
     }
 
     public class CreateNamHocRequest
@@ -88,5 +91,4 @@ namespace Dormitory.Web.Features.Academic.Api
         public DateTime NgayKetThuc { get; set; }
         public bool LaDangHoat { get; set; } = true;
     }
-
 }

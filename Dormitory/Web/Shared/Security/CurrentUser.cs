@@ -22,7 +22,7 @@ namespace Dormitory.Web.Shared.Security
 
         private ClaimsPrincipal? User => _httpContextAccessor.HttpContext?.User;
 
-        public string? Username => User?.Identity?.Name ?? User?.FindFirst(ClaimTypes.Name)?.Value;
+        public string? Username => User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User?.Identity?.Name ?? User?.FindFirst(ClaimTypes.Name)?.Value;
         public string? Role => User?.FindFirst(ClaimTypes.Role)?.Value;
         public string? StaffId => User?.FindFirst("StaffId")?.Value;
         public string? StudentId => User?.FindFirst("StudentId")?.Value;

@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Rooms.DTOs;
 using Dormitory.Web.Features.Rooms.Services;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Rooms.Api
 {
@@ -15,6 +17,7 @@ namespace Dormitory.Web.Features.Rooms.Api
             _phongService = phongService;
         }
 
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? buildingId,
@@ -27,6 +30,7 @@ namespace Dormitory.Web.Features.Rooms.Api
             return Ok(ApiResponse<List<RoomListItemDto>>.Ok(rooms));
         }
 
+        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
         [HttpPost("beds/{bedId}/toggle-maintenance")]
         public async Task<IActionResult> ToggleMaintenance(string bedId, [FromQuery] string? academicYear)
         {
@@ -40,4 +44,3 @@ namespace Dormitory.Web.Features.Rooms.Api
         }
     }
 }
-

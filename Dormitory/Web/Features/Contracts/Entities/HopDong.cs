@@ -1,5 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Dormitory.Web.Features.Academic.Entities;
+using Dormitory.Web.Features.Invoices.Entities;
+using Dormitory.Web.Features.Registrations.Entities;
+using Dormitory.Web.Features.Rooms.Entities;
+using Dormitory.Web.Features.Staff.Entities;
+using Dormitory.Web.Features.Students.Entities;
+using Dormitory.Web.Features.Utilities.Entities;
 
 namespace Dormitory.Web.Features.Contracts.Entities
 {
@@ -52,6 +59,9 @@ namespace Dormitory.Web.Features.Contracts.Entities
 
         [Column("phanTramMienGiam", TypeName = "decimal(5,2)")]
         public decimal PhanTramMienGiam { get; set; } = 0;
+
+        [Column("hanGiuCho")]
+        public DateTime? HanGiuCho { get; set; }
 
         [Required]
         [MaxLength(20)]

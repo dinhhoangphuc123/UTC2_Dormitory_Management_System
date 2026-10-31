@@ -14,6 +14,7 @@ using Dormitory.Web.Features.Maintenance;
 using Dormitory.Web.Features.Violations;
 using Dormitory.Web.Features.Reports;
 using Dormitory.Web.Features.Dashboard;
+using Dormitory.Web.Features.StudentPortal;
 
 namespace Dormitory.Web.Shared.Extensions
 {
@@ -36,6 +37,7 @@ namespace Dormitory.Web.Shared.Extensions
             services.AddViolationsServices();
             services.AddReportsServices();
             services.AddDashboardServices();
+            services.AddStudentPortalServices();
 
             return services;
         }

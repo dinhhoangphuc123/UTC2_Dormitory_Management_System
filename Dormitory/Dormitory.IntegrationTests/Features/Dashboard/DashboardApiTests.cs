@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Dashboard
             var service = new DashboardService(context);
             var controller = new DashboardApiController(service);
 
-            var result = await controller.GetSummary();
+            var result = await controller.GetSummary(null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<DashboardSummaryDto>>(ok.Value);
             Assert.True(res.Success);

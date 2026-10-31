@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Invoices
             var service = new HoaDonService(context);
             var controller = new HoaDonApiController(service);
 
-            var result = await controller.GetAll(null, null, null, null);
+            var result = await controller.GetAll(null, null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<InvoiceItemDto>>>(ok.Value);
             Assert.True(res.Success);

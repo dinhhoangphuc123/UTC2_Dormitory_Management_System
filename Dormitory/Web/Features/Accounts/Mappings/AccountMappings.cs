@@ -39,7 +39,10 @@ namespace Dormitory.Web.Features.Accounts.Mappings
                 Avatar = "",
                 Email = email,
                 Phone = phone,
-                Department = department
+                Department = department,
+                RoleCode = taiKhoan.MaVaiTro,
+                StudentId = taiKhoan.MaSinhVien,
+                StaffId = taiKhoan.MaNhanVien
             };
         }
     }

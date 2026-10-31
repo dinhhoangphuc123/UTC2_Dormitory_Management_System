@@ -1,4 +1,4 @@
-﻿/**
+/**
  * KTX UTC2 - Application Frontend Controller
  * Connects directly to C# .NET Core Web APIs
  */
@@ -17,17 +17,27 @@ const KtxApp = (function () {
         }
 
         const path = url.pathname.toLowerCase();
+        let fetchPromise;
         if (path === '/api/namhoc' || path.startsWith('/api/auth/')) {
-            return nativeFetch(input, init);
+            fetchPromise = nativeFetch(input, init);
+        } else {
+            const academicYear = localStorage.getItem('ktx_user_selected_academic_year');
+            if (academicYear && !url.searchParams.has('academicYear') && !path.startsWith('/api/me')) {
+                url.searchParams.set('academicYear', academicYear);
+            }
+            fetchPromise = input instanceof Request
+                ? nativeFetch(new Request(url.toString(), input), init)
+                : nativeFetch(url.toString(), init);
         }
 
-        const academicYear = localStorage.getItem('ktx_user_selected_academic_year');
-        if (academicYear && !url.searchParams.has('academicYear')) {
-            url.searchParams.set('academicYear', academicYear);
-        }
-        return input instanceof Request
-            ? nativeFetch(new Request(url.toString(), input), init)
-            : nativeFetch(url.toString(), init);
+        return fetchPromise.then(res => {
+            if (res.status === 401 && !path.startsWith('/api/auth/login')) {
+                if (state.currentUser) {
+                    logout();
+                }
+            }
+            return res;
+        });
     };
 
     // State
@@ -84,6 +94,27 @@ const KtxApp = (function () {
     let otpResendSeconds = 54;
     let isResendingOtp = false;
     let activeViewRenderId = 0;
+    let studentUnreadTimer = null;
+
+    function updateStudentBadge() {
+        if (!state.currentUser || state.currentUser.roleCode !== 'sinhVien') return;
+        nativeFetch('/api/me/notifications/unread-count')
+            .then(r => r.json())
+            .then(res => {
+                const badge = document.getElementById('notifBadge');
+                if (badge) {
+                    const count = res?.data?.count || 0;
+                    if (count > 0) {
+                        badge.classList.remove('hidden');
+                        badge.textContent = count > 99 ? '99+' : String(count);
+                        badge.className = 'absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-red-500 text-[10px] font-bold text-white leading-tight min-w-[16px] text-center shadow-xs';
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+            })
+            .catch(() => {});
+    }
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -183,6 +214,30 @@ const KtxApp = (function () {
         } else {
             state.currentUser = null;
         }
+
+        try {
+            const res = await nativeFetch('/api/auth/me');
+            if (res.status === 401) {
+                state.currentUser = null;
+                localStorage.removeItem('utc2_current_user');
+                return;
+            }
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    state.currentUser = json.data;
+                    localStorage.setItem('utc2_current_user', JSON.stringify(json.data));
+                }
+            }
+        } catch (e) {
+            console.warn('Cannot verify session with server:', e);
+        }
+
+        if (state.currentUser && state.currentUser.roleCode === 'sinhVien') {
+            if (!state.currentTab || !state.currentTab.startsWith('sv-') || state.currentTab === 'dashboard') {
+                state.currentTab = 'sv-tong-quan';
+            }
+        }
     }
 
     async function login(username, password) {
@@ -201,7 +256,11 @@ const KtxApp = (function () {
                     if (window.location.pathname.toLowerCase().includes('/account/login')) {
                         window.location.href = '/';
                     } else {
-                        navigate('dashboard');
+                        if (state.currentUser && state.currentUser.roleCode === 'sinhVien') {
+                            navigate('sv-tong-quan');
+                        } else {
+                            navigate('dashboard');
+                        }
                     }
                 }, 300);
                 return true;
@@ -216,14 +275,23 @@ const KtxApp = (function () {
         }
     }
 
-    function logout() {
+    async function logout() {
+        if (studentUnreadTimer) {
+            clearInterval(studentUnreadTimer);
+            studentUnreadTimer = null;
+        }
+        try {
+            await nativeFetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) {
+            console.error('Logout error:', e);
+        }
         state.currentUser = null;
         localStorage.removeItem('utc2_current_user');
         showToast('Đã đăng xuất khỏi hệ thống', 'info');
         if (!window.location.pathname.toLowerCase().includes('/account/login')) {
             window.location.href = '/Account/Login';
         } else {
-            renderApp();
+            renderApp(false);
         }
     }
 
@@ -408,7 +476,38 @@ const KtxApp = (function () {
         const container = document.getElementById('sidebarContainer');
         if (!container || !state.currentUser) return;
 
-        const navGroups = [
+        const isStudent = state.currentUser.roleCode === 'sinhVien';
+        const navGroups = isStudent ? [
+            {
+                title: 'TỔNG QUAN',
+                items: [{ id: 'sv-tong-quan', label: 'Tổng quan', icon: 'grid_view' }]
+            },
+            {
+                title: 'ĐĂNG KÝ NỘI TRÚ',
+                items: [
+                    { id: 'sv-dot-dang-ky', label: 'Đợt đăng ký', icon: 'event_available' },
+                    { id: 'sv-don-cua-toi', label: 'Đơn của tôi', icon: 'assignment' },
+                    { id: 'sv-thanh-toan', label: 'Thanh toán đăng ký', icon: 'qr_code_2' }
+                ]
+            },
+            {
+                title: 'CHỖ Ở CỦA TÔI',
+                items: [
+                    { id: 'sv-hop-dong', label: 'Hợp đồng & chỗ ở', icon: 'home' },
+                    { id: 'sv-hoa-don', label: 'Hóa đơn & thanh toán', icon: 'receipt_long' },
+                    { id: 'sv-sua-chua', label: 'Yêu cầu sửa chữa', icon: 'build' },
+                    { id: 'sv-vi-pham', label: 'Vi phạm & kỷ luật', icon: 'gavel' }
+                ]
+            },
+            {
+                title: 'TÀI KHOẢN & HỖ TRỢ',
+                items: [
+                    { id: 'sv-ho-so', label: 'Hồ sơ của tôi', icon: 'badge' },
+                    { id: 'sv-thong-bao', label: 'Thông báo', icon: 'notifications' },
+                    { id: 'sv-ho-tro', label: 'Nội quy & hỗ trợ', icon: 'support_agent' }
+                ]
+            }
+        ] : [
             {
                 title: 'TỔNG QUAN',
                 items: [{ id: 'dashboard', label: 'Dashboard', icon: 'grid_view' }]
@@ -507,7 +606,7 @@ const KtxApp = (function () {
                                 <span class="w-8 h-8 rounded-full shrink-0 ring-1 ring-blue-400/40 bg-blue-900 text-white flex items-center justify-center text-xs font-bold" aria-label="${state.currentUser.name}">${getUserInitial(state.currentUser.name)}</span>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">${state.currentUser.name}</div>
-                                    <div class="text-[10px] text-blue-300 truncate">${state.currentUser.role}</div>
+                                    <div class="text-[10px] text-blue-300 truncate">${isStudent ? `Sinh viên • ${state.currentUser.studentId || ''}` : state.currentUser.role}</div>
                                 </div>
                             </div>
                             <button onclick="KtxApp.logout()" class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/5 transition-colors" title="Đăng xuất">
@@ -524,6 +623,8 @@ const KtxApp = (function () {
         const container = document.getElementById('topNavContainer');
         if (!container || !state.currentUser) return;
 
+        const isStudent = state.currentUser.roleCode === 'sinhVien';
+
         container.innerHTML = `
             <header class="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white/90 dark:bg-[#121826]/90 backdrop-blur-xl border-b border-[#E4E7EC] dark:border-[#232B3B] z-40 flex items-center gap-3 px-4 lg:px-8 shadow-xs transition-colors">
                 <!-- Left: Mobile hamburger & Search bar -->
@@ -532,22 +633,26 @@ const KtxApp = (function () {
                         <span class="material-symbols-outlined text-[22px]">menu</span>
                     </button>
 
-                    <!-- Global Search Bar -->
-                    <div onclick="KtxApp.openSearch()" class="flex items-center gap-2.5 flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
-                        <span class="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors">search</span>
-                        <span class="text-[13px] text-slate-400 dark:text-slate-400 truncate flex-1 select-none">Tìm kiếm (phòng, SV, hợp đồng...)</span>
-                    </div>
+                    ${!isStudent ? `
+                        <!-- Global Search Bar -->
+                        <div onclick="KtxApp.openSearch()" class="flex items-center gap-2.5 flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
+                            <span class="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors">search</span>
+                            <span class="text-[13px] text-slate-400 dark:text-slate-400 truncate flex-1 select-none">Tìm kiếm (phòng, SV, hợp đồng...)</span>
+                        </div>
+                    ` : '<div class="flex-1"></div>'}
                 </div>
 
                 <!-- Right: Academic year, Dark mode, Notifications, Profile -->
                 <div class="flex items-center gap-2 sm:gap-3 ml-3 shrink-0">
-                    <!-- Academic Year Selector -->
-                    <div class="relative hidden md:flex items-center gap-2 shrink-0">
-                        <select id="academicYearSelect" onchange="KtxApp.changeAcademicYear(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold max-w-[220px]">
-                            <option value="">Chọn năm học</option>
-                        </select>
-                        <button type="button" onclick="KtxApp.toggleAcademicYearMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold">Quản lý năm học</button>
-                    </div>
+                    ${!isStudent ? `
+                        <!-- Academic Year Selector -->
+                        <div class="relative hidden md:flex items-center gap-2 shrink-0">
+                            <select id="academicYearSelect" onchange="KtxApp.changeAcademicYear(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold max-w-[220px]">
+                                <option value="">Chọn năm học</option>
+                            </select>
+                            <button type="button" onclick="KtxApp.toggleAcademicYearMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold">Quản lý năm học</button>
+                        </div>
+                    ` : ''}
 
                     <!-- Dark Mode Button -->
                     <button type="button" onclick="KtxApp.toggleDarkMode()" class="w-10 h-10 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shadow-2xs" title="Đổi chế độ sáng/tối">
@@ -596,6 +701,13 @@ const KtxApp = (function () {
         `;
 
         renderAcademicYearOptions();
+
+        if (isStudent) {
+            updateStudentBadge();
+            if (!studentUnreadTimer) {
+                studentUnreadTimer = setInterval(updateStudentBadge, 60000);
+            }
+        }
     }
 
     function renderAcademicYearOptions() {
@@ -875,12 +987,34 @@ const KtxApp = (function () {
         if (!content) return;
         const renderId = ++activeViewRenderId;
         const tab = state.currentTab;
+
+        const isStudent = state.currentUser?.roleCode === 'sinhVien';
+
+        // Role-based UX Routing Guard
+        if (isStudent) {
+            if (!tab || !tab.startsWith('sv-')) {
+                state.currentTab = 'sv-tong-quan';
+                renderSidebar();
+                return renderActiveView(showPageLoader);
+            }
+        } else {
+            if (tab && tab.startsWith('sv-')) {
+                state.currentTab = 'dashboard';
+                renderSidebar();
+                return renderActiveView(showPageLoader);
+            }
+        }
+
         const startedAt = performance.now();
         if (showPageLoader) content.innerHTML = renderPageLoading();
 
         let viewHtml = '';
 
-        if (tab === 'dashboard') {
+        if (tab.startsWith('sv-') && window.KtxStudentViews && window.KtxStudentViews.hasView(tab)) {
+            const viewContainer = document.createElement('div');
+            await window.KtxStudentViews.renderView(tab, viewContainer, state);
+            viewHtml = viewContainer.innerHTML;
+        } else if (tab === 'dashboard') {
             await loadDashboard();
             viewHtml = renderDashboardView();
         } else if (tab === 'don-dang-ky') {
@@ -1612,7 +1746,10 @@ const KtxApp = (function () {
                                         <td class="py-3.5 px-4 text-center">
                                             <div class="flex items-center justify-center gap-1">
                                                 <button type="button" onclick="KtxApp.openPrintModal('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 text-xs font-semibold" title="In hợp đồng">In HĐ</button>
-                                                ${c.status !== 'Đã thanh lý' ? `
+                                                ${c.status !== 'Đã thanh lý' && c.status !== 'Đã hủy' ? `
+                                                    ${(c.status === 'Hiệu lực' || c.statusCode === 'hieuLuc') && !c.actualCheckInDate ? `
+                                                        <button type="button" onclick="KtxApp.checkInContract('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-xs font-semibold transition-all" title="Ghi nhận sinh viên nhận phòng">Nhận phòng</button>
+                                                    ` : ''}
                                                     <button type="button" onclick="KtxApp.renewContract('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg bg-blue-50 text-[#0B2A5B] hover:bg-[#0B2A5B] hover:text-white text-xs font-semibold transition-all">Gia hạn</button>
                                                     <button type="button" onclick="KtxApp.liquidateContract('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg hover:bg-red-50 text-red-600 text-xs font-medium">Thanh lý</button>
                                                 ` : ''}
@@ -2476,9 +2613,11 @@ const KtxApp = (function () {
             const res = await fetch(`/api/dondangky/${appId}/approve`, { method: 'POST' });
             const json = await res.json();
             if (json.success) {
-                showToast(`Đã duyệt 1-chạm: ${studentName}! Đã tự động tạo hồ sơ cư xá.`, 'success');
+                showToast(`Đã duyệt 1-chạm: ${studentName}! Đã tự động tạo hợp đồng giữ chỗ 24h.`, 'success');
                 await loadApplications();
                 if (state.currentTab === 'don-dang-ky') renderActiveView();
+            } else {
+                showToast(json.message || 'Không thể duyệt hồ sơ.', 'error');
             }
         } catch (e) {
             showToast('Lỗi duyệt hồ sơ', 'error');
@@ -2510,6 +2649,27 @@ const KtxApp = (function () {
             }
         } catch (e) {
             showToast('Lỗi gia hạn', 'error');
+        }
+    }
+
+    async function checkInContract(contractNumber) {
+        if (!confirm(`Xác nhận sinh viên đã đến nhận phòng thực tế cho hợp đồng ${contractNumber}?`)) return;
+        try {
+            const res = await fetch(`/api/hopdong/${contractNumber}/check-in`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const json = await res.json();
+            if (json.success) {
+                showToast(json.message || 'Ghi nhận nhận phòng thành công!', 'success');
+                await loadContracts();
+                if (state.currentTab === 'hop-dong') renderActiveView();
+            } else {
+                showToast(json.message || 'Không thể ghi nhận nhận phòng.', 'error');
+            }
+        } catch (e) {
+            showToast('Lỗi khi ghi nhận nhận phòng', 'error');
         }
     }
 
@@ -3265,6 +3425,47 @@ const KtxApp = (function () {
         const list = document.getElementById('notificationList');
         if (!list) return;
         list.innerHTML = '<div class="text-center text-slate-400 py-4">Đang tải...</div>';
+
+        // Branch for student role
+        if (state.currentUser && state.currentUser.roleCode === 'sinhVien') {
+            try {
+                const res = await nativeFetch('/api/me/notifications');
+                const json = await res.json();
+                const notifs = json?.data || [];
+                if (!notifs.length) {
+                    list.innerHTML = '<div class="text-center text-slate-400 py-4">Không có thông báo mới.</div>';
+                    const badge = document.getElementById('notifBadge');
+                    if (badge) badge.classList.add('hidden');
+                    return;
+                }
+
+                list.innerHTML = notifs.slice(0, 5).map(n => {
+                    const isUnread = !n.daDoc;
+                    const destTab = n.lienKet || 'sv-thong-bao';
+                    return `
+                        <button type="button" onclick="KtxApp.closeNotifications(); if(window.KtxStudentViews && typeof window.KtxStudentViews.handleNotifClick === 'function'){ window.KtxStudentViews.handleNotifClick(${n.id}, '${escapeHtml(destTab)}'); } else { KtxApp.navigate('${escapeHtml(destTab)}'); }" class="w-full text-left p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-start gap-2">
+                            ${isUnread ? '<span class="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1.5"></span>' : '<span class="w-2 h-2 shrink-0 mt-1.5"></span>'}
+                            <div class="min-w-0 flex-1">
+                                <div class="font-bold text-xs ${isUnread ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'} truncate">${escapeHtml(n.tieuDe)}</div>
+                                <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(n.ngayTao)}</div>
+                            </div>
+                        </button>
+                    `;
+                }).join('') + `
+                    <div class="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+                        <button type="button" onclick="KtxApp.closeNotifications(); KtxApp.navigate('sv-thong-bao');" class="text-[11px] font-bold text-[#0B2A5B] dark:text-blue-400 hover:underline">
+                            Xem tất cả thông báo &rarr;
+                        </button>
+                    </div>
+                `;
+            } catch (err) {
+                console.error('Error loading student notifications:', err);
+                list.innerHTML = '<div class="text-center text-rose-500 py-4">Lỗi tải thông báo.</div>';
+            }
+            return;
+        }
+
+        // Branch for staff/admin unchanged
         const items = [];
         try {
             const apps = await fetchApiData('/api/dondangky?status=pending');
@@ -3750,6 +3951,7 @@ const KtxApp = (function () {
         openPrintModal,
         renewContract,
         liquidateContract,
+        checkInContract,
         setStudentsCohort,
         setStudentsMajor,
         setStudentsSearch,
@@ -3764,7 +3966,12 @@ const KtxApp = (function () {
         closeModal,
         getCurrentTab: () => state.currentTab,
         getSelectedAcademicYear: () => state.selectedAcademicYear,
-        exportReport
+        getCurrentUser: () => state.currentUser,
+        getState: () => state,
+        escapeHtml,
+        formatVND,
+        exportReport,
+        updateStudentBadge
     };
 })();
 

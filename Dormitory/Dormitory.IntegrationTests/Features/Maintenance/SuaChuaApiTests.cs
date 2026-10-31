@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Maintenance
             var service = new YeuCauSuaChuaService(context);
             var controller = new SuaChuaApiController(service);
 
-            var result = await controller.GetAll(null, null, null, null, null);
+            var result = await controller.GetAll(null, null, null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<MaintenanceTicketDto>>>(ok.Value);
             Assert.True(res.Success);

@@ -30,6 +30,12 @@ namespace Dormitory.Web.Features.Accounts.Services
             if (!_passwordHasher.VerifyPassword(request.Password, taiKhoan.MatKhauHash))
                 return null;
 
+            // Nâng cấp hash mật khẩu nếu tài khoản đang dùng plaintext cũ
+            if (PasswordHasher.IsLegacyPlaintext(taiKhoan.MatKhauHash))
+            {
+                taiKhoan.MatKhauHash = _passwordHasher.HashPassword(request.Password);
+            }
+
             // Cập nhật lần đăng nhập cuối
             taiKhoan.LanDangNhapCuoi = DateTime.Now;
             await _context.SaveChangesAsync();

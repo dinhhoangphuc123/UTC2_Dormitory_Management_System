@@ -1,7 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Utilities.DTOs;
 using Dormitory.Web.Features.Utilities.Services;
 using Dormitory.Web.Features.Utilities.Validators;
+using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Utilities.Api
 {
@@ -10,12 +13,15 @@ namespace Dormitory.Web.Features.Utilities.Api
     public class DienNuocApiController : ControllerBase
     {
         private readonly IDienNuocDichVuService _dienNuocService;
+        private readonly ICurrentUser? _currentUser;
 
-        public DienNuocApiController(IDienNuocDichVuService dienNuocService)
+        public DienNuocApiController(IDienNuocDichVuService dienNuocService, ICurrentUser? currentUser = null)
         {
             _dienNuocService = dienNuocService;
+            _currentUser = currentUser;
         }
 
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? building,
@@ -28,6 +34,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             return Ok(ApiResponse<List<UtilityItemDto>>.Ok(utilities));
         }
 
+        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
         [HttpPost("record")]
         public async Task<IActionResult> Record([FromBody] RecordUtilityDto req, [FromQuery] string? academicYear)
         {
@@ -37,7 +44,7 @@ namespace Dormitory.Web.Features.Utilities.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var updated = await _dienNuocService.RecordUtilityAsync(req, academicYear);
+            var updated = await _dienNuocService.RecordUtilityAsync(req, academicYear, _currentUser?.StaffId);
             if (updated == null)
             {
                 return NotFound(ApiResponse.Fail("Không tìm thấy thông tin phòng tương ứng!"));
@@ -47,4 +54,3 @@ namespace Dormitory.Web.Features.Utilities.Api
         }
     }
 }
-

@@ -127,11 +127,15 @@ namespace Dormitory.Web.Features.Maintenance.Services
 
             ticket.TrangThai = "dangXuLy";
             ticket.MaNhanVienXuLy = technician.MaNhanVien;
+            if (!string.IsNullOrWhiteSpace(req.PhanHoi))
+            {
+                ticket.PhanHoi = req.PhanHoi.Trim();
+            }
             await _context.SaveChangesAsync();
             return true;
         }
 
-        public async Task<bool> CompleteTicketAsync(string ticketId, string? academicYear = null)
+        public async Task<bool> CompleteTicketAsync(string ticketId, string? academicYear = null, string? phanHoi = null)
         {
             if (int.TryParse(ticketId, out int id))
             {
@@ -146,6 +150,10 @@ namespace Dormitory.Web.Features.Maintenance.Services
 
                 ticket.TrangThai = "hoanThanh";
                 ticket.NgayHoanThanh = DateTime.Now;
+                if (!string.IsNullOrWhiteSpace(phanHoi))
+                {
+                    ticket.PhanHoi = phanHoi.Trim();
+                }
                 await _context.SaveChangesAsync();
                 return true;
             }

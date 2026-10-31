@@ -9,6 +9,7 @@ namespace Dormitory.Web.Shared.Constants
 
         public const string AdminOrManagerPolicy = "AdminOrManager";
         public const string StaffOnlyPolicy = "StaffOnly";
+        public const string StudentOnlyPolicy = "StudentOnly";
     }
 
     public static class AppDefaults

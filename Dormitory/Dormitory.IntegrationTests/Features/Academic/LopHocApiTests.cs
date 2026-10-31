@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Academic
             var service = new LopHocService(context);
             var controller = new LopHocApiController(service);
 
-            var result = await controller.GetAll(null, null, null);
+            var result = await controller.GetAll(null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<ClassItemDto>>>(ok.Value);
             Assert.True(res.Success);

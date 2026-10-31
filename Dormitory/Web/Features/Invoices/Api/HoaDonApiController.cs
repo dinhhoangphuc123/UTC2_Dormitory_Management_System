@@ -1,7 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Invoices.DTOs;
 using Dormitory.Web.Features.Invoices.Services;
 using Dormitory.Web.Features.Invoices.Validators;
+using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Invoices.Api
 {
@@ -10,12 +13,15 @@ namespace Dormitory.Web.Features.Invoices.Api
     public class HoaDonApiController : ControllerBase
     {
         private readonly IHoaDonService _hoaDonService;
+        private readonly ICurrentUser? _currentUser;
 
-        public HoaDonApiController(IHoaDonService hoaDonService)
+        public HoaDonApiController(IHoaDonService hoaDonService, ICurrentUser? currentUser = null)
         {
             _hoaDonService = hoaDonService;
+            _currentUser = currentUser;
         }
 
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? building,
@@ -28,6 +34,7 @@ namespace Dormitory.Web.Features.Invoices.Api
             return Ok(ApiResponse<List<InvoiceItemDto>>.Ok(invoices));
         }
 
+        [Authorize(Roles = $"{RoleNames.Admin},{RoleNames.KeToan}")]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateInvoiceDto req)
         {
@@ -52,10 +59,11 @@ namespace Dormitory.Web.Features.Invoices.Api
             public string PaymentMethod { get; set; } = "Tiền mặt (BQL)";
         }
 
+        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
         [HttpPost("confirm-payment")]
         public async Task<IActionResult> ConfirmPayment([FromBody] ConfirmPaymentRequest req, [FromQuery] string? academicYear)
         {
-            bool success = await _hoaDonService.ConfirmPaymentAsync(req.InvoiceId, req.PaymentMethod, academicYear);
+            bool success = await _hoaDonService.ConfirmPaymentAsync(req.InvoiceId, req.PaymentMethod, academicYear, _currentUser?.StaffId);
             if (success)
             {
                 return Ok(ApiResponse.Ok($"Đã ghi nhận thanh toán thành công cho hóa đơn {req.InvoiceId}!"));

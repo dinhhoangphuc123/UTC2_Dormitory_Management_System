@@ -8,11 +8,13 @@ namespace Dormitory.Web.Shared.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+        private readonly IHostEnvironment _env;
 
-        public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+        public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger, IHostEnvironment env)
         {
             _next = next;
             _logger = logger;
+            _env = env;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -28,16 +30,20 @@ namespace Dormitory.Web.Shared.Middleware
             }
         }
 
-        private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+        private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
             context.Response.ContentType = "application/problem+json";
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+            var detail = _env.IsDevelopment()
+                ? exception.Message
+                : "Đã xảy ra lỗi hệ thống. Vui lòng liên hệ quản trị viên.";
 
             var problem = new ProblemDetails
             {
                 Status = context.Response.StatusCode,
                 Title = "Lỗi máy chủ nội bộ",
-                Detail = exception.Message,
+                Detail = detail,
                 Instance = context.Request.Path
             };
 
@@ -50,4 +56,3 @@ namespace Dormitory.Web.Shared.Middleware
         }
     }
 }
-

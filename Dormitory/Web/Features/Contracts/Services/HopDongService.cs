@@ -111,7 +111,7 @@ namespace Dormitory.Web.Features.Contracts.Services
                 MaKyHoc = term.MaKyHoc,
                 NgayBatDau = start,
                 NgayKetThuc = end,
-                NgayNhanPhongThucTe = start,
+                NgayNhanPhongThucTe = null,
                 GiaThueThang = req.MonthlyFee,
                 TienCoc = req.DepositAmount,
                 TrangThai = "hieuLuc",
@@ -145,6 +145,20 @@ namespace Dormitory.Web.Features.Contracts.Services
             contract.TrangThai = "daKetThuc";
             contract.NgayThanhLy = DateTime.Today;
             contract.GhiChu = reason ?? "Thanh lý hợp đồng và hoàn trả cọc thiết bị";
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> CheckInAsync(string contractId, DateTime? checkInDate = null, string? academicYear = null)
+        {
+            var contract = await _context.HopDongs
+                .FirstOrDefaultAsync(h => h.MaHopDong == contractId && (academicYear == null || (h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear)));
+            if (contract == null || contract.TrangThai != "hieuLuc")
+            {
+                return false;
+            }
+
+            contract.NgayNhanPhongThucTe = (checkInDate ?? DateTime.Today).Date;
             await _context.SaveChangesAsync();
             return true;
         }

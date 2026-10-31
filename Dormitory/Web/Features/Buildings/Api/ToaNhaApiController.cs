@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Buildings.DTOs;
 using Dormitory.Web.Features.Buildings.Services;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Buildings.Api
 {
+    [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
     [ApiController]
     [Route("api/toanha")]
     public class ToaNhaApiController : ControllerBase
@@ -35,4 +38,3 @@ namespace Dormitory.Web.Features.Buildings.Api
         }
     }
 }
-

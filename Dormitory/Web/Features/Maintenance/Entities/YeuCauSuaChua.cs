@@ -1,5 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Dormitory.Web.Features.Rooms.Entities;
+using Dormitory.Web.Features.Staff.Entities;
+using Dormitory.Web.Features.Students.Entities;
 
 namespace Dormitory.Web.Features.Maintenance.Entities
 {
@@ -30,6 +33,22 @@ namespace Dormitory.Web.Features.Maintenance.Entities
         [Column("moTa")]
         public string MoTa { get; set; } = string.Empty;
 
+        [MaxLength(30)]
+        [Column("loaiSuCo")]
+        public string? LoaiSuCo { get; set; }
+
+        [MaxLength(20)]
+        [Column("mucDoKhanCap")]
+        public string? MucDoKhanCap { get; set; }
+
+        [MaxLength(500)]
+        [Column("phanHoi")]
+        public string? PhanHoi { get; set; }
+
+        [MaxLength(255)]
+        [Column("anhMinhHoa")]
+        public string? AnhMinhHoa { get; set; }
+
         [Column("ngayGui")]
         public DateTime NgayGui { get; set; } = DateTime.Now;
 
@@ -58,4 +77,3 @@ namespace Dormitory.Web.Features.Maintenance.Entities
         public virtual NhanVien? NhanVienXuLy { get; set; }
     }
 }
-

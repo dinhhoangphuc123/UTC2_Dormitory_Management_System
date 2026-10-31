@@ -14,23 +14,32 @@ namespace Dormitory.Web.Features.Payments.Services
             _context = context;
         }
 
-        public async Task<bool> ProcessPaymentAsync(ConfirmPaymentDto req, string? academicYear = null)
+        public async Task<bool> ProcessPaymentAsync(ConfirmPaymentDto req, string? academicYear = null, string? staffId = null)
         {
             var invoice = await _context.HoaDons
+                .Include(h => h.HopDong)
                 .Include(h => h.DanhSachThanhToan)
                 .Include(h => h.DanhSachChiTietHoaDon)
-                .FirstOrDefaultAsync(h => h.MaHoaDon == req.InvoiceId && h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear);
+                .FirstOrDefaultAsync(h => h.MaHoaDon == req.InvoiceId && (academicYear == null || (h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear)));
             if (invoice == null || invoice.TrangThai == "daThanhToan")
             {
                 return false;
             }
 
-            var method = req.PaymentMethod?.ToLowerInvariant() ?? string.Empty;
-            var paymentType = method.Contains("vnpay") || method.Contains("ví điện tử")
+            if (invoice.HopDong != null && invoice.HopDong.TrangThai == "choThanhToan")
+            {
+                if (Dormitory.Web.Features.Registrations.Services.RegistrationRules.IsReservationExpired(invoice.HopDong.HanGiuCho, DateTime.Now))
+                {
+                    return false;
+                }
+            }
+
+            var method = (req.PaymentMethod ?? string.Empty).ToLowerInvariant().Replace(" ", "").Replace("-", "");
+            var paymentType = method.Contains("vnpay") || method.Contains("vidientu") || method.Contains("víđiệntử")
                 ? "viDienTu"
-                : method.Contains("chuyển khoản") || method.Contains("chuyen khoan")
+                : method.Contains("chuyenkhoan") || method.Contains("chuyểnkhoản")
                     ? "chuyenKhoan"
-                    : method.Contains("tiền mặt") || method.Contains("tien mat")
+                    : method.Contains("tienmat") || method.Contains("tiềnmặt")
                         ? "tienMat"
                         : null;
             var invoiceTotal = invoice.DanhSachChiTietHoaDon.Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia);
@@ -47,11 +56,32 @@ namespace Dormitory.Web.Features.Payments.Services
                 SoTien = req.Amount,
                 NgayThanhToan = DateTime.Now,
                 PhuongThuc = paymentType,
-                GhiChu = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim()
+                GhiChu = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim(),
+                MaNhanVienThu = staffId
             });
             if (req.Amount == outstanding)
             {
                 invoice.TrangThai = "daThanhToan";
+
+                if (invoice.HopDong != null && invoice.HopDong.TrangThai == "choThanhToan")
+                {
+                    invoice.HopDong.TrangThai = "hieuLuc";
+                    if (!string.IsNullOrEmpty(staffId))
+                    {
+                        invoice.HopDong.MaNhanVienLap = staffId;
+                    }
+
+                    _context.ThongBaos.Add(new Features.Students.Entities.ThongBao
+                    {
+                        MaSinhVien = invoice.HopDong.MaSinhVien,
+                        TieuDe = "Xác nhận thanh toán thành công",
+                        NoiDung = $"Đã nhận tiền cho hóa đơn {invoice.MaHoaDon}. Hợp đồng {invoice.HopDong.MaHopDong} đã chính thức có hiệu lực. Bạn có thể đến KTX làm thủ tục nhận phòng.",
+                        Loai = "thanhToan",
+                        LienKet = "/student/contract",
+                        DaDoc = false,
+                        NgayTao = DateTime.Now
+                    });
+                }
             }
             await _context.SaveChangesAsync();
             return true;

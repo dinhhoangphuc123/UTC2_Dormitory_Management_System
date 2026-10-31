@@ -1,10 +1,13 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Rooms.Entities;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Rooms.Api
 {
+    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
     [ApiController]
     [Route("api/phong")]
     public class PhongCreateApiController : ControllerBase
@@ -65,8 +68,8 @@ namespace Dormitory.Web.Features.Rooms.Api
         public string MaPhong { get; set; } = string.Empty;
         public string MaToaNha { get; set; } = string.Empty;
         public string MaLoaiPhong { get; set; } = string.Empty;
-        public int SoTang { get; set; }
-        public int SoGiuong { get; set; } = 8;
+        public int SoTang { get; set; } = 1;
+        public int SoGiuong { get; set; } = 4;
         public string TrangThai { get; set; } = "hoatDong";
     }
 }

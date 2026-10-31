@@ -12,10 +12,14 @@ namespace Dormitory.Web.Features.Registrations.Mappings
             {
                 "daDuyet" => "Đã duyệt",
                 "tuChoi" => "Bị từ chối",
+                "hetHan" => "Hết hạn",
                 _ => "Chờ duyệt"
             };
 
             string priorityStr = d.SinhVien?.DoiTuongUuTien ?? "—";
+            string roomPref = d.Phong != null 
+                ? $"{d.Phong.MaPhong} ({(d.Phong.LoaiPhong?.TenLoaiPhong ?? d.LoaiPhong?.TenLoaiPhong ?? "—")})"
+                : (d.LoaiPhong?.TenLoaiPhong ?? "—");
 
             return new ApplicationListItemDto
             {
@@ -35,7 +39,7 @@ namespace Dormitory.Web.Features.Registrations.Mappings
                 },
                 AvatarUrl = "",
                 PriorityCategory = priorityStr,
-                RoomPreference = d.LoaiPhong?.TenLoaiPhong ?? "—",
+                RoomPreference = roomPref,
                 ScoreDX = null,
                 EntranceScore = "—",
                 Hometown = d.SinhVien?.DiaChiThuongTru ?? "—",

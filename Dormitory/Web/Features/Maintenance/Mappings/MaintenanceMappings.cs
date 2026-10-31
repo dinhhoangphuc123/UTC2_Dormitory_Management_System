@@ -12,13 +12,23 @@ namespace Dormitory.Web.Features.Maintenance.Mappings
             string rep = t.SinhVienGui?.HoTen ?? string.Empty;
             string phone = t.SinhVienGui?.DienThoai ?? string.Empty;
 
-            string cat = "Điện dân dụng";
-            if (t.MoTa.Contains("nước") || t.MoTa.Contains("lavabo") || t.MoTa.Contains("van")) cat = "Nước / Vệ sinh";
-            else if (t.MoTa.Contains("cửa") || t.MoTa.Contains("khóa")) cat = "Khóa cửa / Cửa sổ";
-            else if (t.MoTa.Contains("giường") || t.MoTa.Contains("tủ") || t.MoTa.Contains("gỗ")) cat = "Đồ gỗ / Giường tủ";
-            else if (t.MoTa.Contains("mạng") || t.MoTa.Contains("LAN") || t.MoTa.Contains("wifi")) cat = "Thiết bị mạng";
+            string cat = !string.IsNullOrWhiteSpace(t.LoaiSuCo)
+                ? t.LoaiSuCo
+                : (t.MoTa.Contains("nước") || t.MoTa.Contains("lavabo") || t.MoTa.Contains("van") ? "Nước / Vệ sinh"
+                    : t.MoTa.Contains("cửa") || t.MoTa.Contains("khóa") ? "Khóa cửa / Cửa sổ"
+                    : t.MoTa.Contains("giường") || t.MoTa.Contains("tủ") || t.MoTa.Contains("gỗ") ? "Đồ gỗ / Giường tủ"
+                    : t.MoTa.Contains("mạng") || t.MoTa.Contains("LAN") || t.MoTa.Contains("wifi") ? "Thiết bị mạng"
+                    : "Điện dân dụng");
 
-            string pri = t.MoTa.Contains("khẩn") || t.MoTa.Contains("chập") || t.MoTa.Contains("khét") || t.MoTa.Contains("ngập") ? "Khẩn cấp" : "Bình thường";
+            string pri;
+            if (!string.IsNullOrWhiteSpace(t.MucDoKhanCap))
+            {
+                pri = t.MucDoKhanCap == "khanCap" ? "Khẩn cấp" : "Bình thường";
+            }
+            else
+            {
+                pri = t.MoTa.Contains("khẩn") || t.MoTa.Contains("chập") || t.MoTa.Contains("khét") || t.MoTa.Contains("ngập") ? "Khẩn cấp" : "Bình thường";
+            }
 
             string st = t.TrangThai switch
             {

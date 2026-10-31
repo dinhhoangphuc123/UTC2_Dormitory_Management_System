@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Rooms
             var service = new PhongService(context);
             var controller = new PhongApiController(service);
 
-            var result = await controller.GetAll(null, null, null, null);
+            var result = await controller.GetAll(null, null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<RoomListItemDto>>>(ok.Value);
             Assert.True(res.Success);

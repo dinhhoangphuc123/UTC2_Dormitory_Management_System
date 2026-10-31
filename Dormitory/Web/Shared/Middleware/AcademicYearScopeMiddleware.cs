@@ -24,7 +24,11 @@ public sealed class AcademicYearScopeMiddleware
         if (!path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ||
             path.Equals("/api/auth", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/auth/", StringComparison.OrdinalIgnoreCase) ||
-            path.Equals("/api/namhoc", StringComparison.OrdinalIgnoreCase))
+            path.Equals("/api/namhoc", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/me", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/api/me/", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/thongbao", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/api/thongbao/", StringComparison.OrdinalIgnoreCase))
         {
             await _next(httpContext);
             return;

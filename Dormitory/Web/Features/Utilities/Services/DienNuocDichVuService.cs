@@ -77,7 +77,7 @@ namespace Dormitory.Web.Features.Utilities.Services
             return result;
         }
 
-        public async Task<UtilityItemDto?> RecordUtilityAsync(RecordUtilityDto req, string? academicYear = null)
+        public async Task<UtilityItemDto?> RecordUtilityAsync(RecordUtilityDto req, string? academicYear = null, string? staffId = null)
         {
             var year = string.IsNullOrWhiteSpace(academicYear)
                 ? null
@@ -142,7 +142,8 @@ namespace Dormitory.Web.Features.Utilities.Services
                     ChiSoCu = oldElec.Value,
                     ChiSoMoi = req.NewElectric,
                     MaGia = elecRate!.MaGia,
-                    NgayGhi = now
+                    NgayGhi = now,
+                    MaNhanVienGhi = staffId
                 };
                 _context.ChiSoDienNuocs.Add(elecIndex);
             }
@@ -150,6 +151,7 @@ namespace Dormitory.Web.Features.Utilities.Services
             {
                 elecIndex.ChiSoMoi = req.NewElectric;
                 elecIndex.NgayGhi = now;
+                if (!string.IsNullOrWhiteSpace(staffId)) elecIndex.MaNhanVienGhi = staffId;
             }
 
             if (waterIndex == null)
@@ -163,7 +165,8 @@ namespace Dormitory.Web.Features.Utilities.Services
                     ChiSoCu = oldWater.Value,
                     ChiSoMoi = req.NewWater,
                     MaGia = waterRate!.MaGia,
-                    NgayGhi = now
+                    NgayGhi = now,
+                    MaNhanVienGhi = staffId
                 };
                 _context.ChiSoDienNuocs.Add(waterIndex);
             }
@@ -171,6 +174,7 @@ namespace Dormitory.Web.Features.Utilities.Services
             {
                 waterIndex.ChiSoMoi = req.NewWater;
                 waterIndex.NgayGhi = now;
+                if (!string.IsNullOrWhiteSpace(staffId)) waterIndex.MaNhanVienGhi = staffId;
             }
 
             await _context.SaveChangesAsync();

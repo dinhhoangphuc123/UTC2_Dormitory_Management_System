@@ -93,23 +93,16 @@ namespace Dormitory.Web.Features.Staff.Services
             return createdStaff.ToStaffItemDto();
         }
 
-        public async Task<bool> ToggleStaffStatusAsync(string staffId)
+        public async Task<bool> ToggleAccountAccessAsync(string staffId)
         {
             var nv = await _context.NhanViens
                 .Include(n => n.TaiKhoan)
                 .FirstOrDefaultAsync(n => n.MaNhanVien == staffId || $"NV-{n.MaNhanVien}" == staffId);
 
-            if (nv != null)
-            {
-                bool isNowActive = nv.TrangThai != "dangLam";
-                nv.TrangThai = isNowActive ? "dangLam" : "nghiViec";
-                if (nv.TaiKhoan != null)
-                {
-                    nv.TaiKhoan.LaDangHoat = isNowActive;
-                }
-                await _context.SaveChangesAsync();
-            }
+            if (nv?.TaiKhoan == null) return false;
 
+            nv.TaiKhoan.LaDangHoat = !nv.TaiKhoan.LaDangHoat;
+            await _context.SaveChangesAsync();
             return true;
         }
     }

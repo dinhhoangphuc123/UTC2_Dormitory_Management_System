@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Students
             var service = new SinhVienService(context);
             var controller = new SinhVienApiController(service);
 
-            var result = await controller.GetAll(null, null, null, null);
+            var result = await controller.GetAll(null, null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<SinhVienListItemDto>>>(ok.Value);
             Assert.True(res.Success);

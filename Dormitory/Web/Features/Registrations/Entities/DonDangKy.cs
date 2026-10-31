@@ -1,5 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Dormitory.Web.Features.Students.Entities;
+using Dormitory.Web.Features.Rooms.Entities;
+using Dormitory.Web.Features.Staff.Entities;
+using Dormitory.Web.Features.Contracts.Entities;
 
 namespace Dormitory.Web.Features.Registrations.Entities
 {
@@ -21,10 +25,13 @@ namespace Dormitory.Web.Features.Registrations.Entities
         [Column("maDotDangKy")]
         public string MaDotDangKy { get; set; } = string.Empty;
 
-        [Required]
         [MaxLength(20)]
         [Column("maLoaiPhong")]
-        public string MaLoaiPhong { get; set; } = string.Empty;
+        public string? MaLoaiPhong { get; set; }
+
+        [MaxLength(20)]
+        [Column("maPhong")]
+        public string? MaPhong { get; set; }
 
         [Column("ngayDangKy")]
         public DateTime NgayDangKy { get; set; } = DateTime.Now;
@@ -54,10 +61,12 @@ namespace Dormitory.Web.Features.Registrations.Entities
         [ForeignKey(nameof(MaLoaiPhong))]
         public virtual LoaiPhong? LoaiPhong { get; set; }
 
+        [ForeignKey(nameof(MaPhong))]
+        public virtual Phong? Phong { get; set; }
+
         [ForeignKey(nameof(MaNhanVienDuyet))]
         public virtual NhanVien? NhanVienDuyet { get; set; }
 
         public virtual ICollection<HopDong> DanhSachHopDong { get; set; } = new List<HopDong>();
     }
 }
-

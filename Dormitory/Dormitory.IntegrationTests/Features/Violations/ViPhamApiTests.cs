@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Violations
             var service = new ViPhamService(context);
             var controller = new ViPhamApiController(service);
 
-            var result = await controller.GetAll(null, null, null, null);
+            var result = await controller.GetAll(null, null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<ViolationRecordDto>>>(ok.Value);
             Assert.True(res.Success);

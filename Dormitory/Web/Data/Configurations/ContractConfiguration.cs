@@ -9,11 +9,12 @@ namespace Dormitory.Web.Data.Configurations
         public void Configure(EntityTypeBuilder<HopDong> builder)
         {
             builder.HasIndex(h => h.MaGiuong)
-                .HasFilter("[trangThai] = N'hieuLuc'");
+                .HasFilter("[trangThai] <> N'daKetThuc' AND [trangThai] <> N'daHuy'")
+                .IsUnique();
 
             builder.HasIndex(h => h.MaSinhVien)
-                .HasFilter("[trangThai] = N'hieuLuc'");
+                .HasFilter("[trangThai] <> N'daKetThuc' AND [trangThai] <> N'daHuy'")
+                .IsUnique();
         }
     }
 }
-

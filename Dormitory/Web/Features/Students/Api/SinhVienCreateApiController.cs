@@ -1,11 +1,14 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Students.Entities;
 using ClosedXML.Excel;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Students.Api
 {
+    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
     [ApiController]
     [Route("api/sinhvien")]
     public class SinhVienCreateApiController : ControllerBase

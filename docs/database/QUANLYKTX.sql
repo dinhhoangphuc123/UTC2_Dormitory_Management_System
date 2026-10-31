@@ -168,16 +168,18 @@ CREATE TABLE donDangKy (
     maDonDangKy    NVARCHAR(20) PRIMARY KEY,
     maSinhVien     NVARCHAR(20) NOT NULL,
     maDotDangKy    NVARCHAR(20) NOT NULL,
-    maLoaiPhong    NVARCHAR(20) NOT NULL,
+    maLoaiPhong    NVARCHAR(20) NULL,
+    maPhong        NVARCHAR(20) NULL,
     ngayDangKy     DATETIME NOT NULL DEFAULT GETDATE(),
     trangThai      NVARCHAR(20) NOT NULL DEFAULT N'choDuyet'
-                   CHECK (trangThai IN (N'choDuyet', N'daDuyet', N'tuChoi', N'daHuy')),
+                   CHECK (trangThai IN (N'choDuyet', N'daDuyet', N'tuChoi', N'daHuy', N'hetHan')),
     maNhanVienDuyet NVARCHAR(20) NULL,
     ngayDuyet      DATETIME NULL,
     ghiChu         NVARCHAR(255) NULL,
     FOREIGN KEY (maSinhVien) REFERENCES sinhVien(maSinhVien),
     FOREIGN KEY (maDotDangKy) REFERENCES dotDangKy(maDotDangKy),
     FOREIGN KEY (maLoaiPhong) REFERENCES loaiPhong(maLoaiPhong),
+    FOREIGN KEY (maPhong) REFERENCES phong(maPhong),
     FOREIGN KEY (maNhanVienDuyet) REFERENCES nhanVien(maNhanVien),
     UNIQUE (maSinhVien, maDotDangKy)
 );
@@ -195,8 +197,9 @@ CREATE TABLE hopDong (
     giaThueThang   DECIMAL(12,2) NOT NULL CHECK (giaThueThang >= 0),
     tienCoc        DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (tienCoc >= 0),
     phanTramMienGiam DECIMAL(5,2) NOT NULL DEFAULT 0 CHECK (phanTramMienGiam BETWEEN 0 AND 100),
+    hanGiuCho      DATETIME NULL,
     trangThai      NVARCHAR(20) NOT NULL DEFAULT N'hieuLuc'
-                   CHECK (trangThai IN (N'hieuLuc', N'daKetThuc', N'daHuy')),
+                   CHECK (trangThai IN (N'hieuLuc', N'daKetThuc', N'daHuy', N'choThanhToan')),
     ngayThanhLy    DATE NULL,
     lyDoThanhLy    NVARCHAR(255) NULL,
     maNhanVienLap  NVARCHAR(20) NOT NULL,
@@ -208,8 +211,8 @@ CREATE TABLE hopDong (
     CHECK (ngayKetThuc > ngayBatDau)
 );
 
-CREATE UNIQUE INDEX UX_hopDong_giuong_hieuLuc ON hopDong(maGiuong)   WHERE trangThai = N'hieuLuc';
-CREATE UNIQUE INDEX UX_hopDong_sinhVien_hieuLuc ON hopDong(maSinhVien) WHERE trangThai = N'hieuLuc';
+CREATE UNIQUE INDEX UX_hopDong_giuong_hieuLuc ON hopDong(maGiuong)   WHERE trangThai <> N'daKetThuc' AND trangThai <> N'daHuy';
+CREATE UNIQUE INDEX UX_hopDong_sinhVien_hieuLuc ON hopDong(maSinhVien) WHERE trangThai <> N'daKetThuc' AND trangThai <> N'daHuy';
 
 -- ============================================================
 -- NHÓM 6: ĐIỆN NƯỚC, DỊCH VỤ & HÓA ĐƠN ĐÓNG TIỀN (10 bảng)
@@ -232,6 +235,10 @@ CREATE TABLE yeuCauSuaChua (
     maTaiSan       NVARCHAR(20) NULL,
     maSinhVienGui  NVARCHAR(20) NOT NULL,
     moTa           NVARCHAR(500) NOT NULL,
+    loaiSuCo       NVARCHAR(30) NULL,
+    mucDoKhanCap   NVARCHAR(20) NULL CHECK (mucDoKhanCap IS NULL OR mucDoKhanCap IN (N'binhThuong', N'khanCap')),
+    phanHoi        NVARCHAR(500) NULL,
+    anhMinhHoa     NVARCHAR(255) NULL,
     ngayGui        DATETIME NOT NULL DEFAULT GETDATE(),
     trangThai      NVARCHAR(20) NOT NULL DEFAULT N'moiGui'
                    CHECK (trangThai IN (N'moiGui', N'dangXuLy', N'hoanThanh', N'tuChoi')),
@@ -359,3 +366,34 @@ FOREIGN KEY (maHoaDon) REFERENCES hoaDon(maHoaDon),
 FOREIGN KEY (maNhanVienThu) REFERENCES nhanVien(maNhanVien)
 );
 GO
+
+-- ============================================================
+-- NHÓM 8: CỔNG SINH VIÊN (2 bảng)
+-- ============================================================
+
+CREATE TABLE thongBao (
+    maThongBao INT IDENTITY(1,1) PRIMARY KEY,
+    maSinhVien NVARCHAR(20) NOT NULL,
+    tieuDe NVARCHAR(150) NOT NULL,
+    noiDung NVARCHAR(500) NOT NULL,
+    loai NVARCHAR(30) NOT NULL CHECK (loai IN (N'donDangKy', N'thanhToan', N'nhacHan', N'baoTri', N'chung')),
+    lienKet NVARCHAR(50) NULL,
+    daDoc BIT NOT NULL DEFAULT 0,
+    ngayTao DATETIME NOT NULL DEFAULT GETDATE(),
+    FOREIGN KEY (maSinhVien) REFERENCES sinhVien(maSinhVien)
+);
+
+CREATE TABLE yeuCauDieuChinhHoSo (
+    maYeuCau INT IDENTITY(1,1) PRIMARY KEY,
+    maSinhVien NVARCHAR(20) NOT NULL,
+    truong NVARCHAR(30) NOT NULL,
+    giaTriMoi NVARCHAR(255) NOT NULL,
+    lyDo NVARCHAR(255) NOT NULL,
+    trangThai NVARCHAR(20) NOT NULL DEFAULT N'choDuyet' CHECK (trangThai IN (N'choDuyet', N'daDuyet', N'tuChoi')),
+    ngayGui DATETIME NOT NULL DEFAULT GETDATE(),
+    maNhanVienDuyet NVARCHAR(20) NULL,
+    ngayDuyet DATETIME NULL,
+    ghiChu NVARCHAR(255) NULL,
+    FOREIGN KEY (maSinhVien) REFERENCES sinhVien(maSinhVien),
+    FOREIGN KEY (maNhanVienDuyet) REFERENCES nhanVien(maNhanVien)
+);

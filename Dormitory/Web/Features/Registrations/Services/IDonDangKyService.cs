@@ -11,7 +11,7 @@ namespace Dormitory.Web.Features.Registrations.Services
             string? gender = null,
             string? academicYear = null);
 
-        Task<bool> ApproveApplicationAsync(string applicationId, string? staffId, string? academicYear = null);
+        Task<ApproveApplicationResult> ApproveApplicationAsync(string applicationId, string? staffId, string? academicYear = null);
         Task<bool> RejectApplicationAsync(string applicationId, string? staffId, string? reason = null, string? academicYear = null);
     }
 }

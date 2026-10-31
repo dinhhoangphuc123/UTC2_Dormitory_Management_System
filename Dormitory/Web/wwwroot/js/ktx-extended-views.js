@@ -1830,7 +1830,9 @@ window.KtxExtendedViews = (function () {
                                 ${filtered.map(s => {
                                     const stBadge = s.status === 'active'
                                         ? '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>Hoạt động</span>'
-                                        : '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">Đã khóa</span>';
+                                        : s.status === 'locked'
+                                            ? '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">Đã khóa</span>'
+                                            : '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">Chưa có tài khoản</span>';
 
                                     return `
                                         <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-900/40 transition-colors">
@@ -1857,8 +1859,8 @@ window.KtxExtendedViews = (function () {
                                             </td>
                                             <td class="py-3 px-4">${stBadge}</td>
                                             <td class="py-3 px-4 text-right">
-                                                <button onclick="KtxExtendedViews.toggleStaffStatus('${s.id}')" class="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-[11px] hover:bg-slate-100 transition">
-                                                    ${s.status === 'active' ? 'Khóa' : 'Mở khóa'}
+                                                <button ${s.status === 'no-account' ? 'disabled title="Nhân viên chưa được cấp tài khoản đăng nhập"' : `onclick="KtxExtendedViews.toggleStaffStatus('${s.id}', this)"`} class="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-[11px] hover:bg-slate-100 transition disabled:cursor-not-allowed disabled:opacity-50">
+                                                    ${s.status === 'active' ? 'Khóa' : s.status === 'locked' ? 'Mở khóa' : 'Chưa có TK'}
                                                 </button>
                                             </td>
                                         </tr>
@@ -1877,15 +1879,31 @@ window.KtxExtendedViews = (function () {
     function filterStaffStatus(status) { extState.staffStatus = status; reRender(); }
     function filterStaffRole(role) { extState.staffRole = role; reRender(); }
 
-    async function toggleStaffStatus(id) {
+    async function toggleStaffStatus(id, button) {
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Đang cập nhật...';
+        }
+
         try {
-            const res = await fetch(`/api/nhanvien/${id}/toggle-status`, { method: 'POST' });
-            const json = await res.json();
-            KtxApp.showToast(json.message || 'Đã cập nhật trạng thái nhân viên!');
+            const res = await fetch(`/api/nhanvien/${encodeURIComponent(id)}/toggle-status`, { method: 'POST' });
+            const json = await res.json().catch(() => null);
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.message || 'Không thể cập nhật trạng thái tài khoản.');
+            }
+
+            KtxApp.showToast(json.message || 'Đã cập nhật trạng thái tài khoản!', 'success');
             await loadStaff();
             reRender();
-        } catch (e) {
-            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
+        } catch (error) {
+            const message = error instanceof TypeError
+                ? 'Không kết nối được máy chủ. Vui lòng kiểm tra API đang chạy.'
+                : error.message || 'Không thể cập nhật trạng thái tài khoản.';
+            KtxApp.showToast(message, 'error');
+            if (button) {
+                button.disabled = false;
+                button.textContent = extState.staff.find(staff => staff.id === id)?.status === 'active' ? 'Khóa' : 'Mở khóa';
+            }
         }
     }
 
@@ -2043,7 +2061,6 @@ window.KtxExtendedViews = (function () {
                                     <th class="py-3 px-4">Tổng Giường</th>
                                     <th class="py-3 px-4">Đang Ở</th>
                                     <th class="py-3 px-4">Còn Trống</th>
-                                    <th class="py-3 px-4">Tỷ Lệ Lấp Đầy</th>
                                     <th class="py-3 px-4">Doanh Thu Kỳ</th>
                                     <th class="py-3 px-4">Trạng Thái</th>
                                 </tr>
@@ -2056,21 +2073,13 @@ window.KtxExtendedViews = (function () {
                                         <td class="py-3 px-4 text-slate-600 dark:text-slate-400 font-medium">${b.beds} chỗ</td>
                                         <td class="py-3 px-4 font-bold text-blue-600 dark:text-blue-400">${b.occupied}</td>
                                         <td class="py-3 px-4 font-semibold text-slate-500">${b.vacant}</td>
-                                        <td class="py-3 px-4">
-                                            <div class="flex items-center gap-2">
-                                                <div class="w-16 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                                    <div class="h-full bg-emerald-500 rounded-full" style="width: ${b.rate}%"></div>
-                                                </div>
-                                                <span class="font-bold text-slate-800 dark:text-white text-[11px]">${b.rate}%</span>
-                                            </div>
-                                        </td>
                                         <td class="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">${b.revenue}</td>
                                         <td class="py-3 px-4">
                                             <span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.statusColor === 'warning' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${b.status}</span>
                                         </td>
                                     </tr>
                                 `).join('')}
-                                ${(r.buildingOperations || []).length === 0 ? '<tr><td colspan="8" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
+                                ${(r.buildingOperations || []).length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -2168,6 +2177,8 @@ window.KtxExtendedViews = (function () {
         submitAddStaff,
         // Report methods
         exportReportsCsv,
-        closeModal
+        closeModal,
+        // Shared component
+        renderMetricCard
     };
 })();

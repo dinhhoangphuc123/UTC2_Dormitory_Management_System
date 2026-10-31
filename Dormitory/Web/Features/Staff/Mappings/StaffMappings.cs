@@ -28,7 +28,7 @@ namespace Dormitory.Web.Features.Staff.Mappings
                 _ => "other"
             };
 
-            bool isActive = (tk == null || tk.LaDangHoat) && n.TrangThai == "dangLam";
+            string accountStatus = (tk == null || tk.LaDangHoat) && n.TrangThai == "dangLam" ? "active" : "locked";
 
             string initials = string.Concat(
                 n.HoTen.Trim()
@@ -52,7 +52,7 @@ namespace Dormitory.Web.Features.Staff.Mappings
                 Email = n.Email ?? "—",
                 Role = rName,
                 RoleKey = rKey,
-                Status = isActive ? "active" : "locked"
+                Status = accountStatus
             };
         }
     }

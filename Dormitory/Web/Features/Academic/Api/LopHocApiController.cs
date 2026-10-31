@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Academic.DTOs;
 using Dormitory.Web.Features.Academic.Services;
 using Dormitory.Web.Features.Academic.Validators;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Academic.Api
 {
@@ -16,6 +18,7 @@ namespace Dormitory.Web.Features.Academic.Api
             _lopHocService = lopHocService;
         }
 
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? faculty,
@@ -27,6 +30,7 @@ namespace Dormitory.Web.Features.Academic.Api
             return Ok(ApiResponse<List<ClassItemDto>>.Ok(classes));
         }
 
+        [Authorize(Roles = RoleNames.Admin)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateClassDto req)
         {
@@ -41,4 +45,3 @@ namespace Dormitory.Web.Features.Academic.Api
         }
     }
 }
-

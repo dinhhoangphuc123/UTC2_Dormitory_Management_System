@@ -16,7 +16,7 @@ namespace Dormitory.UnitTests.Features.Rooms
                 TrangThai = "hoatDong"
             };
 
-            var dto = p.ToRoomListItemDto();
+            var dto = p.ToRoomListItemDto(DateTime.MinValue, DateTime.MaxValue);
             Assert.Equal("A01_101", dto.Id);
             Assert.Equal("101", dto.RoomNumber);
             Assert.Equal("A01", dto.BuildingId);

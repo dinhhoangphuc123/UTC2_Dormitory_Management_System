@@ -22,7 +22,7 @@ namespace Dormitory.IntegrationTests.Features.Payments
             var service = new ThanhToanService(context);
             var controller = new ThanhToanApiController(service);
 
-            var result = await controller.GetTotalRevenue();
+            var result = await controller.GetTotalRevenue(null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<decimal>>(ok.Value);
             Assert.True(res.Success);

@@ -14,7 +14,7 @@ namespace Dormitory.Web.Features.Contracts.Mappings
             string bedNum = h.Giuong != null ? $"G{h.Giuong.SoThuTu}" : string.Empty;
             string buildingId = toa?.MaToaNha ?? string.Empty;
 
-            int remainingDays = (h.TrangThai == "daKetThuc")
+            int remainingDays = (h.TrangThai == "daKetThuc" || h.TrangThai == "daHuy")
                 ? 0
                 : Math.Max(0, (int)(h.NgayKetThuc - DateTime.Today).TotalDays);
 
@@ -25,6 +25,16 @@ namespace Dormitory.Web.Features.Contracts.Mappings
             {
                 status = "Đã thanh lý";
                 statusNote = "Hợp đồng đã kết thúc";
+            }
+            else if (h.TrangThai == "choThanhToan")
+            {
+                status = "Chờ thanh toán";
+                statusNote = h.HanGiuCho.HasValue ? $"Hạn: {h.HanGiuCho.Value:dd/MM HH:mm}" : "Chờ thanh toán";
+            }
+            else if (h.TrangThai == "daHuy")
+            {
+                status = "Đã hủy";
+                statusNote = h.GhiChu ?? "Hợp đồng đã hủy";
             }
             else if (remainingDays <= 15)
             {
@@ -65,12 +75,16 @@ namespace Dormitory.Web.Features.Contracts.Mappings
                 BuildingId = buildingId,
                 StartDate = h.NgayBatDau.ToString("dd/MM/yyyy"),
                 EndDate = h.NgayKetThuc.ToString("dd/MM/yyyy"),
+                ActualCheckInDate = h.NgayNhanPhongThucTe?.ToString("dd/MM/yyyy"),
+                HoldDeadline = h.HanGiuCho?.ToString("dd/MM/yyyy HH:mm"),
                 RemainingDays = remainingDays,
                 MonthlyFee = h.GiaThueThang,
                 DepositAmount = h.TienCoc,
                 DepositStatus = h.TienCoc > 0 ? "Theo hợp đồng" : "Chưa ghi nhận",
                 Status = status,
-                StatusNote = statusNote
+                StatusCode = h.TrangThai,
+                StatusNote = statusNote,
+                Note = h.GhiChu
             };
         }
     }

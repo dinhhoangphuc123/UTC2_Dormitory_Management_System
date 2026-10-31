@@ -6,7 +6,7 @@ namespace Dormitory.Web.Features.Staff.Services
     {
         Task<List<StaffItemDto>> GetAllStaffAsync(string? deptKey = null, string? roleKey = null, string? status = null, string? search = null);
         Task<StaffItemDto> CreateStaffAsync(CreateStaffDto req);
-        Task<bool> ToggleStaffStatusAsync(string staffId);
+        Task<bool> ToggleAccountAccessAsync(string staffId);
     }
 }
 

@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Staff.DTOs;
 using Dormitory.Web.Features.Staff.Services;
 using Dormitory.Web.Features.Staff.Validators;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Staff.Api
 {
@@ -16,6 +18,7 @@ namespace Dormitory.Web.Features.Staff.Api
             _nhanVienService = nhanVienService;
         }
 
+        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? department,
@@ -27,6 +30,7 @@ namespace Dormitory.Web.Features.Staff.Api
             return Ok(ApiResponse<List<StaffItemDto>>.Ok(staff));
         }
 
+        [Authorize(Roles = RoleNames.Admin)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateStaffDto req)
         {
@@ -40,17 +44,17 @@ namespace Dormitory.Web.Features.Staff.Api
             return Ok(ApiResponse<StaffItemDto>.Ok(staff, $"Đã thêm thành công nhân viên {staff.Name} ({staff.Code})!"));
         }
 
+        [Authorize(Roles = RoleNames.Admin)]
         [HttpPost("{id}/toggle-status")]
-        public async Task<IActionResult> ToggleStatus(string id)
+        public async Task<IActionResult> ToggleAccountAccess(string id)
         {
-            bool success = await _nhanVienService.ToggleStaffStatusAsync(id);
+            bool success = await _nhanVienService.ToggleAccountAccessAsync(id);
             if (success)
             {
                 return Ok(ApiResponse.Ok("Đã thay đổi trạng thái hoạt động tài khoản thành công!"));
             }
 
-            return BadRequest(ApiResponse.Fail("Không tìm thấy nhân viên tương ứng."));
+            return BadRequest(ApiResponse.Fail("Không tìm thấy nhân viên hoặc nhân viên chưa được cấp tài khoản."));
         }
     }
 }
-

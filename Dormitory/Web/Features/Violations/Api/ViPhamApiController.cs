@@ -1,19 +1,25 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Violations.DTOs;
 using Dormitory.Web.Features.Violations.Services;
 using Dormitory.Web.Features.Violations.Validators;
+using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Violations.Api
 {
+    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
     [ApiController]
     [Route("api/vipham")]
     public class ViPhamApiController : ControllerBase
     {
         private readonly IViPhamService _viPhamService;
+        private readonly ICurrentUser? _currentUser;
 
-        public ViPhamApiController(IViPhamService viPhamService)
+        public ViPhamApiController(IViPhamService viPhamService, ICurrentUser? currentUser = null)
         {
             _viPhamService = viPhamService;
+            _currentUser = currentUser;
         }
 
         [HttpGet]
@@ -37,7 +43,7 @@ namespace Dormitory.Web.Features.Violations.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var record = await _viPhamService.CreateViolationAsync(req, Request.Query["academicYear"].FirstOrDefault());
+            var record = await _viPhamService.CreateViolationAsync(req, Request.Query["academicYear"].FirstOrDefault(), _currentUser?.StaffId);
             if (record == null)
             {
                 return NotFound(ApiResponse.Fail("Không tìm thấy sinh viên hoặc loại vi phạm trong dữ liệu."));

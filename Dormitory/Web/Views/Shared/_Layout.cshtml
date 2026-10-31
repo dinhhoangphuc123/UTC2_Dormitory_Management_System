@@ -9,7 +9,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -51,9 +50,12 @@
 <body class="h-full bg-[#F4F5F7] dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] transition-colors duration-200">
     @RenderBody()
 
+    <!-- Convert Material Symbol ligature labels into local SVG icons. -->
+    <script src="~/js/ktx-icon-renderer.js" asp-append-version="true"></script>
     <!-- Core App JS -->
     <script src="~/js/ktx-app.js" asp-append-version="true"></script>
     <script src="~/js/ktx-extended-views.js" asp-append-version="true"></script>
+    <script src="~/js/ktx-student-views.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

@@ -5,5 +5,6 @@ namespace Dormitory.Web.Features.Maintenance.DTOs
         public string TicketId { get; set; } = string.Empty;
         public string Technician { get; set; } = string.Empty;
         public string Deadline { get; set; } = string.Empty;
+        public string? PhanHoi { get; set; }
     }
 }

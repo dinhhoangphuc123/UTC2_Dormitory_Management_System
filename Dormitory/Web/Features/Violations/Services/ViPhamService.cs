@@ -78,7 +78,7 @@ namespace Dormitory.Web.Features.Violations.Services
                 .ToListAsync();
         }
 
-        public async Task<ViolationRecordDto?> CreateViolationAsync(CreateViolationDto req, string? academicYear = null)
+        public async Task<ViolationRecordDto?> CreateViolationAsync(CreateViolationDto req, string? academicYear = null, string? staffId = null)
         {
             var year = string.IsNullOrWhiteSpace(academicYear)
                 ? null
@@ -111,7 +111,7 @@ namespace Dormitory.Web.Features.Violations.Services
                     "expel" => "buocRaKhoi",
                     _ => "khienTrach"
                 },
-                MaNhanVienLap = null
+                MaNhanVienLap = staffId
             };
 
             _context.ViPhams.Add(entity);

@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Rooms.Api
 {
+    [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
     [ApiController]
     [Route("api/loaiphong")]
     public class LoaiPhongApiController : ControllerBase

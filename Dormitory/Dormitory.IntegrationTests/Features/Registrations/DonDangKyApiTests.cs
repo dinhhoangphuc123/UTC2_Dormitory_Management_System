@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Registrations
             var service = new DonDangKyService(context);
             var controller = new DonDangKyApiController(service);
 
-            var result = await controller.GetAll(null, null, null, null);
+            var result = await controller.GetAll(null, null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<ApplicationListItemDto>>>(ok.Value);
             Assert.True(res.Success);

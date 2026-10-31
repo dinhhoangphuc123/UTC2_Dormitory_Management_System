@@ -23,7 +23,7 @@ namespace Dormitory.IntegrationTests.Features.Utilities
             var service = new DienNuocDichVuService(context);
             var controller = new DienNuocApiController(service);
 
-            var result = await controller.GetAll(null, null, null, null);
+            var result = await controller.GetAll(null, null, null, null, null);
             var ok = Assert.IsType<OkObjectResult>(result);
             var res = Assert.IsType<ApiResponse<List<UtilityItemDto>>>(ok.Value);
             Assert.True(res.Success);

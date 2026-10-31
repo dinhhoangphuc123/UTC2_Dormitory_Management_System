@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Students.DTOs;
 using Dormitory.Web.Features.Students.Services;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Students.Api
 {
+    [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
     [ApiController]
     [Route("api/sinhvien")]
     public class SinhVienApiController : ControllerBase
@@ -38,7 +41,5 @@ namespace Dormitory.Web.Features.Students.Api
 
             return Ok(ApiResponse<SinhVienListItemDto>.Ok(student));
         }
-
     }
 }
-

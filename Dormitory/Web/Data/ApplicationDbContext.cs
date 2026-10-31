@@ -63,6 +63,10 @@ namespace Dormitory.Web.Data
         public DbSet<LoaiViPham> LoaiViPhams => Set<LoaiViPham>();
         public DbSet<ViPham> ViPhams => Set<ViPham>();
 
+        // 8. Student Portal
+        public DbSet<ThongBao> ThongBaos => Set<ThongBao>();
+        public DbSet<YeuCauDieuChinhHoSo> YeuCauDieuChinhHoSos => Set<YeuCauDieuChinhHoSo>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

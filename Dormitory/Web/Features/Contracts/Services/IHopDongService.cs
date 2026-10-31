@@ -9,5 +9,6 @@ namespace Dormitory.Web.Features.Contracts.Services
         Task<ContractListItemDto?> CreateContractAsync(CreateContractRequestDto req, string? staffId, string? academicYear = null);
         Task<bool> RenewContractAsync(string contractId, int months = 5, string? academicYear = null);
         Task<bool> LiquidateContractAsync(string contractId, string? reason = null, string? academicYear = null);
+        Task<bool> CheckInAsync(string contractId, DateTime? checkInDate = null, string? academicYear = null);
     }
 }

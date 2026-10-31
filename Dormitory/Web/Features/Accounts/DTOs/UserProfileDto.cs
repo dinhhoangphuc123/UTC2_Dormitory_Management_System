@@ -10,5 +10,8 @@ namespace Dormitory.Web.Features.Accounts.DTOs
         public string Email { get; set; } = "";
         public string Phone { get; set; } = "";
         public string Department { get; set; } = "";
+        public string RoleCode { get; set; } = "";
+        public string? StudentId { get; set; }
+        public string? StaffId { get; set; }
     }
 }

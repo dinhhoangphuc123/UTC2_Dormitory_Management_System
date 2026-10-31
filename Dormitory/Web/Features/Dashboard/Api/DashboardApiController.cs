@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Dashboard.DTOs;
 using Dormitory.Web.Features.Dashboard.Services;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Dashboard.Api
 {
+    [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
     [ApiController]
     [Route("api/dashboard")]
     public class DashboardApiController : ControllerBase
