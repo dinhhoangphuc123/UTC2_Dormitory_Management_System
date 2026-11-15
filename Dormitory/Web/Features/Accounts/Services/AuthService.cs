@@ -18,23 +18,20 @@ namespace Dormitory.Web.Features.Accounts.Services
 
         public async Task<UserProfileDto?> LoginAsync(LoginRequestDto request)
         {
+            var userOrEmail = (request.Username ?? string.Empty).Trim();
             var taiKhoan = await _context.TaiKhoans
                 .Include(t => t.VaiTro)
                 .Include(t => t.NhanVien)
                 .Include(t => t.SinhVien)
-                .FirstOrDefaultAsync(t => t.TenDangNhap == request.Username && t.LaDangHoat);
+                .FirstOrDefaultAsync(t => (t.TenDangNhap == userOrEmail ||
+                                           (t.NhanVien != null && t.NhanVien.Email == userOrEmail) ||
+                                           (t.SinhVien != null && t.SinhVien.Email == userOrEmail)) && t.LaDangHoat);
 
             if (taiKhoan == null)
                 return null;
 
             if (!_passwordHasher.VerifyPassword(request.Password, taiKhoan.MatKhauHash))
                 return null;
-
-            // Nâng cấp hash mật khẩu nếu tài khoản đang dùng plaintext cũ
-            if (PasswordHasher.IsLegacyPlaintext(taiKhoan.MatKhauHash))
-            {
-                taiKhoan.MatKhauHash = _passwordHasher.HashPassword(request.Password);
-            }
 
             // Cập nhật lần đăng nhập cuối
             taiKhoan.LanDangNhapCuoi = DateTime.Now;
@@ -50,11 +47,14 @@ namespace Dormitory.Web.Features.Accounts.Services
 
         public async Task<UserProfileDto?> GetProfileAsync(string username)
         {
+            var userOrEmail = (username ?? string.Empty).Trim();
             var taiKhoan = await _context.TaiKhoans
                 .Include(t => t.VaiTro)
                 .Include(t => t.NhanVien)
                 .Include(t => t.SinhVien)
-                .FirstOrDefaultAsync(t => t.TenDangNhap == username && t.LaDangHoat);
+                .FirstOrDefaultAsync(t => (t.TenDangNhap == userOrEmail ||
+                                           (t.NhanVien != null && t.NhanVien.Email == userOrEmail) ||
+                                           (t.SinhVien != null && t.SinhVien.Email == userOrEmail)) && t.LaDangHoat);
 
             if (taiKhoan == null)
                 return null;

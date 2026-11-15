@@ -8,6 +8,12 @@ namespace Dormitory.Web.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<TaiKhoan> builder)
         {
+            builder.HasIndex(t => t.TenDangNhap).IsUnique();
+            builder.HasIndex(t => t.MaNhanVien).IsUnique()
+                .HasFilter("[maNhanVien] IS NOT NULL");
+            builder.HasIndex(t => t.MaSinhVien).IsUnique()
+                .HasFilter("[maSinhVien] IS NOT NULL");
+
             builder.HasOne(t => t.NhanVien)
                 .WithOne(n => n.TaiKhoan)
                 .HasForeignKey<TaiKhoan>(t => t.MaNhanVien)

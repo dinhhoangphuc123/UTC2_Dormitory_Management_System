@@ -29,7 +29,24 @@ NhaTroData/
 **/backups/
 outputs/
 
-docs/archive/*
-!docs/archive/truoc_admin/
+# Documentation
+docs/
 
+# Scripts
 scripts/*   
+
+# AI Agent rules, skills & artifacts (local only)
+AGENTS.md
+.agent/
+.agents/
+.claude/skills/
+bug-reports/
+
+# Local scratch scripts, runtime uploads & test result logs
+scratch/
+__pycache__/
+*.pyc
+*.log
+QA_Tests/
+**/App_Data/
+

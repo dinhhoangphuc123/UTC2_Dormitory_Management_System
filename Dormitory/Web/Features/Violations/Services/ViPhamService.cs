@@ -29,6 +29,7 @@ namespace Dormitory.Web.Features.Violations.Services
 
             var endExclusive = year.NgayKetThuc.Date.AddDays(1);
             var list = await _context.ViPhams
+                .AsNoTracking()
                 .Where(v => v.NgayViPham >= year.NgayBatDau && v.NgayViPham < endExclusive)
                 .Include(v => v.SinhVien)
                     .ThenInclude(s => s!.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
@@ -38,6 +39,7 @@ namespace Dormitory.Web.Features.Violations.Services
                 .Include(v => v.LoaiViPham)
                 .Include(v => v.NhanVienLap)
                 .OrderByDescending(v => v.NgayViPham)
+                .AsSplitQuery()
                 .ToListAsync();
 
             var result = list.Select(v => v.ToViolationRecordDto()).ToList();

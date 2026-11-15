@@ -24,9 +24,11 @@ namespace Dormitory.Web.Features.Students.Api
             [FromQuery] string? major,
             [FromQuery] string? status,
             [FromQuery] string? search,
-            [FromQuery] string? academicYear)
+            [FromQuery] string? academicYear,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50)
         {
-            var students = await _sinhVienService.GetAllStudentsAsync(cohort, major, status, search, academicYear);
+            var students = await _sinhVienService.GetAllStudentsAsync(cohort, major, status, search, academicYear, page, pageSize);
             return Ok(ApiResponse<List<SinhVienListItemDto>>.Ok(students));
         }
 

@@ -4,11 +4,13 @@ using Dormitory.Web.Features.StudentPortal.DTOs;
 using Dormitory.Web.Features.StudentPortal.Services;
 using Dormitory.Web.Features.StudentPortal.Validators;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Middleware;
 using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.StudentPortal.Api
 {
     [Authorize(Policy = RoleNames.StudentOnlyPolicy)]
+    [SkipAcademicYearScope]
     [ApiController]
     [Route("api/me")]
     public class StudentProfileApiController : ControllerBase
@@ -46,8 +48,14 @@ namespace Dormitory.Web.Features.StudentPortal.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            bool success = await _portalService.UpdateProfileAsync(studentId, dto);
-            if (!success) return NotFound(ApiResponse.Fail("Không tìm thấy sinh viên."));
+            var (success, error, statusCode) = await _portalService.UpdateProfileAsync(studentId, dto);
+            if (!success)
+            {
+                if (statusCode == StatusCodes.Status404NotFound)
+                    return NotFound(ApiResponse.Fail(error ?? "Không tìm thấy sinh viên."));
+
+                return BadRequest(ApiResponse.Fail(error ?? "Không thể cập nhật thông tin."));
+            }
 
             return Ok(ApiResponse.Ok("Cập nhật thông tin liên hệ thành công."));
         }

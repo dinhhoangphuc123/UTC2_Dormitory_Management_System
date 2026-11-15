@@ -50,6 +50,20 @@ namespace Dormitory.Web.Features.Rooms.Services
 
             var list = entities.Select(p => p.ToRoomListItemDto(year.NgayBatDau, year.NgayKetThuc)).ToList();
 
+            if (!string.IsNullOrWhiteSpace(status) && status != "ALL" && status != "all")
+            {
+                // Hỗ trợ cả khóa tiếng Anh từ API lẫn nhãn tiếng Việt trên giao diện.
+                var normalized = status.Trim().ToLowerInvariant();
+                var expected = normalized switch
+                {
+                    "available" or "concho" or "còn chỗ" => "Còn chỗ",
+                    "full" or "day" or "đầy" => "Đầy",
+                    "maintenance" or "baotri" or "bảo trì" => "Bảo trì",
+                    _ => status.Trim()
+                };
+                list = list.Where(r => r.Status.Equals(expected, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
             if (!string.IsNullOrWhiteSpace(search))
             {
                 string q = search.Trim().ToLower();
@@ -73,6 +87,15 @@ namespace Dormitory.Web.Features.Rooms.Services
             var bed = await _context.Giuongs.FirstOrDefaultAsync(g => g.MaGiuong == bedId);
             if (bed != null)
             {
+                // Không được đưa giường vào bảo trì khi vẫn còn hợp đồng đang hiệu lực.
+                bool hasActiveContract = await _context.HopDongs.AnyAsync(h =>
+                    h.MaGiuong == bedId &&
+                    h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy");
+                if (hasActiveContract)
+                {
+                    return false;
+                }
+
                 bed.LaDangHoat = !bed.LaDangHoat;
                 await _context.SaveChangesAsync();
                 return true;

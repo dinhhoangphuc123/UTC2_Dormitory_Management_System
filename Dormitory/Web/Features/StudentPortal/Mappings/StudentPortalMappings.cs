@@ -78,8 +78,9 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
             return new RegistrationRoundDto
             {
                 Id = d.MaDotDangKy,
-                TenDot = d.TenDot,
+                TenDot = d.TenDotHienThi,
                 MaKyHoc = d.MaKyHoc,
+                MaNamHoc = d.KyHoc?.MaNamHoc ?? string.Empty,
                 NgayMo = d.NgayMo.ToString("dd/MM/yyyy"),
                 NgayDong = d.NgayDong.ToString("dd/MM/yyyy"),
                 Status = status,
@@ -130,10 +131,8 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
                 linkedContract?.NgayNhanPhongThucTe,
                 now);
 
-            bool canPay = d.TrangThai == "daDuyet" && 
-                          linkedContract != null && 
-                          linkedContract.TrangThai == "choThanhToan" && 
-                          (!linkedContract.HanGiuCho.HasValue || linkedContract.HanGiuCho.Value >= now);
+            bool canPay = (d.TrangThai == "daDuyet" || state == RegistrationRules.StepDaDuyetChoThanhToan) && 
+                          (linkedContract == null || (linkedContract.TrangThai == "choThanhToan" && (!linkedContract.HanGiuCho.HasValue || linkedContract.HanGiuCho.Value >= now)));
 
             string? bed = linkedContract?.Giuong != null ? $"G{linkedContract.Giuong.SoThuTu}" : null;
 
@@ -142,7 +141,7 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
                 Id = d.MaDonDangKy,
                 MaDonDangKy = d.MaDonDangKy,
                 MaDotDangKy = d.MaDotDangKy,
-                TenDot = d.DotDangKy?.TenDot ?? "—",
+                TenDot = d.DotDangKy?.TenDotHienThi ?? "—",
                 MaPhong = d.MaPhong ?? d.Phong?.MaPhong,
                 TenToaNha = d.Phong?.ToaNha?.TenToaNha,
                 TenLoaiPhong = d.Phong?.LoaiPhong?.TenLoaiPhong ?? d.LoaiPhong?.TenLoaiPhong,
@@ -207,7 +206,9 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
                 TongTien = total,
                 DaThanhToan = paid,
                 ConLai = remaining,
-                IsRegistration = isRegistration
+                IsRegistration = isRegistration,
+                HasPaymentProof = !string.IsNullOrEmpty(hd.AnhMinhChung),
+                NgayNopMinhChung = hd.NgayNopMinhChung?.ToString("dd/MM/yyyy HH:mm")
             };
         }
 
@@ -230,6 +231,8 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
                 DaThanhToan = paid,
                 ConLai = remaining,
                 IsRegistration = isRegistration,
+                HasPaymentProof = !string.IsNullOrEmpty(hd.AnhMinhChung),
+                NgayNopMinhChung = hd.NgayNopMinhChung?.ToString("dd/MM/yyyy HH:mm"),
                 Lines = hd.DanhSachChiTietHoaDon.Select(l => new PaymentInvoiceLineDto
                 {
                     Description = !string.IsNullOrWhiteSpace(l.NoiDung) ? l.NoiDung : (l.LoaiKhoan switch
@@ -266,11 +269,15 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
         {
             return new StudentRegisteredServiceDto
             {
+                Id = d.MaDangKyDV,
+                ServiceId = d.MaDichVu,
                 TenDichVu = d.DichVu?.TenDichVu ?? "—",
                 DonGia = d.DichVu?.DonGia ?? 0,
                 SoLuong = d.SoLuong,
                 NgayBatDau = d.NgayBatDau.ToString("dd/MM/yyyy"),
-                NgayKetThuc = d.NgayKetThuc?.ToString("dd/MM/yyyy")
+                NgayKetThuc = d.NgayKetThuc?.ToString("dd/MM/yyyy"),
+                Status = d.TrangThai,
+                RejectReason = d.LyDoTuChoi
             };
         }
 

@@ -15,6 +15,12 @@ namespace Dormitory.Web.Data.Seeding
         {
             await RoleSeeder.SeedAsync(context);
             await ReferenceDataSeeder.SeedAsync(context);
+
+            // Dữ liệu demo chỉ được nạp ngoài môi trường production.
+            if (env == null || env.IsDevelopment() || env.IsEnvironment("Testing"))
+            {
+                await DemoDataSeeder.SeedAsync(context);
+            }
         }
     }
 }

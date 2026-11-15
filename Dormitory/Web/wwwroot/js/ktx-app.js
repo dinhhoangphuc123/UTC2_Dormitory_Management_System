@@ -66,21 +66,27 @@ const KtxApp = (function () {
         // Active filters
         admissionsTab: 'pending',
         admissionsPriority: '',
+        admissionsRoomType: '',
         admissionsSearch: '',
 
-        contractsTab: 'valid',
+        contractsTab: 'all',
         contractsBuilding: 'all',
+        contractsRoom: 'all',
         contractsSearch: '',
 
         studentsCohort: '',
         studentsMajor: '',
+        studentsPayment: 'all',
+        studentsTab: 'all',
         studentsStatus: 'all',
         studentsSearch: '',
 
         roomsViewMode: 'roster',
         roomsBuilding: 'all',
-        roomsFloor: 'all',
+        roomsGender: 'all',
         roomsRoomNumber: 'all',
+        roomsRoomDropdownOpen: false,
+        roomsBedStatus: 'all',
         roomsSearch: '',
 
         // Active modals data
@@ -140,8 +146,172 @@ const KtxApp = (function () {
         return new Intl.NumberFormat('vi-VN').format(amount) + ' đ';
     }
 
+    function formatShortVND(amount) {
+        if (!amount || amount <= 0) return '0đ';
+        if (amount >= 1000000000) return (amount / 1000000000).toFixed(1) + 'B';
+        if (amount >= 1000000) return (amount / 1000000).toFixed(0) + 'tr';
+        if (amount >= 1000) return (amount / 1000).toFixed(0) + 'k';
+        return amount + 'đ';
+    }
+
     function getUserInitial(name) {
         return String(name || '?').trim().charAt(0).toLocaleUpperCase('vi-VN');
+    }
+
+    // =========================================================================
+    // FUZZY SEARCH ENGINE (Tìm kiếm gần giống, không dấu, chấp nhận gõ sai)
+    // =========================================================================
+    function normalizeVietnamese(str) {
+        return String(str ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .replace(/Đ/g, 'D')
+            .toLowerCase()
+            .trim();
+    }
+
+    function compactAlphanumeric(str) {
+        return normalizeVietnamese(str).replace(/[^a-z0-9]/g, '');
+    }
+
+    function levenshteinDistance(a, b, maxDist = 2) {
+        if (a === b) return 0;
+        const la = a.length;
+        const lb = b.length;
+        if (Math.abs(la - lb) > maxDist) return maxDist + 1;
+        if (la === 0) return lb;
+        if (lb === 0) return la;
+
+        let prev = new Array(lb + 1);
+        let curr = new Array(lb + 1);
+        for (let j = 0; j <= lb; j++) prev[j] = j;
+
+        for (let i = 1; i <= la; i++) {
+            curr[0] = i;
+            let minInRow = curr[0];
+            const ca = a.charCodeAt(i - 1);
+            for (let j = 1; j <= lb; j++) {
+                const cost = ca === b.charCodeAt(j - 1) ? 0 : 1;
+                let val = Math.min(
+                    prev[j] + 1,
+                    curr[j - 1] + 1,
+                    prev[j - 1] + cost
+                );
+                if (i > 1 && j > 1 && ca === b.charCodeAt(j - 2) && a.charCodeAt(i - 2) === b.charCodeAt(j - 1)) {
+                    val = Math.min(val, val - cost + (prev[j - 2] || 0));
+                }
+                curr[j] = val;
+                if (val < minInRow) minInRow = val;
+            }
+            if (minInRow > maxDist) return maxDist + 1;
+            const tmp = prev;
+            prev = curr;
+            curr = tmp;
+        }
+        return prev[lb];
+    }
+
+    function isSubsequence(sub, str) {
+        if (!sub || sub.length < 3 || sub.length > str.length) return false;
+        let i = 0;
+        for (let j = 0; j < str.length && i < sub.length; j++) {
+            if (sub.charCodeAt(i) === str.charCodeAt(j)) i++;
+        }
+        return i === sub.length;
+    }
+
+    function fuzzyMatch(query, ...fields) {
+        const qRaw = String(query ?? '').trim();
+        if (!qRaw) return true;
+
+        const qNorm = normalizeVietnamese(qRaw);
+        const qCompact = compactAlphanumeric(qRaw);
+        if (!qNorm) return true;
+
+        const validFields = fields.filter(f => f !== null && f !== undefined && String(f).trim() !== '');
+        if (validFields.length === 0) return false;
+
+        const combinedNorm = validFields.map(f => normalizeVietnamese(f)).join(' ');
+        const combinedCompact = validFields.map(f => compactAlphanumeric(f)).join(' ');
+
+        // 1. Khớp chính xác chuỗi con không dấu hoặc chuỗi mã gộp (bỏ dấu gạch ngang, khoảng trắng)
+        if (combinedNorm.includes(qNorm)) return true;
+        if (qCompact.length >= 2 && combinedCompact.includes(qCompact)) return true;
+
+        // 2. Tách từng từ trong câu truy vấn để so khớp linh hoạt (cho phép đảo thứ tự từ & gõ sai chính tả)
+        const qTokens = qNorm.split(/\s+/).filter(Boolean);
+        const targetWords = combinedNorm.split(/[\s,.;:/\\|()[\]{}_\-+#]+/).filter(Boolean);
+        const targetCompacts = combinedCompact.split(/\s+/).filter(Boolean);
+
+        return qTokens.every(token => {
+            if (combinedNorm.includes(token)) return true;
+            const tokenCompact = token.replace(/[^a-z0-9]/g, '');
+            if (tokenCompact && combinedCompact.includes(tokenCompact)) return true;
+
+            // Cho phép sai số ký tự tùy theo độ dài từ (tìm kiếm gần giống)
+            const allowedDist = token.length >= 6 ? 2 : (token.length >= 3 ? 1 : 0);
+            if (allowedDist > 0) {
+                for (const word of targetWords) {
+                    if (levenshteinDistance(token, word, allowedDist) <= allowedDist) {
+                        return true;
+                    }
+                    // Khớp tiền tố gần giống (ví dụ gõ "nguye" hoặc "nguen" cho "nguyen")
+                    if (word.length > token.length && token.length >= 3) {
+                        const prefix = word.slice(0, token.length);
+                        if (levenshteinDistance(token, prefix, 1) <= 1) return true;
+                    }
+                    // Khớp chuỗi con bị thiếu 1 ký tự (ví dụ "nguen" trong "nguyen")
+                    if (token.length >= 4 && Math.abs(word.length - token.length) <= 2 && isSubsequence(token, word)) {
+                        return true;
+                    }
+                }
+                if (tokenCompact.length >= 4) {
+                    for (const comp of targetCompacts) {
+                        if (isSubsequence(tokenCompact, comp)) return true;
+                    }
+                }
+            }
+            return false;
+        });
+    }
+
+    function preserveSearchFocusAndUpdate(container, newHtml) {
+        if (!container) return;
+        const activeEl = document.activeElement;
+        const isSearchInput = activeEl && container.contains(activeEl) && activeEl.tagName === 'INPUT' && activeEl.type === 'text';
+        const inputId = isSearchInput ? activeEl.id : null;
+        const inputPlaceholder = isSearchInput ? activeEl.getAttribute('placeholder') : null;
+        const currentVal = isSearchInput ? activeEl.value : null;
+        let selStart = null;
+        let selEnd = null;
+        if (isSearchInput) {
+            try {
+                selStart = activeEl.selectionStart;
+                selEnd = activeEl.selectionEnd;
+            } catch (_) {}
+        }
+
+        container.innerHTML = newHtml;
+
+        if (isSearchInput) {
+            let nextInput = inputId ? document.getElementById(inputId) : null;
+            if (!nextInput && inputPlaceholder) {
+                nextInput = Array.from(container.querySelectorAll('input[type="text"]')).find(
+                    el => el.getAttribute('placeholder') === inputPlaceholder
+                );
+            }
+            if (nextInput) {
+                if (currentVal !== null && nextInput.value !== currentVal) {
+                    nextInput.value = currentVal;
+                }
+                nextInput.focus({ preventScroll: true });
+                try {
+                    const pos = selEnd !== null ? selEnd : nextInput.value.length;
+                    nextInput.setSelectionRange(selStart !== null ? selStart : pos, pos);
+                } catch (_) {}
+            }
+        }
     }
 
     // Toast Notifications
@@ -251,6 +421,9 @@ const KtxApp = (function () {
             if (json.success && json.data) {
                 state.currentUser = json.data;
                 localStorage.setItem('utc2_current_user', JSON.stringify(json.data));
+                if (state.currentUser.roleCode !== 'sinhVien') {
+                    await loadAcademicYearOptions();
+                }
                 showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
                 setTimeout(() => {
                     if (window.location.pathname.toLowerCase().includes('/account/login')) {
@@ -305,9 +478,26 @@ const KtxApp = (function () {
 
     async function fetchApiData(url) {
         const response = await fetch(url);
-        const json = await response.json();
-        if (!response.ok || !json.success) {
-            throw new Error(json.message || `Yêu cầu thất bại (${response.status})`);
+        const text = await response.text();
+
+        let json = null;
+        try {
+            json = text ? JSON.parse(text) : null;
+        } catch (parseError) {
+            // Server trả HTML/text thay vì JSON (thường là trang lỗi dev hoặc bị chuyển hướng đăng nhập).
+            // Báo rõ cho người dùng thay vì lỗi khó hiểu của JSON.parse.
+            if (response.status === 401) {
+                logout();
+                throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+            }
+            throw new Error(`Máy chủ trả nội dung không phải JSON (HTTP ${response.status}). Vui lòng kiểm tra SQL Server/lại sau.`);
+        }
+
+        if (!json || !response.ok || !json.success) {
+            if (response.status === 401) {
+                logout();
+            }
+            throw new Error((json && json.message) || (json && json.detail) || `Yêu cầu thất bại (${response.status})`);
         }
         return json.data;
     }
@@ -343,7 +533,7 @@ const KtxApp = (function () {
             return;
         }
         try {
-            const students = await fetchApiData('/api/sinhvien');
+            const students = await fetchApiData(`/api/sinhvien?academicYear=${encodeURIComponent(academicYear)}&pageSize=500`);
             if (state.selectedAcademicYear === academicYear) state.students = students;
         } catch (e) {
             if (state.selectedAcademicYear === academicYear) {
@@ -399,7 +589,8 @@ const KtxApp = (function () {
             return;
         }
         try {
-            const applications = await fetchApiData('/api/dondangky');
+            const query = `?academicYear=${encodeURIComponent(academicYear)}`;
+            const applications = await fetchApiData(`/api/dondangky${query}`);
             if (state.selectedAcademicYear === academicYear) state.applications = applications;
         } catch (e) {
             if (state.selectedAcademicYear === academicYear) {
@@ -416,7 +607,7 @@ const KtxApp = (function () {
             return;
         }
         try {
-            const rooms = await fetchApiData('/api/phong');
+            const rooms = await fetchApiData(`/api/phong?academicYear=${encodeURIComponent(academicYear)}`);
             if (state.selectedAcademicYear === academicYear) state.rooms = rooms;
         } catch (e) {
             if (state.selectedAcademicYear === academicYear) {
@@ -448,7 +639,7 @@ const KtxApp = (function () {
                     <div id="topNavContainer"></div>
 
                     <!-- Dynamic Main Content -->
-                    <main id="mainContent" class="flex-1 pt-20 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto">
+                    <main id="mainContent" class="flex-1 pt-20 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto">
                         <div class="flex items-center justify-center p-12 text-slate-400">
                             <span class="inline-block w-6 h-6 border-2 border-[#0B2A5B] border-t-transparent rounded-full animate-spin"></span>
                         </div>
@@ -472,12 +663,37 @@ const KtxApp = (function () {
         renderToasts();
     }
 
+    // Quyền hiển thị menu theo vai trò. Máy chủ vẫn kiểm tra quyền ở từng API,
+    // đây chỉ là lớp bảo vệ giao diện để người dùng không thấy mục mình không dùng được.
+    const MENU_ROLES = {
+        'dashboard': ['admin', 'quanLy', 'keToan'],
+        'don-dang-ky': ['admin', 'quanLy'],
+        'hop-dong': ['admin', 'quanLy'],
+        'sinh-vien': ['admin', 'quanLy'],
+        'lop-khoa': ['admin', 'quanLy'],
+        'phong-va-giuong': ['admin', 'quanLy'],
+        'dien-nuoc-dich-vu': ['admin', 'quanLy', 'keToan'],
+        'hoa-don': ['admin', 'quanLy', 'keToan'],
+        'sua-chua': ['admin', 'quanLy'],
+        'vi-pham': ['admin', 'quanLy'],
+        'nhan-vien-tai-khoan': ['admin'],
+        'bao-cao': ['admin', 'quanLy', 'keToan']
+    };
+
+    function canAccessMenu(tab) {
+        if (!tab) return false;
+        const role = state.currentUser && state.currentUser.roleCode;
+        if (tab.startsWith('sv-')) return role === 'sinhVien';
+        const allowed = MENU_ROLES[tab];
+        return Array.isArray(allowed) && allowed.includes(role);
+    }
+
     function renderSidebar() {
         const container = document.getElementById('sidebarContainer');
         if (!container || !state.currentUser) return;
 
         const isStudent = state.currentUser.roleCode === 'sinhVien';
-        const navGroups = isStudent ? [
+        const navGroups = (isStudent ? [
             {
                 title: 'TỔNG QUAN',
                 items: [{ id: 'sv-tong-quan', label: 'Tổng quan', icon: 'grid_view' }]
@@ -548,7 +764,9 @@ const KtxApp = (function () {
                     { id: 'bao-cao', label: 'Báo cáo thống kê', icon: 'bar_chart' }
                 ]
             }
-        ];
+        ])
+            .map(group => ({ ...group, items: group.items.filter(item => canAccessMenu(item.id)) }))
+            .filter(group => group.items.length > 0);
 
         container.innerHTML = `
             ${state.isMobileMenuOpen ? `
@@ -566,8 +784,8 @@ const KtxApp = (function () {
                                 <img src="/images/utc2-logo.png" alt="Logo Trường Đại học Giao thông Vận tải" class="w-full h-full object-contain" />
                             </div>
                             <div class="flex flex-col min-w-0">
-                                <span class="font-bold text-sm text-white tracking-wide truncate leading-tight">KTX UTC2</span>
-                                <span class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase truncate mt-0.5">PHÂN HIỆU TP.HCM</span>
+                                <span class="font-bold text-base text-white tracking-wide truncate leading-tight">KTX UTC2</span>
+                                <span class="text-xs text-slate-400 font-semibold tracking-wider uppercase truncate mt-0.5">PHÂN HIỆU TP.HCM</span>
                             </div>
                         </div>
                         <button onclick="KtxApp.toggleMobileMenu()" class="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg">
@@ -579,7 +797,7 @@ const KtxApp = (function () {
                     <div class="flex-1 overflow-y-auto px-3 py-3 space-y-4">
                         ${navGroups.map(group => `
                             <div class="space-y-1">
-                                <div class="px-2.5 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                                <div class="px-2.5 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                                     ${group.title}
                                 </div>
                                 ${group.items.map(item => {
@@ -590,29 +808,13 @@ const KtxApp = (function () {
                                                 ? 'bg-[#0e3b78] text-white shadow-sm font-semibold'
                                                 : 'text-slate-300 hover:bg-slate-800/60 hover:text-white font-medium'
                                         }">
-                                            <span class="material-symbols-outlined text-[19px] ${isActive ? 'text-white' : 'text-slate-400'}">${item.icon}</span>
-                                            <span class="text-[13px] truncate">${item.label}</span>
+                                            <span class="material-symbols-outlined text-[20px] ${isActive ? 'text-white' : 'text-slate-400'}">${item.icon}</span>
+                                            <span class="text-sm truncate">${item.label}</span>
                                         </button>
                                     `;
                                 }).join('')}
                             </div>
                         `).join('')}
-                    </div>
-
-                    <!-- Bottom User Profile Card -->
-                    <div class="p-3 bg-[#0a1628] shrink-0 border-t border-white/5">
-                        <div class="flex items-center justify-between p-2 rounded-xl bg-[#0f213b] border border-white/5">
-                            <div class="flex items-center gap-2.5 min-w-0">
-                                <span class="w-8 h-8 rounded-full shrink-0 ring-1 ring-blue-400/40 bg-blue-900 text-white flex items-center justify-center text-xs font-bold" aria-label="${state.currentUser.name}">${getUserInitial(state.currentUser.name)}</span>
-                                <div class="min-w-0">
-                                    <div class="text-xs font-bold text-white truncate">${state.currentUser.name}</div>
-                                    <div class="text-[10px] text-blue-300 truncate">${isStudent ? `Sinh viên • ${state.currentUser.studentId || ''}` : state.currentUser.role}</div>
-                                </div>
-                            </div>
-                            <button onclick="KtxApp.logout()" class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/5 transition-colors" title="Đăng xuất">
-                                <span class="material-symbols-outlined text-[18px]">logout</span>
-                            </button>
-                        </div>
                     </div>
                 </div>
             </aside>
@@ -629,15 +831,15 @@ const KtxApp = (function () {
             <header class="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white/90 dark:bg-[#121826]/90 backdrop-blur-xl border-b border-[#E4E7EC] dark:border-[#232B3B] z-40 flex items-center gap-3 px-4 lg:px-8 shadow-xs transition-colors">
                 <!-- Left: Mobile hamburger & Search bar -->
                 <div class="flex items-center gap-3 flex-1 min-w-0">
-                    <button type="button" onclick="KtxApp.toggleMobileMenu()" class="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <button type="button" aria-label="M? menu di?u hu?ng" onclick="KtxApp.toggleMobileMenu()" class="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <span class="material-symbols-outlined text-[22px]">menu</span>
                     </button>
 
                     ${!isStudent ? `
                         <!-- Global Search Bar -->
-                        <div onclick="KtxApp.openSearch()" class="flex items-center gap-2.5 flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
+                        <div role="button" tabindex="0" aria-label="Tìm kiếm nhanh" onclick="KtxApp.openSearch()" class="flex items-center gap-2.5 flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
                             <span class="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors">search</span>
-                            <span class="text-[13px] text-slate-400 dark:text-slate-400 truncate flex-1 select-none">Tìm kiếm (phòng, SV, hợp đồng...)</span>
+                            <span class="text-sm text-slate-400 dark:text-slate-400 truncate flex-1 select-none">Tìm kiếm (phòng, SV, hợp đồng...)</span>
                         </div>
                     ` : '<div class="flex-1"></div>'}
                 </div>
@@ -647,10 +849,10 @@ const KtxApp = (function () {
                     ${!isStudent ? `
                         <!-- Academic Year Selector -->
                         <div class="relative hidden md:flex items-center gap-2 shrink-0">
-                            <select id="academicYearSelect" onchange="KtxApp.changeAcademicYear(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold max-w-[220px]">
+                            <select id="academicYearSelect" onchange="KtxApp.changeAcademicYear(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-sm font-semibold max-w-[220px]">
                                 <option value="">Chọn năm học</option>
                             </select>
-                            <button type="button" onclick="KtxApp.toggleAcademicYearMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-xs font-semibold">Quản lý năm học</button>
+                            <button type="button" onclick="KtxApp.toggleAcademicYearMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-sm font-semibold">Quản lý năm học</button>
                         </div>
                     ` : ''}
 
@@ -702,6 +904,10 @@ const KtxApp = (function () {
 
         renderAcademicYearOptions();
 
+        if (!isStudent && state.academicYears.length === 0) {
+            loadAcademicYearOptions();
+        }
+
         if (isStudent) {
             updateStudentBadge();
             if (!studentUnreadTimer) {
@@ -714,12 +920,16 @@ const KtxApp = (function () {
         const select = document.getElementById('academicYearSelect');
         if (!select) return;
 
+        const hasSelected = state.academicYears.some(year => getAcademicYearCode(year) === state.selectedAcademicYear);
+        const currentValue = hasSelected ? state.selectedAcademicYear : '';
+
         select.innerHTML = '<option value="">Chọn năm học</option>' + state.academicYears.map(year => {
             const code = getAcademicYearCode(year);
             const label = `${getAcademicYearLabel(year)} (${code})`;
-            return `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`;
+            const selectedAttr = code === currentValue ? ' selected' : '';
+            return `<option value="${escapeHtml(code)}"${selectedAttr}>${escapeHtml(label)}</option>`;
         }).join('');
-        select.value = state.selectedAcademicYear;
+        select.value = currentValue;
     }
 
     // Login View (Exact 2-column split layout from demo)
@@ -982,7 +1192,7 @@ const KtxApp = (function () {
         `;
     }
 
-    async function renderActiveView(showPageLoader = false) {
+    async function renderActiveView(showPageLoader = false, skipFetch = false) {
         const content = document.getElementById('mainContent');
         if (!content) return;
         const renderId = ++activeViewRenderId;
@@ -995,13 +1205,13 @@ const KtxApp = (function () {
             if (!tab || !tab.startsWith('sv-')) {
                 state.currentTab = 'sv-tong-quan';
                 renderSidebar();
-                return renderActiveView(showPageLoader);
+                return renderActiveView(showPageLoader, skipFetch);
             }
         } else {
-            if (tab && tab.startsWith('sv-')) {
+            if (tab && (tab.startsWith('sv-') || !canAccessMenu(tab))) {
                 state.currentTab = 'dashboard';
                 renderSidebar();
-                return renderActiveView(showPageLoader);
+                return renderActiveView(showPageLoader, skipFetch);
             }
         }
 
@@ -1010,28 +1220,73 @@ const KtxApp = (function () {
 
         let viewHtml = '';
 
-        if (tab.startsWith('sv-') && window.KtxStudentViews && window.KtxStudentViews.hasView(tab)) {
-            const viewContainer = document.createElement('div');
-            await window.KtxStudentViews.renderView(tab, viewContainer, state);
-            viewHtml = viewContainer.innerHTML;
+        if (tab.startsWith('sv-')) {
+            let retries = 0;
+            while ((!window.KtxStudentViews || !window.KtxStudentViews.hasView(tab)) && retries < 20) {
+                await new Promise(res => setTimeout(res, 50));
+                retries++;
+            }
+            if (window.KtxStudentViews && window.KtxStudentViews.hasView(tab)) {
+                try {
+                    await window.KtxStudentViews.renderView(tab, content, state);
+                } catch (svErr) {
+                    console.error('KtxStudentViews.renderView error for tab ' + tab + ':', svErr);
+                    content.innerHTML = `
+                        <div class="bg-white dark:bg-[#121826] rounded-2xl p-8 shadow-xs border border-red-200 dark:border-red-900/50 text-center space-y-4">
+                            <div class="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center">
+                                <span class="material-symbols-outlined text-[30px]">error</span>
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">Lỗi hiển thị trang sinh viên</h3>
+                            <p class="text-xs text-red-600 dark:text-red-400 max-w-md mx-auto">${escapeHtml(svErr.message || 'Không thể tải giao diện')}</p>
+                            <div class="pt-2">
+                                <button type="button" onclick="KtxApp.navigate('${escapeHtml(tab)}')" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all">
+                                    Thử lại
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+                return;
+            } else {
+                console.warn('KtxStudentViews not ready or missing view for tab:', tab);
+                content.innerHTML = `
+                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-8 shadow-xs border border-amber-200 dark:border-amber-900/50 text-center space-y-4">
+                        <div class="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[30px]">pending</span>
+                        </div>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Đang khởi tạo giao diện sinh viên</h3>
+                        <p class="text-xs text-slate-500 max-w-md mx-auto">Vui lòng bấm tải lại hoặc chọn lại mục từ thanh điều hướng bên trái.</p>
+                        <div class="pt-2">
+                            <button type="button" onclick="window.location.reload()" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all">
+                                Tải lại trang (F5)
+                            </button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
         } else if (tab === 'dashboard') {
-            await loadDashboard();
+            if (!skipFetch || !state.dashboardSummary) await loadDashboard();
             viewHtml = renderDashboardView();
         } else if (tab === 'don-dang-ky') {
-            await loadApplications();
+            if (!skipFetch || !state.applications || !state.applications.length) await loadApplications();
             viewHtml = renderAdmissionsView();
         } else if (tab === 'hop-dong') {
-            await Promise.all([loadContracts(), loadContractBuildings()]);
+            if (!skipFetch || !state.contracts || !state.contracts.length) {
+                await Promise.all([loadContracts(), loadContractBuildings()]);
+            }
             viewHtml = renderContractsView();
         } else if (tab === 'sinh-vien') {
-            await loadStudents();
+            if (!skipFetch || !state.students || !state.students.length) await loadStudents();
             viewHtml = renderStudentsView();
         } else if (tab === 'phong-va-giuong') {
-            await loadRooms();
+            if (!skipFetch || !state.rooms || !state.rooms.length) {
+                await Promise.all([loadRooms(), loadStudents()]);
+            }
             viewHtml = renderRoomsView();
         } else if (window.KtxExtendedViews && window.KtxExtendedViews.hasView(tab)) {
             const viewContainer = document.createElement('div');
-            await window.KtxExtendedViews.renderView(tab, viewContainer, state);
+            await window.KtxExtendedViews.renderView(tab, viewContainer, state, skipFetch);
             viewHtml = viewContainer.innerHTML;
         } else {
             // Secondary fallback tabs
@@ -1061,10 +1316,1619 @@ const KtxApp = (function () {
         }
 
         if (renderId !== activeViewRenderId || tab !== state.currentTab) return;
-        content.innerHTML = showPageLoader ? `<div class="page-content-enter">${viewHtml}</div>` : viewHtml;
+        if (showPageLoader) {
+            content.innerHTML = `<div class="page-content-enter">${viewHtml}</div>`;
+        } else {
+            preserveSearchFocusAndUpdate(content, viewHtml);
+        }
+        if (tab === 'dashboard' && !skipFetch) {
+            initDashboardEntranceAnimations();
+        }
     }
 
-    // 1. Dashboard View Renderer
+    // =========================================================================
+    // MEBIUS DESIGN: CASH FLOW AREA CHART MATH & DATA ENGINE (FIGMA 1473:76243)
+    // =========================================================================
+    const CF_PLOT_WIDTH = 594;
+    const CF_PLOT_HEIGHT = 150;
+    const CF_INSET = 12;
+    const CF_GRID_COLUMNS = 12;
+    const CF_TICK_TOP = 6;
+    const CF_TICK_BOTTOM = 140;
+    const CF_AREA_OFFSET = 1;
+    const CF_FADE_END = 132;
+    const CF_CAP = 5;
+    const CF_CAP_HALF = 5 / Math.sqrt(3);
+    const CF_MARKER = 12;
+    const CF_TIP_GAP = 12;
+    const CF_TIP_ROW = 18;
+
+    const rawCashFlowValues = [
+        18319.33, 17076.42, 16400.51, 17263.28, 18056.65, 16440.02, 15763.04, 15810.02, 17893.28, 17232.32, 16922.66, 14827.65, 13619.98, 17120.2,
+        17792.91, 16298, 17373.27, 16456.03, 15979.8, 15508.9, 15654.12, 17925.31, 17138.35, 17403.16, 17501.4, 17058.27, 18139.94, 17764.08,
+        17521.69, 17766.21, 17221.64, 17424.52, 17712.82, 17682.93, 17010.22, 17807.86, 16905.57, 17366.86, 17096.71, 17957.35, 18233.9, 16625.81,
+        16778.51, 16689.88, 17435.2, 16884.22, 17297.45, 16503.02, 16592.71, 15779.06, 15953.1, 15788.67, 17483.25, 17595.37, 16121.82, 17216.3,
+        15611.41, 16957.9, 17335.89, 16844.71, 16815.88, 16604.46, 15559.09, 13237.72, 13784.42, 17531.3, 15785.46, 17071.08, 16290.53, 17151.17,
+        16599.12, 15408.53, 15041.21, 15071.11, 15118.09, 15798.28, 14647.2, 16192.29, 14865.03, 15911.46, 16606.59, 13441.66, 12472.11, 12184.87,
+        13091.43, 14008.66, 15136.25, 14078.07, 14375.98, 13978.76, 14728.35, 14185.91, 15807.89, 16182.68, 14438.98
+    ];
+
+    const rawCompareValues = [
+        22402.08, 21138.08, 20705.93, 21428.45, 22919.63, 23319.33, 22427.7, 20459.96, 18186.47, 18808.22, 17050.58, 15217.78, 18379.49, 21322.55,
+        20494.12, 19520.5, 19722.06, 20104.67, 19141.3, 16850.73, 16989.09, 17347.79, 15600.4, 18458.06, 19699.85, 19055.9, 16435.66, 17139.4,
+        18157.43, 19488.05, 20077.34, 18136.94, 20555.61, 20350.64, 18756.98, 19315.53, 19337.73, 18613.5, 20149.08, 19744.26, 17756.03, 16674.8,
+        18054.95, 19324.07, 16738, 15655.06, 15730.22, 19062.73, 18005.41, 17510.06, 14158.76, 12226.89, 17826.06, 18902.17, 16510.82, 18230.88,
+        16763.62, 16001.8, 15248.53, 15480.83, 19113.97, 17855.1, 18278.71, 18435.85, 17726.99, 19457.3, 18856.05, 18468.31
+    ];
+
+    function generateEvenlyDatedPoints(startDateStr, endDateStr, values) {
+        const from = Date.parse(`${startDateStr}T00:00:00Z`);
+        const to = Date.parse(`${endDateStr}T00:00:00Z`);
+        const totalMs = to - from;
+        const n = values.length;
+        return values.map((val, i) => {
+            const time = from + Math.round((i * totalMs) / Math.max(1, n - 1));
+            const d = new Date(time);
+            return {
+                date: d.toISOString().slice(0, 10),
+                value: val
+            };
+        });
+    }
+
+    const defaultCashFlowData = generateEvenlyDatedPoints("2025-01-01", "2025-08-01", rawCashFlowValues);
+    let cashFlowChartState = null;
+
+    const MONTH_LABELS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+
+    function formatVND(value) {
+        return `${new Intl.NumberFormat('vi-VN').format(Math.round(Number(value) || 0))} đ`;
+    }
+
+    function formatCompactVND(value) {
+        const v = Number(value) || 0;
+        if (v >= 1000000000) return `${(v / 1000000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tỷ`;
+        if (v >= 1000000) return `${Math.round(v / 1000000).toLocaleString('vi-VN')} tr`;
+        return new Intl.NumberFormat('vi-VN').format(Math.round(v));
+    }
+
+    // Chọn mốc trục tung đẹp (1, 2, 5 × 10^n) để biểu đồ luôn vừa dữ liệu thật.
+    function buildRevenueTicks(maxValue) {
+        if (!(maxValue > 0)) return [0, 1000000, 2000000, 3000000, 4000000];
+        const rough = maxValue / 4;
+        const power = Math.pow(10, Math.floor(Math.log10(rough)));
+        const normalized = rough / power;
+        const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+        const step = nice * power;
+        return [0, step, step * 2, step * 3, step * 4];
+    }
+
+    function buildCountTicks(maxValue) {
+        if (!(maxValue > 0)) return [0, 1, 2, 3, 4];
+        const step = Math.max(1, Math.ceil(maxValue / 4));
+        return [0, step, step * 2, step * 3, step * 4];
+    }
+
+    function layoutCashFlowChart(data, compare, ticks, width) {
+        const values = data.map(p => p.value);
+        const lo = ticks[0];
+        const hi = ticks[ticks.length - 1];
+        const y = (val) => (hi > lo ? CF_TICK_BOTTOM - ((val - lo) / (hi - lo)) * (CF_TICK_BOTTOM - CF_TICK_TOP) : (CF_TICK_TOP + CF_TICK_BOTTOM) / 2);
+        const spread = (count) => (i) => (count > 1 ? CF_INSET + (i * (width - 2 * CF_INSET)) / (count - 1) : width / 2);
+        const at = spread(values.length);
+        const atCompare = spread(compare.length);
+
+        return {
+            ticks,
+            step: values.length > 1 ? (width - 2 * CF_INSET) / (values.length - 1) : width,
+            current: values.map((val, i) => ({ x: at(i), y: y(val), date: data[i].date, value: val })),
+            previous: compare.map((val, i) => ({ x: atCompare(i), y: y(val), value: val })),
+            grid: Array.from({ length: CF_GRID_COLUMNS + 1 }, (_, i) => CF_INSET + (i * (width - 2 * CF_INSET)) / CF_GRID_COLUMNS + 0.5),
+            isHovering: false
+        };
+    }
+
+    function valueAtPolyline(points, targetX) {
+        if (!points || !points.length) return 0;
+        if (targetX <= points[0].x) return points[0].y;
+        if (targetX >= points[points.length - 1].x) return points[points.length - 1].y;
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[i];
+            const p1 = points[i + 1];
+            if (targetX >= p0.x && targetX <= p1.x) {
+                const ratio = (targetX - p0.x) / (p1.x - p0.x);
+                return p0.y + ratio * (p1.y - p0.y);
+            }
+        }
+        return points[0].y;
+    }
+
+    function buildPolylinePath(points) {
+        if (!points || !points.length) return '';
+        return points.map((p, i) => (i === 0 ? `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}` : `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
+    }
+
+    function buildAreaPolylinePath(points, height) {
+        if (!points || !points.length) return '';
+        const line = buildPolylinePath(points);
+        return `${line} L ${points[points.length - 1].x.toFixed(1)} ${height} L ${points[0].x.toFixed(1)} ${height} Z`;
+    }
+
+    // Interactive Scrubber Handler
+    function onCashFlowPointerMove(e) {
+        if (!cashFlowChartState) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const clientX = e.clientX;
+        const relativeX = ((clientX - rect.left) / rect.width) * CF_PLOT_WIDTH;
+        const n = cashFlowChartState.current.length;
+        const idx = Math.min(n - 1, Math.max(0, Math.round((relativeX - CF_INSET) / cashFlowChartState.step)));
+        cashFlowChartState.isHovering = true;
+        updateCashFlowActivePoint(idx);
+    }
+
+    function onCashFlowPointerLeave() {
+        if (!cashFlowChartState) return;
+        cashFlowChartState.isHovering = false;
+        updateCashFlowActivePoint(Math.max(0, cashFlowChartState.current.length - 1));
+    }
+
+    function updateCashFlowActivePoint(idx) {
+        if (!cashFlowChartState) return;
+        const s = cashFlowChartState;
+        const pt = s.current[idx];
+        if (!pt) return;
+        s.activeIndex = idx;
+
+        const cursorX = pt.x;
+        const currentY = pt.y;
+        const compareY = valueAtPolyline(s.previous, cursorX);
+
+        // Tọa độ con trỏ line và polygon caps
+        const cursorEl = document.getElementById('cf-cursor-group');
+        if (cursorEl) {
+            cursorEl.innerHTML = `
+                <line x1="${cursorX}" x2="${cursorX}" y1="${CF_CAP - 0.5}" y2="${CF_PLOT_HEIGHT - CF_CAP + 0.5}" stroke="#0562ef" stroke-dasharray="4 4" stroke-width="1" />
+                <polygon points="${cursorX - CF_CAP_HALF},0 ${cursorX + CF_CAP_HALF},0 ${cursorX + 0.5},${CF_CAP} ${cursorX - 0.5},${CF_CAP}" fill="#0562ef" />
+                <polygon points="${cursorX - CF_CAP_HALF},${CF_PLOT_HEIGHT} ${cursorX + CF_CAP_HALF},${CF_PLOT_HEIGHT} ${cursorX + 0.5},${CF_PLOT_HEIGHT - CF_CAP} ${cursorX - 0.5},${CF_PLOT_HEIGHT - CF_CAP}" fill="#0562ef" />
+            `;
+        }
+
+        const xPct = (cursorX / CF_PLOT_WIDTH) * 100;
+
+        // Marker 1 (current) & Marker 2 (compare)
+        const markerCurrent = document.getElementById('cf-marker-current');
+        if (markerCurrent) {
+            markerCurrent.style.left = `calc(${xPct}% - ${CF_MARKER / 2}px)`;
+            markerCurrent.style.top = `${currentY - CF_MARKER / 2}px`;
+        }
+        const markerCompare = document.getElementById('cf-marker-compare');
+        if (markerCompare) {
+            markerCompare.style.left = `calc(${xPct}% - ${CF_MARKER / 2}px)`;
+            markerCompare.style.top = `${compareY - CF_MARKER / 2}px`;
+        }
+
+        // Tooltip placement & text
+        const tipEl = document.getElementById('cf-tooltip');
+        if (tipEl) {
+            const container = document.getElementById('cf-plot-container');
+            const plotW = container ? container.clientWidth : CF_PLOT_WIDTH;
+            const actualCursorX = (cursorX / CF_PLOT_WIDTH) * plotW;
+            const tipWidth = 158;
+            const flipped = actualCursorX + CF_TIP_GAP + tipWidth > plotW;
+            const tipAnchor = flipped ? actualCursorX - CF_TIP_GAP : actualCursorX + CF_TIP_GAP;
+            const highest = Math.min(currentY, compareY);
+            const tipTop = Math.round(Math.min(Math.max(highest - CF_TIP_ROW, 0), CF_PLOT_HEIGHT - 60));
+
+            const comparePoint = s.previous[idx];
+            const compareVal = comparePoint ? comparePoint.value : valueAtPolyline(s.previous, cursorX);
+            const diff = pt.value - compareVal;
+            const isDown = diff < 0;
+
+            const dateObj = new Date(pt.date);
+            const formattedDate = `Tháng ${dateObj.getUTCMonth() + 1}`;
+
+            const arrowCircleSvg = isDown
+                ? `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><circle cx="8" cy="8" r="6.75"/><polyline points="5.5 8 8 10.5 10.5 8"/><line x1="8" y1="5.5" x2="8" y2="10.5"/></svg>`
+                : `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><circle cx="8" cy="8" r="6.75"/><polyline points="5.5 8 8 5.5 10.5 8"/><line x1="8" y1="10.5" x2="8" y2="5.5"/></svg>`;
+
+            tipEl.style.left = `${tipAnchor}px`;
+            tipEl.style.top = `${tipTop}px`;
+            tipEl.style.transform = flipped ? 'translateX(-100%)' : 'none';
+            tipEl.style.opacity = s.isHovering ? '1' : '0';
+
+            tipEl.innerHTML = `
+                <div class="flex items-center gap-1.5">
+                    <span class="h-4 w-1 bg-[#0562ef] rounded-xs shrink-0"></span>
+                    <span class="text-[12px] font-bold text-slate-900 dark:text-white font-sans tabular-nums">${formatVND(pt.value)}</span>
+                    <span class="text-[10px] text-slate-400">${formattedDate}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="h-4 w-1 bg-slate-300 dark:bg-slate-600 rounded-xs shrink-0"></span>
+                    <span class="text-[11px] font-medium text-slate-700 dark:text-slate-300 font-sans tabular-nums">${formatVND(compareVal)}</span>
+                    <span class="text-[10px] text-slate-400">Cùng kỳ năm trước</span>
+                </div>
+                <div class="w-full border-t border-slate-100 dark:border-slate-800 border-dashed my-0.5"></div>
+                <div class="flex items-center gap-1 ${isDown ? 'text-red-500' : 'text-emerald-500'}">
+                    ${arrowCircleSvg}
+                    <span class="text-[11px] font-bold font-sans tabular-nums">${isDown ? '-' : '+'}${formatVND(Math.abs(diff))}</span>
+                </div>
+            `;
+        }
+
+        // Active Label trên trục X (Percentage responsive theo plot container)
+        const activeLabelEl = document.getElementById('cf-active-label');
+        if (activeLabelEl) {
+            activeLabelEl.style.left = `${xPct}%`;
+            const d = new Date(pt.date);
+            activeLabelEl.innerHTML = `<span class="text-[11px] font-bold text-[#0562ef] block -translate-x-1/2 whitespace-nowrap">${MONTH_LABELS[d.getUTCMonth()]}</span>`;
+        }
+
+        // Highlight tick trên trục Y
+        const ticks = s.ticks;
+        let closestTick = ticks[0];
+        let minDist = Math.abs(ticks[0] - pt.value);
+        ticks.forEach(tick => {
+            const dist = Math.abs(tick - pt.value);
+            if (dist < minDist) {
+                minDist = dist;
+                closestTick = tick;
+            }
+        });
+
+        document.querySelectorAll('[data-slot="cash-flow-tick"]').forEach(el => {
+            const tickVal = Number(el.getAttribute('data-tick'));
+            if (tickVal === closestTick) {
+                el.className = 'text-[11px] font-bold text-[#0562ef] dark:text-[#3179ff] font-sans transition-colors duration-200';
+            } else {
+                el.className = 'text-[11px] font-medium text-slate-400 font-sans transition-colors duration-200';
+            }
+        });
+    }
+
+    // ========================================================
+    // REVENUE BY PRODUCT LINE (Chuẩn 100% Mã Nguồn Mebius React)
+    // ========================================================
+    let studentChartState = null;
+
+    function layoutStudentChart(data, series, hidden, ticks, width) {
+        const n = data.length;
+        const k = Math.max(1, series.length);
+        const INSET_LEFT = 43;
+        const INSET_RIGHT = 46;
+        const GROUP_GAP = 24;
+        const BAR_GAP = 10;
+        const BAR_WIDTH = 48;
+        const SPAN = 142;
+        const BASE = 149;
+
+        const room = Math.max(0, width - INSET_LEFT - INSET_RIGHT);
+        const fit = ((n ? room / n : room) - GROUP_GAP * (n > 1 ? (n - 1) / n : 0) - (k - 1) * BAR_GAP) / k;
+        const barWidth = Math.max(4, Math.min(BAR_WIDTH, fit));
+        const groupWidth = k * barWidth + (k - 1) * BAR_GAP;
+        const first = INSET_LEFT + groupWidth / 2;
+        const last = width - INSET_RIGHT - groupWidth / 2;
+        const centres = data.map((_, i) => (n > 1 ? first + (i * (last - first)) / (n - 1) : (first + last) / 2));
+        const lo = ticks[0] !== undefined ? ticks[0] : 0;
+        const hi = ticks[ticks.length - 1] !== undefined ? ticks[ticks.length - 1] : 50;
+        const shown = series.filter(s => !hidden.includes(s.id));
+
+        const groups = data.map((line, i) => {
+            const shownWidth = shown.length * barWidth + Math.max(0, shown.length - 1) * BAR_GAP;
+            const bars = series.map((s, j) => {
+                const off = hidden.includes(s.id);
+                const slot = off ? j : shown.indexOf(s);
+                const x = off 
+                    ? centres[i] - groupWidth / 2 + slot * (barWidth + BAR_GAP) 
+                    : centres[i] - shownWidth / 2 + slot * (barWidth + BAR_GAP);
+                const value = line.values[s.id] ?? 0;
+                const height = off || hi <= lo ? 0 : Math.max(0, Math.round(((Math.min(Math.max(value, lo), hi) - lo) / (hi - lo)) * SPAN));
+                return { id: s.id, x, value, height, off };
+            });
+            const top = BASE - Math.max(0, ...bars.filter(bar => !bar.off).map(bar => bar.height));
+            const visible = bars.filter(bar => !bar.off);
+            const left = visible.length ? Math.min(...visible.map(bar => bar.x)) : centres[i];
+            const right = visible.length ? Math.max(...visible.map(bar => bar.x + barWidth)) : centres[i];
+            return { centre: centres[i], top, left, right, bars, label: line.label, values: line.values };
+        });
+
+        const dividers = centres.slice(1).map((c, i) => Math.round((centres[i] + c) / 2));
+        const columns = centres.map((c, i) => {
+            const from = i > 0 ? (centres[i - 1] + c) / 2 : 0;
+            const to = i < n - 1 ? (c + centres[i + 1]) / 2 : width;
+            return { left: from, width: to - from };
+        });
+
+        return { barWidth, groupWidth, groups, dividers, columns, width };
+    }
+
+    function applyStudentChartLayout(width) {
+        if (!studentChartState || !width || width <= 0) return;
+        const s = studentChartState;
+        s.width = width;
+        const layout = layoutStudentChart(s.data, s.series, s.hiddenSeries, s.ticks, width);
+        s.groups = layout.groups;
+        s.columns = layout.columns;
+        s.dividers = layout.dividers;
+        s.barWidth = layout.barWidth;
+
+        // 1. Update SVG horizontal lines (x2) and vertical dividers
+        const svgLines = document.querySelectorAll('[data-slot="student-grid-line"]');
+        svgLines.forEach(l => l.setAttribute('x2', width));
+        const dividers = document.querySelectorAll('[data-slot="student-divider"]');
+        layout.dividers.forEach((divX, i) => {
+            if (dividers[i]) {
+                dividers[i].setAttribute('x1', divX + 0.5);
+                dividers[i].setAttribute('x2', divX + 0.5);
+            }
+        });
+
+        // 2. Update Bars positioning and width
+        layout.groups.forEach((g, i) => {
+            g.bars.forEach(bar => {
+                const colEl = document.querySelector(`[data-slot="revenue-by-product-line-chart-column"][data-group-idx="${i}"][data-series-id="${bar.id}"]`);
+                if (colEl) {
+                    colEl.style.left = `${bar.x}px`;
+                    colEl.style.width = `${layout.barWidth}px`;
+                }
+            });
+        });
+
+        // 3. Update Bottom Axis Labels positioning (100% centered under bars)
+        layout.groups.forEach((g, i) => {
+            const lblWrapper = document.querySelector(`[data-slot="revenue-by-product-line-chart-axis-label"][data-index="${i}"]`);
+            if (lblWrapper) {
+                lblWrapper.style.left = `${g.centre}px`;
+            }
+        });
+
+        // 4. Update Interactive overlay buttons
+        layout.columns.forEach((col, i) => {
+            const btn = document.querySelector(`[data-slot="revenue-by-product-line-chart-line"][data-index="${i}"]`);
+            if (btn) {
+                btn.style.left = `${col.left}px`;
+                btn.style.width = `${col.width}px`;
+                const ring = btn.querySelector('span[aria-hidden="true"]');
+                if (ring) {
+                    ring.style.left = `${layout.groups[i].left - col.left - 6}px`;
+                    ring.style.width = `${layout.groups[i].right - layout.groups[i].left + 12}px`;
+                }
+            }
+        });
+
+        // 5. Update Tooltip position
+        const activeIdx = s.selectedIndex !== null ? s.selectedIndex : 0;
+        updateStudentActiveGroup(activeIdx);
+    }
+
+    function onStudentGroupHover(idx) {
+        if (!studentChartState) return;
+        studentChartState.isHovering = true;
+        updateStudentActiveGroup(idx);
+    }
+
+    function onStudentGroupLeave() {
+        if (!studentChartState) return;
+        const defaultIdx = studentChartState.selectedIndex !== null ? studentChartState.selectedIndex : 0;
+        studentChartState.isHovering = false;
+        updateStudentActiveGroup(defaultIdx);
+    }
+
+    function onStudentGroupClick(idx) {
+        if (!studentChartState) return;
+        studentChartState.selectedIndex = (studentChartState.selectedIndex === idx) ? null : idx;
+        updateStudentActiveGroup(studentChartState.selectedIndex !== null ? studentChartState.selectedIndex : 0);
+    }
+
+    function toggleStudentSeries(seriesId) {
+        if (!studentChartState) return;
+        const s = studentChartState;
+        const pos = s.hiddenSeries.indexOf(seriesId);
+        if (pos > -1) {
+            s.hiddenSeries.splice(pos, 1);
+        } else {
+            s.hiddenSeries.push(seriesId);
+        }
+
+        const isOff = s.hiddenSeries.includes(seriesId);
+        const btn = document.querySelector(`[data-slot="revenue-legend-${seriesId}"]`);
+        if (btn) {
+            btn.setAttribute('aria-pressed', isOff ? 'false' : 'true');
+            const dotWrapper = btn.querySelector('[data-slot="legend-dot-wrapper"]');
+            if (dotWrapper) dotWrapper.style.opacity = isOff ? '0.4' : '1';
+        }
+
+        applyStudentChartLayout(s.width);
+    }
+
+    function updateStudentActiveGroup(idx) {
+        if (!studentChartState) return;
+        const s = studentChartState;
+        const group = s.groups[idx];
+        if (!group) return;
+
+        // 1. Dim other columns
+        document.querySelectorAll('[data-slot="revenue-by-product-line-chart-column"]').forEach(col => {
+            const gIdx = Number(col.getAttribute('data-group-idx'));
+            const sId = col.getAttribute('data-series-id');
+            const isHidden = s.hiddenSeries.includes(sId);
+            if (isHidden) {
+                col.style.opacity = '0';
+            } else if (gIdx === idx) {
+                col.style.opacity = '1';
+            } else {
+                col.style.opacity = '0.4';
+            }
+        });
+
+        // 2. Highlight axis label
+        s.groups.forEach((g, i) => {
+            const lbl = document.getElementById(`student-axis-label-${i}`);
+            if (lbl) {
+                if (i === idx) {
+                    lbl.className = 'text-[12px] font-bold text-slate-900 dark:text-white block -translate-x-1/2 whitespace-nowrap transition-colors duration-200';
+                } else {
+                    lbl.className = 'text-[12px] font-medium text-slate-400 block -translate-x-1/2 whitespace-nowrap transition-colors duration-200';
+                }
+            }
+        });
+
+        // 3. Position & update Tooltip
+        const tipEl = document.getElementById('student-tooltip');
+        if (tipEl) {
+            const tipWidth = 168;
+            const tipHeight = 92;
+            const flipped = Math.round(group.right + 8) + tipWidth > s.width;
+            const tipLeft = flipped ? Math.max(0, Math.round(group.left - 8 - tipWidth)) : Math.round(group.right + 8);
+            const tipTop = Math.round(Math.min(Math.max(group.top + 6, 0), Math.max(0, s.height - tipHeight)));
+
+            tipEl.style.left = `${tipLeft}px`;
+            tipEl.style.top = `${tipTop}px`;
+            tipEl.style.opacity = s.isHovering ? '1' : '0';
+
+            const maleVal = Number(group.values.male) || 0;
+            const femaleVal = Number(group.values.female) || 0;
+            const totalVal = maleVal + femaleVal;
+            const femaleShare = totalVal > 0 ? Math.round((femaleVal / totalVal) * 100) : 0;
+
+            const showInd = !s.hiddenSeries.includes('male');
+            const showTop = !s.hiddenSeries.includes('female');
+
+            let rowsHtml = '';
+            if (showInd) {
+                rowsHtml += `
+                    <div class="flex items-center gap-1.5">
+                        <span class="h-4 w-1 rounded-xs bg-[#0562ef] shrink-0"></span>
+                        <span class="text-[12px] font-bold text-slate-900 dark:text-white font-sans tabular-nums">${maleVal} sinh viên</span>
+                        <span class="text-[10px] text-slate-400">Nam</span>
+                    </div>
+                `;
+            }
+            if (showTop) {
+                rowsHtml += `
+                    <div class="flex items-center gap-1.5">
+                        <span class="h-4 w-1 rounded-xs bg-[#93c5fd] shrink-0"></span>
+                        <span class="text-[11px] font-medium text-slate-700 dark:text-slate-300 font-sans tabular-nums">${femaleVal} sinh viên</span>
+                        <span class="text-[10px] text-slate-400">Nữ</span>
+                    </div>
+                `;
+            }
+
+            let changeHtml = '';
+            if (showInd || showTop) {
+                changeHtml = `
+                    <div class="w-full border-t border-slate-100 dark:border-slate-800 border-dashed my-0.5"></div>
+                    <div class="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                        <span class="text-[11px] font-semibold font-sans">Tổng: ${totalVal} sinh viên · Nữ ${femaleShare}%</span>
+                    </div>
+                `;
+            }
+
+            tipEl.innerHTML = `
+                <span class="text-[12px] font-bold text-slate-900 dark:text-white">${group.label}</span>
+                ${rowsHtml}
+                ${changeHtml}
+            `;
+        }
+    }
+
+    // =========================================================================
+    // REVENUE OVERVIEW GAUGE (Chuẩn 100% Mã Nguồn Mebius React - Figma 1473:80634)
+    // =========================================================================
+    const GAUGE_WIDTH = 720;
+    const GAUGE_HEIGHT = 362;
+    const CX = 360;
+    const CY = 360;
+    const RING_OUTER = 360;
+    const RING_INNER = 356.4;
+    const BAND_OUTER = 340;
+    const BAND_INNER = 231.2;
+    const CORNER = 8;
+    const LINE_CY = 361;
+    const LINE_OUTER = 296;
+    const LINE_INNER = 284.16;
+    const LINE_RADIUS = (LINE_OUTER + LINE_INNER) / 2;
+    const LINE_START = 180.131;
+    const DOT = 10;
+    const DOT_RING = 2;
+    const END_DOT = 12;
+    const END_RING = 4;
+    const FILL_PAST = 4.5195;
+    const ARC_PAST = 3.4795;
+    const ARC_SPAN = 93.2246;
+    const LINE_PAST = 1.6274;
+    const FIGMA_TODAY = 284.5628;
+
+    const roundG = (n) => Math.round(n * 1000) / 1000;
+    const radG = (deg) => (deg * Math.PI) / 180;
+    const clampG = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
+    const atG = (cx, cy, r, deg) => `${roundG(cx + r * Math.cos(radG(deg)))} ${roundG(cy + r * Math.sin(radG(deg)))}`;
+    const angleOf = (share) => 180 + 180 * clampG(share, 0, 1);
+
+    function segmentPath(cx, cy, inner, outer, from, to, corner = 0) {
+        if (!(to - from > 0.001)) return "";
+        const fit = Math.min(corner, (outer - inner) / 2 - 0.01, radG(to - from) * inner * 0.45);
+        const c = Math.max(0, fit);
+        const large = (span) => (span > 180 ? 1 : 0);
+        if (c < 0.01) {
+            return `M ${atG(cx, cy, outer, from)} A ${outer} ${outer} 0 ${large(to - from)} 1 ${atG(cx, cy, outer, to)} L ${atG(cx, cy, inner, to)} A ${inner} ${inner} 0 ${large(to - from)} 0 ${atG(cx, cy, inner, from)} Z`;
+        }
+        const dOut = (Math.asin(c / (outer - c)) * 180) / Math.PI;
+        const dIn = (Math.asin(c / (inner + c)) * 180) / Math.PI;
+        const edgeOut = Math.sqrt((outer - c) ** 2 - c * c);
+        const edgeIn = Math.sqrt((inner + c) ** 2 - c * c);
+        return [
+            `M ${atG(cx, cy, edgeIn, from)}`,
+            `L ${atG(cx, cy, edgeOut, from)}`,
+            `A ${c} ${c} 0 0 1 ${atG(cx, cy, outer, from + dOut)}`,
+            `A ${outer} ${outer} 0 ${large(to - from - 2 * dOut)} 1 ${atG(cx, cy, outer, to - dOut)}`,
+            `A ${c} ${c} 0 0 1 ${atG(cx, cy, edgeOut, to)}`,
+            `L ${atG(cx, cy, edgeIn, to)}`,
+            `A ${c} ${c} 0 0 1 ${atG(cx, cy, inner, to - dIn)}`,
+            `A ${inner} ${inner} 0 ${large(to - from - 2 * dIn)} 0 ${atG(cx, cy, inner, from + dIn)}`,
+            `A ${c} ${c} 0 0 1 ${atG(cx, cy, edgeIn, from)}`,
+            "Z"
+        ].join(" ");
+    }
+
+    function linePath(to) {
+        if (!(to - LINE_START > 0.001)) return "";
+        const cap = (LINE_OUTER - LINE_INNER) / 2;
+        const end = Math.max(LINE_START, to - ((cap / LINE_RADIUS) * 180) / Math.PI);
+        const large = end - LINE_START > 180 ? 1 : 0;
+        return `M ${atG(CX, LINE_CY, LINE_OUTER, LINE_START)} A ${LINE_OUTER} ${LINE_OUTER} 0 ${large} 1 ${atG(CX, LINE_CY, LINE_OUTER, end)} A ${cap} ${cap} 0 0 1 ${atG(CX, LINE_CY, LINE_INNER, end)} A ${LINE_INNER} ${LINE_INNER} 0 ${large} 0 ${atG(CX, LINE_CY, LINE_INNER, LINE_START)} Z`;
+    }
+
+    function lineFade(to) {
+        const sx = CX + LINE_RADIUS * Math.cos(radG(LINE_START));
+        const sy = LINE_CY + LINE_RADIUS * Math.sin(radG(LINE_START));
+        const end = (deg) => [CX + LINE_RADIUS * Math.cos(radG(deg)) - sx, LINE_CY + LINE_RADIUS * Math.sin(radG(deg)) - sy];
+        const [fx, fy] = end(FIGMA_TODAY + LINE_PAST);
+        const [nx, ny] = end(to);
+        const scale = Math.hypot(nx, ny) / (Math.hypot(fx, fy) || 1);
+        const turn = ((Math.atan2(ny, nx) - Math.atan2(fy, fx)) * 180) / Math.PI;
+        return `translate(${roundG(sx)} ${roundG(sy)}) rotate(${roundG(turn)}) scale(${roundG(scale)}) translate(${roundG(-sx)} ${roundG(-sy)})`;
+    }
+
+    function marksAt(today, sweep = 1) {
+        const along = (deg) => 180 + (Math.min(deg, 360) - 180) * sweep;
+        return { fill: along(today + FILL_PAST), arc: along(today + ARC_PAST), line: along(today + LINE_PAST) };
+    }
+
+    const sampleRevenueOverviewData = [
+        { date: "2026-10-01", value: 52.86 },
+        { date: "2026-10-02", value: 127.05 },
+        { date: "2026-10-08", value: 532.22 },
+        { date: "2026-10-10", value: 610.76 },
+        { date: "2026-10-13", value: 685.21 },
+        { date: "2026-10-15", value: 757.96 },
+        { date: "2026-10-17", value: 874.92 }
+    ];
+    const SAMPLE_TARGET = 1506;
+    const SAMPLE_PREVIOUS = 807.57;
+
+    let revenueOverviewChartState = null;
+
+    function onRevenueOverviewPointerMove(event) {
+        if (!revenueOverviewChartState) return;
+        const target = event.currentTarget;
+        const box = target.getBoundingClientRect();
+        const x = ((event.clientX - box.left) / box.width) * GAUGE_WIDTH;
+        const y = ((event.clientY - box.top) / box.height) * GAUGE_HEIGHT;
+        let deg = (Math.atan2(y - LINE_CY, x - CX) * 180) / Math.PI;
+        if (deg < 0) deg += 360;
+        if (deg < 180) deg = deg < 90 ? 360 : 180;
+
+        let best = 0;
+        const angles = revenueOverviewChartState.angles;
+        for (let i = 1; i < angles.length; i++) {
+            if (Math.abs(angles[i] - deg) < Math.abs(angles[best] - deg)) best = i;
+        }
+        setRevenueOverviewActive(best);
+    }
+
+    function onRevenueOverviewPointerLeave() {
+        if (!revenueOverviewChartState) return;
+        setRevenueOverviewActive(null);
+    }
+
+    function setRevenueOverviewActive(idx) {
+        if (!revenueOverviewChartState) return;
+        const s = revenueOverviewChartState;
+        const tipEl = document.getElementById('ro-tooltip');
+        const tipValEl = document.getElementById('ro-tip-val');
+        const tipDateEl = document.getElementById('ro-tip-date');
+        const n = s.data.length;
+        const activeIdx = idx !== null ? idx : n - 1;
+        const pt = s.data[activeIdx];
+        const angle = s.angles[activeIdx];
+
+        const pctX = ((CX + LINE_RADIUS * Math.cos(radG(angle))) / GAUGE_WIDTH) * 100;
+        const pctY = ((LINE_CY + LINE_RADIUS * Math.sin(radG(angle))) / GAUGE_HEIGHT) * 100;
+
+        if (tipEl) {
+            tipEl.style.left = `${pctX.toFixed(2)}%`;
+            tipEl.style.top = `${pctY.toFixed(2)}%`;
+            tipEl.style.transform = 'translate(-50%, -100%) translateY(-10px)';
+        }
+        if (tipValEl && pt) {
+            tipValEl.textContent = '$' + pt.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        if (tipDateEl && pt) {
+            const d = new Date(pt.date);
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            tipDateEl.textContent = `${dayNames[d.getUTCDay()]}, ${monthNames[d.getUTCMonth()]} ${d.getUTCDate()}`;
+        }
+
+        document.querySelectorAll('[data-slot="revenue-overview-chart-dot"]').forEach((dot, i) => {
+            if (i === activeIdx) {
+                dot.style.transform = 'scale(1.3)';
+                dot.style.transition = 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+            } else {
+                dot.style.transform = 'scale(1)';
+                dot.style.transition = 'transform 300ms ease-out';
+            }
+        });
+    }
+
+    // =========================================================================
+    // MEBIUS DESIGN: EXPENSES CHART MATH & ENGINE (FIGMA 1473:82110)
+    // =========================================================================
+    const EXP_SIZE = 320;
+    const EXP_CENTER = EXP_SIZE / 2; // 160
+    const EXP_OUTER = 160;
+    const EXP_INNER = 108.8; // 68% of the radius
+    const EXP_CORNER = 8;
+    const EXP_GAP = 0.9; // degrees
+    const EXP_SPREAD = 2;
+    const EXP_TICK_INNER = 116.005;
+    const EXP_TICK_OUTER = 153;
+    const EXP_TICK_SPAN = 1.8;
+    const EXP_TICK_STEP = 3;
+    const EXP_OUTLINE_BEFORE = 7.62;
+    const EXP_OUTLINE_AFTER = 4.75;
+    const EXP_GLOW_INNER = 120.61;
+    const EXP_GLOW_OUTER = 147;
+    const EXP_GLOW_SHARE = 0.9;
+    const EXP_GLOW_CORNER = 7.35;
+    const EXP_POP = 4;
+    const EXP_HOVER_IN = EXP_INNER - 10;
+    const EXP_HOVER_OUT = EXP_OUTER + 10;
+    const EXP_FRAME = "M -60 -60 H 380 V 380 H -60 Z ";
+    const EXP_REST = "\u0000rest";
+
+    const expColors = {
+        orange: {
+            fill: "#fb923c",
+            rim: "#f97316",
+            glow: "#ea580c",
+            dot: "#fb923c",
+            dotRing: "#f97316",
+            ringClass: "focus-visible:ring-orange-500/40"
+        },
+        green: {
+            fill: "#4ade80",
+            rim: "#22c55e",
+            glow: "#16a34a",
+            dot: "#4ade80",
+            dotRing: "#22c55e",
+            ringClass: "focus-visible:ring-green-500/40"
+        },
+        yellow: {
+            fill: "#facc15",
+            rim: "#eab308",
+            dot: "#facc15",
+            dotRing: "#eab308",
+            ringClass: "focus-visible:ring-yellow-500/40"
+        },
+        blue: {
+            fill: "#60a5fa",
+            rim: "#3b82f6",
+            glow: "#2563eb",
+            dot: "#60a5fa",
+            dotRing: "#3b82f6",
+            ringClass: "focus-visible:ring-blue-500/40"
+        },
+        purple: {
+            fill: "#c084fc",
+            rim: "#a855f7",
+            glow: "#9333ea",
+            dot: "#c084fc",
+            dotRing: "#a855f7",
+            ringClass: "focus-visible:ring-purple-500/40"
+        }
+    };
+
+    // Danh mục và số liệu được nạp từ API dashboard (loại phòng thật trong CSDL).
+    let expensesCategories = [];
+    let expensesPeriods = [];
+
+    let expensesChartState = {
+        period: "all",
+        pinned: null,
+        preview: null,
+        donut: null
+    };
+
+    function formatRoomCount(val) {
+        return `${new Intl.NumberFormat('vi-VN').format(Math.round(Number(val) || 0))} phòng`;
+    }
+
+    const polarExp = (r, a) => [EXP_CENTER + r * Math.sin(a), EXP_CENTER - r * Math.cos(a)];
+
+    function arcPathExp(r, a0, a1) {
+        if (!(a1 > a0)) return "";
+        if (a1 - a0 >= 360) {
+            const [x, y] = polarExp(r, 0);
+            const [bx, by] = polarExp(r, Math.PI);
+            return `M ${roundG(x)} ${roundG(y)} A ${r} ${r} 0 1 1 ${roundG(bx)} ${roundG(by)} A ${r} ${r} 0 1 1 ${roundG(x)} ${roundG(y)}`;
+        }
+        const [x0, y0] = polarExp(r, radG(a0));
+        const [x1, y1] = polarExp(r, radG(a1));
+        return `M ${roundG(x0)} ${roundG(y0)} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${roundG(x1)} ${roundG(y1)}`;
+    }
+
+    function wedgePathExp(a0, a1) {
+        const r = EXP_OUTER + 40;
+        if (!(a1 > a0)) return "";
+        if (a1 - a0 >= 360) return `${arcPathExp(r, 0, 360)} Z`;
+        return `M ${EXP_CENTER} ${EXP_CENTER} L ${arcPathExp(r, a0, a1).slice(2)} Z`;
+    }
+
+    function sectorPath(r0, r1, a0, a1, opts = {}) {
+        const center = opts.center || EXP_CENTER;
+        const corner = opts.corner || 0;
+        const deg0 = (a0 * 180 / Math.PI) - 90;
+        const deg1 = (a1 * 180 / Math.PI) - 90;
+        return segmentPath(center, center, r0, r1, deg0, deg1, corner);
+    }
+
+    function layoutDonutExp(values, budget) {
+        const total = values.reduce((sum, value) => sum + Math.max(0, value), 0);
+        const full = budget !== undefined && budget > total ? budget : total;
+        let at = 0;
+        const arcs = values.map(value => {
+            const span = full > 0 ? (Math.max(0, value) / full) * 360 : 0;
+            const arc = { a0: at, a1: Math.max(at, at + span - EXP_GAP) };
+            at += span;
+            return arc;
+        });
+        const rest = full > total ? (arcs.length ? arcs[arcs.length - 1].a1 : 0) : 360;
+        return { arcs, rest, total, full };
+    }
+
+    function segmentShapesExp(arc) {
+        const { a0, a1 } = arc;
+        if (!(a1 - a0 > 0.01)) return { rim: "", fill: "", light: "", glow: "" };
+        const shrink = (EXP_OUTER - EXP_SPREAD) / EXP_OUTER;
+        const mid = (a0 + a1) / 2;
+        const half = ((a1 - a0) * EXP_GLOW_SHARE) / 2;
+        return {
+            rim: sectorPath((EXP_INNER * (EXP_OUTER + 1)) / EXP_OUTER, EXP_OUTER + 1, radG(a0), radG(a1), { center: EXP_CENTER, corner: (EXP_CORNER * (EXP_OUTER + 1)) / EXP_OUTER }),
+            fill: sectorPath(EXP_INNER, EXP_OUTER, radG(a0), radG(a1), { center: EXP_CENTER, corner: EXP_CORNER }),
+            light: EXP_FRAME + sectorPath(EXP_INNER * shrink, EXP_OUTER * shrink, radG(a0), radG(a1), { center: EXP_CENTER, corner: EXP_CORNER * shrink }),
+            glow: sectorPath(EXP_GLOW_INNER, EXP_GLOW_OUTER, radG(mid - half), radG(mid + half), { center: EXP_CENTER, corner: EXP_GLOW_CORNER })
+        };
+    }
+
+    function restShapesExp(rest) {
+        return {
+            bars: rest < 360 ? wedgePathExp(Math.max(0, rest - EXP_TICK_SPAN), 360) : "",
+            outerLine: rest < 360 ? arcPathExp(EXP_OUTER - 0.5, rest - EXP_OUTLINE_BEFORE, 360 + EXP_OUTLINE_AFTER) : "",
+            innerLine: rest < 360 ? arcPathExp(EXP_INNER + 0.5, rest - EXP_OUTLINE_BEFORE, 360 + EXP_OUTLINE_AFTER) : ""
+        };
+    }
+
+    const EXP_TICKS = Array.from({ length: 360 / EXP_TICK_STEP }, (_, k) => {
+        const end = 360 - k * EXP_TICK_STEP;
+        return {
+            end,
+            d: sectorPath(EXP_TICK_INNER, EXP_TICK_OUTER, radG(end - EXP_TICK_SPAN), radG(end), { center: EXP_CENTER, corner: 0 })
+        };
+    });
+
+    function drawExpensesDonut(root, donut) {
+        if (!root) return;
+        root.querySelectorAll('[data-arc]').forEach(group => {
+            const arc = donut.arcs[Number(group.dataset.arc)];
+            const shapes = arc ? segmentShapesExp(arc) : segmentShapesExp({ a0: 0, a1: 0 });
+            group.querySelectorAll('[data-shape]').forEach(node => {
+                const shape = node.getAttribute('data-shape');
+                if (shapes[shape] !== undefined) node.setAttribute('d', shapes[shape]);
+            });
+        });
+        const rest = restShapesExp(donut.rest);
+        root.querySelectorAll('[data-rest]').forEach(node => {
+            const restAttr = node.getAttribute('data-rest');
+            if (rest[restAttr] !== undefined) node.setAttribute('d', rest[restAttr]);
+        });
+    }
+
+    function lerpExpensesDonut(from, to, t) {
+        return {
+            arcs: to.arcs.map((arc, i) => {
+                const start = from.arcs[i] || { a0: arc.a0, a1: arc.a0 };
+                return {
+                    a0: start.a0 + (arc.a0 - start.a0) * t,
+                    a1: start.a1 + (arc.a1 - start.a1) * t
+                };
+            }),
+            rest: from.rest + (to.rest - from.rest) * t
+        };
+    }
+
+    function sweptExpensesDonut(donut, sweep) {
+        return {
+            arcs: donut.arcs.map(({ a0, a1 }) => ({
+                a0,
+                a1: Math.max(a0, Math.min(a1, sweep))
+            })),
+            rest: donut.rest
+        };
+    }
+
+    function pointAtExpenses(event) {
+        const target = event.currentTarget;
+        if (!target) return null;
+        const box = target.getBoundingClientRect();
+        const scale = EXP_SIZE / (box.width || EXP_SIZE);
+        const x = (event.clientX - box.left) * scale - EXP_CENTER;
+        const y = (event.clientY - box.top) * scale - EXP_CENTER;
+        const r = Math.hypot(x, y);
+        if (r < EXP_HOVER_IN || r > EXP_HOVER_OUT) return null;
+        const angle = ((Math.atan2(x, -y) * 180) / Math.PI + 360) % 360;
+        const period = expensesPeriods.find(p => p.value === expensesChartState.period) || expensesPeriods[0];
+        const full = period.budget && period.budget > expensesChartState.donut.total ? period.budget : expensesChartState.donut.total;
+        let at = 0;
+        for (let i = 0; i < expensesCategories.length; i++) {
+            const val = period.values[expensesCategories[i].id] || 0;
+            const span = full > 0 ? (val / full) * 360 : 0;
+            if (span > 0 && angle >= at && angle < at + span) {
+                return expensesCategories[i].id;
+            }
+            at += span;
+        }
+        const remaining = full > expensesChartState.donut.total ? full - expensesChartState.donut.total : 0;
+        return remaining > 0 ? EXP_REST : null;
+    }
+
+    function updateExpensesVisualState(prevIndex) {
+        const ring = document.getElementById('expenses-ring-svg');
+        const centerBox = document.getElementById('expenses-center-box');
+        const centerLabel = document.getElementById('expenses-center-label');
+        const centerVal = document.getElementById('expenses-center-val');
+        const centerNote = document.getElementById('expenses-center-note');
+        if (!ring || !expensesChartState.donut) return;
+
+        const period = expensesPeriods.find(p => p.value === expensesChartState.period) || expensesPeriods[0];
+        const donut = expensesChartState.donut;
+        const { total, full } = donut;
+        const remaining = full > total ? full - total : 0;
+
+        const shownKey = expensesChartState.preview ?? expensesChartState.pinned;
+        const shownIndex = expensesCategories.findIndex(c => c.id === shownKey);
+        const shownRest = shownKey === EXP_REST && remaining > 0;
+        const shownCat = shownIndex >= 0 ? expensesCategories[shownIndex] : null;
+        const catVal = shownCat ? (period.values[shownCat.id] || 0) : 0;
+
+        expensesCategories.forEach((cat, idx) => {
+            const isDimmed = shownKey !== null && shownKey !== cat.id;
+            const row = document.getElementById(`exp-row-${cat.id}`);
+            if (row) {
+                row.style.opacity = isDimmed ? '0.45' : '1';
+                row.style.borderColor = (expensesChartState.pinned === cat.id) ? '#f97316' : '';
+                if (expensesChartState.pinned === cat.id) {
+                    row.classList.add('bg-white', 'dark:bg-slate-700/80', 'shadow-xs');
+                } else {
+                    row.classList.remove('bg-white', 'dark:bg-slate-700/80', 'shadow-xs');
+                }
+            }
+
+            const arcEls = ring.querySelectorAll(`[data-pop="${idx}"]`);
+            arcEls.forEach(el => {
+                el.style.opacity = isDimmed ? '0.35' : '1';
+            });
+        });
+
+        const restGroup = document.getElementById('exp-rest-group');
+        if (restGroup) {
+            restGroup.style.opacity = (shownKey !== null && !shownRest) ? '0.4' : '1';
+        }
+
+        if (prevIndex !== undefined && prevIndex !== shownIndex && prevIndex >= 0) {
+            const prevEls = ring.querySelectorAll(`[data-pop="${prevIndex}"]`);
+            prevEls.forEach(el => {
+                el.style.transform = 'translate(0px, 0px)';
+                el.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out';
+            });
+        }
+
+        if (shownIndex >= 0) {
+            const arc = donut.arcs[shownIndex];
+            if (arc) {
+                const mid = radG((arc.a0 + arc.a1) / 2);
+                const px = roundG(EXP_POP * Math.sin(mid));
+                const py = roundG(-EXP_POP * Math.cos(mid));
+                const curEls = ring.querySelectorAll(`[data-pop="${shownIndex}"]`);
+                curEls.forEach(el => {
+                    el.style.transform = `translate(${px}px, ${py}px)`;
+                    el.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease-out';
+                });
+            }
+        }
+
+        if (centerBox && centerLabel && centerVal && centerNote) {
+            if (shownCat) {
+                centerBox.style.opacity = '1';
+                centerBox.style.transform = 'scale(1)';
+                centerBox.style.transition = 'opacity 0.35s ease-out, transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                centerLabel.textContent = shownCat.label;
+                centerVal.textContent = formatRoomCount(catVal);
+                const pct = total > 0 ? ((catVal / total) * 100).toFixed(1) : '0';
+                centerNote.textContent = `${pct}% của ${formatRoomCount(total)}`;
+            } else if (shownRest) {
+                centerBox.style.opacity = '1';
+                centerBox.style.transform = 'scale(1)';
+                centerBox.style.transition = 'opacity 0.35s ease-out, transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                centerLabel.textContent = 'Còn lại';
+                centerVal.textContent = formatRoomCount(remaining);
+                centerNote.textContent = `trên ${formatRoomCount(full)}`;
+            } else {
+                centerBox.style.opacity = '0';
+                centerBox.style.transform = 'scale(0.92)';
+                centerBox.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
+            }
+        }
+    }
+
+    function onExpensesRowHover(catId, isEnter) {
+        const prevKey = expensesChartState.preview ?? expensesChartState.pinned;
+        const prevIndex = expensesCategories.findIndex(c => c.id === prevKey);
+        expensesChartState.preview = isEnter ? catId : null;
+        updateExpensesVisualState(prevIndex);
+    }
+
+    function onExpensesRowClick(catId) {
+        const prevKey = expensesChartState.preview ?? expensesChartState.pinned;
+        const prevIndex = expensesCategories.findIndex(c => c.id === prevKey);
+        expensesChartState.pinned = expensesChartState.pinned === catId ? null : catId;
+        updateExpensesVisualState(prevIndex);
+    }
+
+    function onExpensesRingPointerMove(event) {
+        const targetId = pointAtExpenses(event);
+        const prevKey = expensesChartState.preview ?? expensesChartState.pinned;
+        const prevIndex = expensesCategories.findIndex(c => c.id === prevKey);
+        if (expensesChartState.preview !== targetId) {
+            expensesChartState.preview = targetId;
+            updateExpensesVisualState(prevIndex);
+        }
+    }
+
+    function onExpensesRingPointerLeave() {
+        const prevKey = expensesChartState.preview ?? expensesChartState.pinned;
+        const prevIndex = expensesCategories.findIndex(c => c.id === prevKey);
+        expensesChartState.preview = null;
+        updateExpensesVisualState(prevIndex);
+    }
+
+    function onExpensesRingClick(event) {
+        const targetId = pointAtExpenses(event);
+        if (targetId && targetId !== EXP_REST) {
+            onExpensesRowClick(targetId);
+        }
+    }
+
+    function countUpNumber(el, start, end, duration, formatFn, delay = 0) {
+        if (!el) return;
+        const isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (isReduced) {
+            el.textContent = formatFn(end);
+            return;
+        }
+        setTimeout(() => {
+            const startT = performance.now();
+            function step(now) {
+                const p = Math.min(1, (now - startT) / duration);
+                const ease = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+                el.textContent = formatFn(start + (end - start) * ease);
+                if (p < 1) requestAnimationFrame(step);
+                else el.textContent = formatFn(end);
+            }
+            requestAnimationFrame(step);
+        }, delay);
+    }
+
+    function setExpensesPeriod(newPeriod) {
+        if (expensesChartState.period === newPeriod) return;
+        const fromDonut = expensesChartState.donut;
+        expensesChartState.period = newPeriod;
+        expensesChartState.preview = null;
+        expensesChartState.pinned = null;
+
+        const period = expensesPeriods.find(p => p.value === newPeriod) || expensesPeriods[0];
+        const toDonut = layoutDonutExp(expensesCategories.map(c => period.values[c.id] || 0), period.budget);
+        expensesChartState.donut = toDonut;
+
+        document.querySelectorAll('[data-slot="exp-period-btn"]').forEach(btn => {
+            const val = btn.getAttribute('data-period');
+            if (val === newPeriod) {
+                btn.className = "px-3 py-1 text-xs font-semibold rounded-full bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs transition-all";
+            } else {
+                btn.className = "px-3 py-1 text-xs font-medium rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all";
+            }
+        });
+
+        const ringSvg = document.getElementById('expenses-ring-svg');
+        if (ringSvg && fromDonut) {
+            const startT = performance.now();
+            const duration = 800;
+            function morphStep(now) {
+                const p = Math.min(1, (now - startT) / duration);
+                const ease = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+                const cur = lerpExpensesDonut(fromDonut, toDonut, ease);
+                drawExpensesDonut(ringSvg, cur);
+                if (p < 1) requestAnimationFrame(morphStep);
+                else drawExpensesDonut(ringSvg, toDonut);
+            }
+            requestAnimationFrame(morphStep);
+        }
+
+        const totalEl = document.getElementById('expenses-total-val');
+        if (totalEl) {
+            const prevTotal = fromDonut ? fromDonut.total : 0;
+            countUpNumber(totalEl, prevTotal, toDonut.total, 800, (v) => formatRoomCount(v));
+        }
+
+        const badgeText = document.getElementById('expenses-change-val');
+        const changeLbl = document.getElementById('expenses-change-label');
+        const previous = period.previous;
+        const change = previous !== undefined && previous > 0 ? ((toDonut.total - previous) / previous) * 100 : 0;
+        if (badgeText) {
+            countUpNumber(badgeText, 0, Math.abs(change), 800, (v) => (change >= 0 ? '+' : '-') + v.toFixed(2) + '%');
+        }
+        if (changeLbl) changeLbl.textContent = period.changeLabel || '';
+
+        expensesCategories.forEach(c => {
+            const valEl = document.getElementById(`exp-val-${c.id}`);
+            if (valEl) {
+                const oldVal = parseFloat(valEl.getAttribute('data-val')) || 0;
+                const newVal = period.values[c.id] || 0;
+                valEl.setAttribute('data-val', newVal);
+                countUpNumber(valEl, oldVal, newVal, 800, (v) => formatRoomCount(v));
+            }
+        });
+
+        updateExpensesVisualState();
+    }
+
+    function renderSegmentSvg(c, i, color, arc) {
+        const shapes = segmentShapesExp(arc);
+        const col = expColors[color] || expColors.orange;
+        return `
+            <g data-pop="${i}" class="transition-opacity duration-200">
+                <g data-arc="${i}">
+                    <path data-shape="rim" d="${shapes.rim}" fill="${col.rim}" />
+                    <path data-shape="fill" d="${shapes.fill}" fill="${col.fill}" />
+                    <g clip-path="url(#exp-segment-${i})">
+                        <path data-shape="light" d="${shapes.light}" fill-rule="evenodd" fill="#ffffff" fill-opacity="0.32" filter="url(#exp-light)" />
+                    </g>
+                </g>
+            </g>
+        `;
+    }
+
+    // =========================================================================
+    // ENTRANCE ANIMATIONS CHOREOGRAPHY (Ported 100% from Mebius Design Anime.js)
+    // =========================================================================
+    function initDashboardEntranceAnimations() {
+        const isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function countUp(el, start, end, duration, formatFn, delay = 0) {
+            if (!el) return;
+            if (isReduced) {
+                el.textContent = formatFn(end);
+                return;
+            }
+            setTimeout(() => {
+                const startT = performance.now();
+                function step(now) {
+                    const p = Math.min(1, (now - startT) / duration);
+                    const ease = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+                    el.textContent = formatFn(start + (end - start) * ease);
+                    if (p < 1) requestAnimationFrame(step);
+                    else el.textContent = formatFn(end);
+                }
+                requestAnimationFrame(step);
+            }, delay);
+        }
+
+        // 1. CARD 1: Doanh thu lũy kế
+        // Đặt lại tooltip/điểm đang chọn theo bề rộng thực của khung vẽ để không tràn ra ngoài card.
+        if (cashFlowChartState && cashFlowChartState.current.length) {
+            updateCashFlowActivePoint(Math.max(0, cashFlowChartState.current.length - 1));
+        }
+
+        // Khung vẽ co giãn theo layout (sidebar, breakpoint) nên căn lại tooltip khi kích thước đổi.
+        const cfPlotEl = document.getElementById('cf-plot-container');
+        if (cfPlotEl) {
+            if (window._cfPlotObserver) window._cfPlotObserver.disconnect();
+            window._cfPlotObserver = new ResizeObserver(() => {
+                if (!cashFlowChartState || !cashFlowChartState.current.length) return;
+                const idx = Number.isInteger(cashFlowChartState.activeIndex)
+                    ? cashFlowChartState.activeIndex
+                    : cashFlowChartState.current.length - 1;
+                updateCashFlowActivePoint(idx);
+            });
+            window._cfPlotObserver.observe(cfPlotEl);
+        }
+
+        const cfTotal = document.getElementById('cf-kpi-total');
+        if (cfTotal) {
+            const target = parseFloat(cfTotal.getAttribute('data-target')) || 0;
+            countUp(cfTotal, 0, target, 1200, (v) => formatVND(v), 100);
+        }
+
+        const cfChange = document.getElementById('cf-kpi-change');
+        if (cfChange) {
+            const target = parseFloat(cfChange.getAttribute('data-target')) || 0;
+            countUp(cfChange, 0, target, 1200, (v) => formatVND(v), 100);
+        }
+
+        // 2. CARD 2: Revenue By Product Line Entrance (Anime.js Timeline)
+        const studentPlotEl = document.getElementById('student-plot-container');
+        if (studentPlotEl) {
+            if (window._studentPlotObserver) {
+                window._studentPlotObserver.disconnect();
+            }
+            window._studentPlotObserver = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    const w = Math.round(entry.contentRect.width);
+                    if (w > 0 && (!studentChartState || Math.abs(studentChartState.width - w) > 1)) {
+                        applyStudentChartLayout(w);
+                    }
+                }
+            });
+            window._studentPlotObserver.observe(studentPlotEl);
+
+            if (studentPlotEl.clientWidth > 0) {
+                applyStudentChartLayout(studentPlotEl.clientWidth);
+            }
+        }
+
+        // Legend dots pop
+        document.querySelectorAll('[data-slot="legend-dot-wrapper"]').forEach((dot, idx) => {
+            if (isReduced) return;
+            dot.style.transform = 'scale(0.4)';
+            dot.style.opacity = '0';
+            dot.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.6s ease-out';
+            setTimeout(() => {
+                dot.style.transform = 'scale(1)';
+                dot.style.opacity = '1';
+            }, idx * 90);
+        });
+
+        // Grid lines draw in from left
+        document.querySelectorAll('[data-slot="student-grid-line"]').forEach((line, idx) => {
+            if (isReduced) return;
+            const w = parseFloat(line.getAttribute('x2')) || 560;
+            line.style.strokeDasharray = `${w}`;
+            line.style.strokeDashoffset = `${w}`;
+            line.style.transition = `stroke-dashoffset 900ms cubic-bezier(0.25, 0.46, 0.45, 0.94) ${100 + (5 - idx) * 45}ms`;
+            setTimeout(() => {
+                line.style.strokeDashoffset = '0';
+            }, 50);
+        });
+
+        // Dividers grow up
+        document.querySelectorAll('[data-slot="student-divider"]').forEach((div, idx) => {
+            if (isReduced) return;
+            const h = (studentChartState && studentChartState.height) ? studentChartState.height : 160;
+            div.style.strokeDasharray = `${h}`;
+            div.style.strokeDashoffset = `${h}`;
+            div.style.transition = `stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1) ${100 + idx * 80}ms`;
+            setTimeout(() => {
+                div.style.strokeDashoffset = '0';
+            }, 50);
+        });
+
+        // Y-axis ticks slide in
+        document.querySelectorAll('[data-slot="student-tick"]').forEach((tick, idx) => {
+            if (isReduced) return;
+            tick.style.opacity = '0';
+            tick.style.transform = 'translateX(-4px)';
+            tick.style.transition = `opacity 600ms ease-out ${200 + idx * 45}ms, transform 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) ${200 + idx * 45}ms`;
+            setTimeout(() => {
+                tick.style.opacity = '1';
+                tick.style.transform = 'translateX(0)';
+            }, 50);
+        });
+
+        // Axis labels slide up
+        document.querySelectorAll('[data-slot="revenue-by-product-line-chart-axis-label"] > span').forEach((lbl, idx) => {
+            if (isReduced) return;
+            lbl.style.opacity = '0';
+            lbl.style.transform = 'translateY(4px)';
+            lbl.style.transition = `opacity 600ms ease-out ${300 + idx * 90}ms, transform 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) ${300 + idx * 90}ms`;
+            setTimeout(() => {
+                lbl.style.opacity = '1';
+                lbl.style.transform = 'translateY(0)';
+            }, 50);
+        });
+
+        // Bars growth + numbers count up (Staggered by line & bar position)
+        const BARS_AT = 250;
+        const LINE_STAGGER = 90;
+        const BAR_STAGGER = 60;
+        const GROW = 1100;
+
+        document.querySelectorAll('[data-slot="revenue-by-product-line-chart-bar"]').forEach(bar => {
+            const line = Number(bar.getAttribute('data-line')) || 0;
+            const pos = Number(bar.getAttribute('data-position')) || 0;
+            const targetH = parseFloat(bar.getAttribute('data-target-height')) || 0;
+            const at = BARS_AT + line * LINE_STAGGER + pos * BAR_STAGGER;
+
+            const valEl = bar.parentElement ? bar.parentElement.querySelector('[data-slot="revenue-by-product-line-chart-value"]') : null;
+            const targetVal = valEl ? (parseFloat(valEl.getAttribute('data-target')) || 0) : 0;
+
+            if (isReduced) {
+                bar.style.height = `${targetH}px`;
+                if (valEl) {
+                    valEl.style.opacity = '1';
+                    valEl.textContent = `${Math.round(targetVal)}`;
+                }
+                return;
+            }
+
+            bar.style.height = '0px';
+            setTimeout(() => {
+                bar.style.transition = `height ${GROW}ms cubic-bezier(0.16, 1, 0.3, 1)`;
+                bar.style.height = `${targetH}px`;
+            }, at);
+
+            if (valEl) {
+                valEl.style.opacity = '0';
+                valEl.textContent = '0';
+                setTimeout(() => {
+                    valEl.style.transition = 'opacity 400ms ease-out';
+                    valEl.style.opacity = '1';
+                }, at);
+                countUp(valEl, 0, targetVal, GROW, (v) => `${Math.round(v)}`, at);
+            }
+        });
+
+        // Footer note icon pop
+        const noteIcon = document.querySelector('[data-slot="revenue-by-product-line-chart-note-icon"]');
+        if (noteIcon && !isReduced) {
+            noteIcon.style.opacity = '0';
+            noteIcon.style.transform = 'scale(0.6)';
+            noteIcon.style.transition = 'opacity 700ms ease-out 500ms, transform 700ms cubic-bezier(0.34, 1.56, 0.64, 1) 500ms';
+            setTimeout(() => {
+                noteIcon.style.opacity = '1';
+                noteIcon.style.transform = 'scale(1)';
+            }, 50);
+        }
+
+        // Footer figure (44%) count up
+        const figEl = document.getElementById('student-insight-figure');
+        if (figEl) {
+            const target = parseFloat(figEl.getAttribute('data-target')) || 44;
+            countUp(figEl, 0, target, 1400, (v) => `${Math.round(v)}%`, 600);
+        }
+
+        // 3. CARD 3: Revenue Overview Gauge (Sweep Animation + Synchronized Dot Pops + Halo Loop)
+        const roBand = document.getElementById('ro-band-path');
+        const roLine = document.getElementById('ro-line-path');
+        const roArcPaths = document.querySelectorAll('[data-slot="revenue-overview-chart-arc"]');
+        const roBandFade = document.getElementById('ro-band-fade');
+        const roArcFade = document.getElementById('ro-arc-fade');
+        const roLineFade = document.getElementById('ro-line-fade');
+        const roValueEl = document.getElementById('mebius-gauge-value');
+
+        function drawRoMarks(m) {
+            if (roBand) roBand.setAttribute("d", segmentPath(CX, CY, BAND_INNER, BAND_OUTER, 180, m.fill, CORNER));
+            const arc = segmentPath(CX, CY, RING_INNER, RING_OUTER, Math.max(180, m.arc - ARC_SPAN), m.arc);
+            roArcPaths.forEach(p => p.setAttribute("d", arc));
+            if (roLine) roLine.setAttribute("d", linePath(m.line));
+            if (roBandFade) roBandFade.setAttribute("gradientTransform", `rotate(${roundG(m.fill - FIGMA_TODAY - FILL_PAST)} ${CX} ${CY})`);
+            if (roArcFade) roArcFade.setAttribute("gradientTransform", `rotate(${roundG(m.arc - FIGMA_TODAY - ARC_PAST)} ${CX} ${CY})`);
+            if (roLineFade) roLineFade.setAttribute("gradientTransform", lineFade(m.line));
+        }
+
+        function placeRoPoints(pointAngles, lineEnd) {
+            document.querySelectorAll('[data-slot="revenue-overview-chart-point"]').forEach((el, i) => {
+                const deg = pointAngles[i];
+                if (deg === undefined) return;
+                el.setAttribute("transform", `translate(${atG(CX, LINE_CY, LINE_RADIUS, deg)})`);
+                el.setAttribute("visibility", deg <= lineEnd + 0.01 || i === pointAngles.length - 1 ? "visible" : "hidden");
+            });
+        }
+
+        function startRoTodayPulse() {
+            const halo = document.getElementById('ro-today-halo');
+            if (!halo) return;
+            const startT = performance.now();
+            function loop(now) {
+                const elapsed = (now - startT) % 3200;
+                if (elapsed <= 1800) {
+                    const p = elapsed / 1800;
+                    const ease = 1 - (1 - p) * (1 - p);
+                    halo.style.transform = `scale(${roundG(1 + 0.9 * ease)})`;
+                    halo.style.opacity = `${roundG(0.35 * (1 - ease))}`;
+                } else {
+                    halo.style.opacity = '0';
+                }
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        }
+
+        if (revenueOverviewChartState) {
+            const { todayAngle, targetVal, angles } = revenueOverviewChartState;
+
+            if (isReduced) {
+                const finalM = marksAt(todayAngle, 1);
+                drawRoMarks(finalM);
+                placeRoPoints(angles, finalM.line);
+                if (roValueEl) roValueEl.textContent = '$' + targetVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            } else {
+                drawRoMarks(marksAt(todayAngle, 0));
+                placeRoPoints(angles, 180);
+
+                // Track fade in 700ms
+                document.querySelectorAll('[data-slot="revenue-overview-chart-track"]').forEach(t => {
+                    t.style.opacity = '0';
+                    t.style.transition = 'opacity 700ms ease-out';
+                    setTimeout(() => { t.style.opacity = '1'; }, 50);
+                });
+
+                // Pill pop at 100ms
+                const pill = document.querySelector('[data-slot="revenue-overview-chart-pill"]');
+                if (pill) {
+                    pill.style.opacity = '0';
+                    pill.style.transform = 'scale(0.8)';
+                    pill.style.transition = 'opacity 600ms ease-out, transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+                    setTimeout(() => { pill.style.opacity = '1'; pill.style.transform = 'scale(1)'; }, 100);
+                }
+
+                // SWEEP 1500ms at SWEEP_AT = 200ms
+                const SWEEP = 1500;
+                const SWEEP_AT = 200;
+                const easeCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+                const dots = document.querySelectorAll('[data-slot="revenue-overview-chart-dot"]');
+                dots.forEach(d => {
+                    d.style.transform = 'scale(0)';
+                    d.style.opacity = '0';
+                });
+
+                const lineEnd = todayAngle + LINE_PAST;
+                dots.forEach((dot, i) => {
+                    const last = i === dots.length - 1;
+                    const goal = ((angles[i] ?? 180) - 180) / Math.max(0.001, lineEnd - 180);
+                    let lo = 0, hi = 1;
+                    for (let k = 0; k < 20; k++) {
+                        const mid = (lo + hi) / 2;
+                        if (easeCubic(mid) < goal) lo = mid;
+                        else hi = mid;
+                    }
+                    const when = SWEEP_AT + (last ? SWEEP - 150 : hi * SWEEP);
+                    setTimeout(() => {
+                        dot.style.transition = `transform ${last ? 700 : 500}ms ${last ? 'cubic-bezier(0.34, 1.8, 0.64, 1)' : 'cubic-bezier(0.34, 1.56, 0.64, 1)'}, opacity 400ms ease-out`;
+                        dot.style.transform = 'scale(1)';
+                        dot.style.opacity = '1';
+                    }, when);
+                });
+
+                setTimeout(() => {
+                    const sweepStart = performance.now();
+                    function sweepFrame(now) {
+                        const p = Math.min(1, (now - sweepStart) / SWEEP);
+                        const eased = easeCubic(p);
+                        const m = marksAt(todayAngle, eased);
+                        drawRoMarks(m);
+                        placeRoPoints(angles, m.line);
+                        if (roValueEl) {
+                            const cur = targetVal * eased;
+                            roValueEl.textContent = '$' + cur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                        if (p < 1) {
+                            requestAnimationFrame(sweepFrame);
+                        } else {
+                            const finalM = marksAt(todayAngle, 1);
+                            drawRoMarks(finalM);
+                            placeRoPoints(angles, finalM.line);
+                            if (roValueEl) roValueEl.textContent = '$' + targetVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            startRoTodayPulse();
+                        }
+                    }
+                    requestAnimationFrame(sweepFrame);
+                }, SWEEP_AT);
+
+                // Change slide up at SWEEP_AT + SWEEP - 500 = 1200ms
+                const changeEl = document.querySelector('[data-slot="revenue-overview-chart-change"]');
+                if (changeEl) {
+                    changeEl.style.opacity = '0';
+                    changeEl.style.transform = 'translateY(4px)';
+                    changeEl.style.transition = 'opacity 600ms ease-out, transform 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    setTimeout(() => { changeEl.style.opacity = '1'; changeEl.style.transform = 'translateY(0)'; }, 1200);
+                }
+
+                // Insight footer slide up at SWEEP_AT + SWEEP - 350 = 1350ms
+                const insightBox = document.querySelector('[data-slot="revenue-overview-chart-insight"]');
+                if (insightBox) {
+                    insightBox.style.opacity = '0';
+                    insightBox.style.transform = 'translateY(10px)';
+                    insightBox.style.transition = 'opacity 700ms ease-out, transform 700ms cubic-bezier(0.16, 1, 0.3, 1)';
+                    setTimeout(() => { insightBox.style.opacity = '1'; insightBox.style.transform = 'translateY(0)'; }, 1350);
+                }
+
+                // Insight icon rotate at SWEEP_AT + SWEEP - 200 = 1500ms
+                const insightIcon = document.querySelector('[data-slot="revenue-overview-chart-insight-icon"]');
+                if (insightIcon) {
+                    insightIcon.style.transform = 'scale(0) rotate(-90deg)';
+                    insightIcon.style.transition = 'transform 800ms cubic-bezier(0.34, 1.8, 0.64, 1)';
+                    setTimeout(() => { insightIcon.style.transform = 'scale(1) rotate(0deg)'; }, 1500);
+                }
+            }
+        }
+
+        // 3b. CARD 3: Quét biểu đồ nửa hình tròn theo tỷ lệ phòng đã thuê
+        const roomBand = document.getElementById('room-occupancy-band');
+        const roomArc = document.getElementById('room-occupancy-arc');
+        const roomPercentEl = document.getElementById('room-occupancy-percent');
+        if (roomBand && roomArc) {
+            const percent = Number(roomPercentEl?.getAttribute('data-target')) || 0;
+            const targetAngle = 180 + 180 * Math.min(1, Math.max(0, percent / 100));
+            const drawRoomGauge = (angle) => {
+                roomBand.setAttribute('d', segmentPath(CX, CY, BAND_INNER, BAND_OUTER, 180, angle, CORNER));
+                roomArc.setAttribute('d', segmentPath(CX, CY, RING_INNER, RING_OUTER, 180, angle));
+            };
+
+            if (isReduced) {
+                drawRoomGauge(targetAngle);
+            } else {
+                drawRoomGauge(180);
+                const startT = performance.now();
+                const duration = 1200;
+                function roomStep(now) {
+                    const p = Math.min(1, (now - startT) / duration);
+                    const ease = 1 - Math.pow(1 - p, 3);
+                    drawRoomGauge(180 + (targetAngle - 180) * ease);
+                    if (p < 1) requestAnimationFrame(roomStep);
+                    else drawRoomGauge(targetAngle);
+                }
+                requestAnimationFrame(roomStep);
+            }
+
+            const percentText = roomPercentEl?.querySelector('span');
+            if (percentText) countUp(percentText, 0, percent, 1200, (v) => `${v.toFixed(1)}%`, 120);
+        }
+
+        // 4. CARD 4: Expenses Chart Entrance (Anime.js Timeline 100% Mebius)
+        const expTotalEl = document.getElementById('expenses-total-val');
+        if (expTotalEl && expensesChartState.donut) {
+            countUp(expTotalEl, 0, expensesChartState.donut.total, 1400, (v) => formatRoomCount(v), 100);
+        }
+
+        const expBadge = document.getElementById('expenses-change-badge');
+        if (expBadge) {
+            if (isReduced) {
+                expBadge.style.opacity = '1';
+                expBadge.style.transform = 'scale(1)';
+            } else {
+                expBadge.style.opacity = '0';
+                expBadge.style.transform = 'scale(0.6)';
+                expBadge.style.transition = 'opacity 600ms ease-out, transform 600ms cubic-bezier(0.34, 2, 0.64, 1)';
+                setTimeout(() => {
+                    expBadge.style.opacity = '1';
+                    expBadge.style.transform = 'scale(1)';
+                }, 500);
+            }
+        }
+
+        const expChangeLbl = document.getElementById('expenses-change-label');
+        if (expChangeLbl) {
+            if (isReduced) {
+                expChangeLbl.style.opacity = '1';
+                expChangeLbl.style.transform = 'translateX(0)';
+            } else {
+                expChangeLbl.style.opacity = '0';
+                expChangeLbl.style.transform = 'translateX(-4px)';
+                expChangeLbl.style.transition = 'opacity 500ms ease-out, transform 500ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                setTimeout(() => {
+                    expChangeLbl.style.opacity = '1';
+                    expChangeLbl.style.transform = 'translateX(0)';
+                }, 600);
+            }
+        }
+
+        document.querySelectorAll('[data-slot="expenses-chart-category"]').forEach((row, idx) => {
+            if (isReduced) {
+                row.style.opacity = '1';
+                row.style.transform = 'translateY(0)';
+            } else {
+                row.style.opacity = '0';
+                row.style.transform = 'translateY(10px)';
+                row.style.transition = `opacity 800ms ease-out ${350 + idx * 90}ms, transform 800ms cubic-bezier(0.16, 1, 0.3, 1) ${350 + idx * 90}ms`;
+                setTimeout(() => {
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateY(0)';
+                }, 50);
+            }
+        });
+
+        const expRingSvg = document.getElementById('expenses-ring-svg');
+        if (expRingSvg && expensesChartState.donut) {
+            const finalDonut = expensesChartState.donut;
+            if (isReduced) {
+                drawExpensesDonut(expRingSvg, finalDonut);
+            } else {
+                drawExpensesDonut(expRingSvg, sweptExpensesDonut(finalDonut, 0));
+
+                // Core glows fade in staggered
+                document.querySelectorAll('[data-slot="expenses-chart-core"]').forEach((glow, idx) => {
+                    glow.style.opacity = '0';
+                    glow.style.transition = `opacity 700ms ease-out ${250 + 1300 * 0.45 + idx * 140}ms`;
+                    setTimeout(() => { glow.style.opacity = '1'; }, 50);
+                });
+
+                // Hatch bars fade in staggered clockwise
+                const rest = finalDonut.rest;
+                const span = Math.max(1, 360 - rest);
+                document.querySelectorAll('[data-slot="expenses-chart-bar"]').forEach(bar => {
+                    const end = parseFloat(bar.getAttribute('data-end')) || 0;
+                    const delay = (Math.max(0, end - rest) / span) * 600;
+                    bar.style.opacity = '0';
+                    bar.style.transition = `opacity 350ms ease-out ${250 + 1300 * 0.55 + delay}ms`;
+                    setTimeout(() => { bar.style.opacity = '1'; }, 50);
+                });
+
+                // Outline lines fade in
+                document.querySelectorAll('[data-slot="expenses-chart-outline"]').forEach(line => {
+                    line.style.opacity = '0';
+                    line.style.transition = `opacity 600ms ease-out ${250 + 1300 * 0.5}ms`;
+                    setTimeout(() => { line.style.opacity = '1'; }, 50);
+                });
+
+                // Sweep animation: SWEEP_AT = 250ms, duration = 1300ms (inOutCubic)
+                setTimeout(() => {
+                    const startT = performance.now();
+                    const duration = 1300;
+                    function sweepStep(now) {
+                        const p = Math.min(1, (now - startT) / duration);
+                        const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+                        drawExpensesDonut(expRingSvg, sweptExpensesDonut(finalDonut, ease * 360));
+                        if (p < 1) requestAnimationFrame(sweepStep);
+                        else drawExpensesDonut(expRingSvg, finalDonut);
+                    }
+                    requestAnimationFrame(sweepStep);
+                }, 250);
+            }
+        }
+    }
+
+    // 1. Dashboard View Renderer (Mebius Design System - Pixel Perfect)
     function renderDashboardView() {
         const d = state.dashboardSummary || {
             totalStudents: 0,
@@ -1074,227 +2938,744 @@ const KtxApp = (function () {
             debtAmount: 0,
             collectedPercent: 0,
             pendingApplicationsCount: 0,
+            totalApplicationsCount: 0,
+            approvedApplicationsCount: 0,
+            applicationsApprovalRate: 0,
             repairRequestsCount: 0,
+            revenueGrowthPercent: 0,
             zoneOccupancies: [],
-            urgentTasks: []
+            urgentTasks: [],
+            cohortGenderStats: [],
+            monthlyRevenueStats: [],
+            repairCategoryStats: [],
+            cashFlowData: [],
+            cashFlowCompare: [],
+            cashFlowTicks: []
         };
 
-        const zoneOccupancies = d.zoneOccupancies || [];
-        const urgentTasks = d.urgentTasks || [];
-        const activeTaskCount = urgentTasks.filter(t => !t.completed).length;
+        // ========================================================
+        // 1. BIỂU ĐỒ MIỀN: DOANH THU LŨY KẾ NĂM NAY / CÙNG KỲ NĂM TRƯỚC
+        // ========================================================
+        const revenueByMonth = Array.isArray(d.monthlyRevenueStats) ? d.monthlyRevenueStats : [];
+        const cashFlowData = revenueByMonth.map(item => ({
+            date: `${item.year}-${String(item.month).padStart(2, '0')}-01`,
+            value: Number(item.revenue) || 0
+        }));
+        const cashFlowCompare = revenueByMonth.map(item => Number(item.previousYearRevenue) || 0);
+        const currentYearRevenue = cashFlowData.length ? cashFlowData[cashFlowData.length - 1].value : 0;
+        const previousYearRevenue = cashFlowCompare.length ? cashFlowCompare[cashFlowCompare.length - 1] : 0;
+        const revenueDiff = currentYearRevenue - previousYearRevenue;
+        const cashFlowTicks = buildRevenueTicks(Math.max(currentYearRevenue, previousYearRevenue));
+
+        const chartLayout = layoutCashFlowChart(cashFlowData, cashFlowCompare, cashFlowTicks, CF_PLOT_WIDTH);
+        cashFlowChartState = chartLayout;
+
+        const currentPath = buildPolylinePath(chartLayout.current);
+        const previousPath = buildPolylinePath(chartLayout.previous);
+        const areaFillPath = buildAreaPolylinePath(chartLayout.current, CF_PLOT_HEIGHT);
+
+        const defaultActiveIdx = Math.max(0, chartLayout.current.length - 1);
+        const activePoint = chartLayout.current[defaultActiveIdx] || { x: CF_PLOT_WIDTH / 2, y: CF_PLOT_HEIGHT - 1, value: 0, date: '' };
+        const defaultComparePoint = chartLayout.previous[defaultActiveIdx];
+        const defaultCompareY = defaultComparePoint ? defaultComparePoint.y : valueAtPolyline(chartLayout.previous, activePoint.x);
+        const defaultCompareValue = defaultComparePoint ? defaultComparePoint.value : 0;
+        const monthLabelOf = (iso) => {
+            const dt = new Date(`${iso}T00:00:00Z`);
+            return MONTH_LABELS[dt.getUTCMonth()] || '';
+        };
+        const activeMonthLabel = activePoint.date ? monthLabelOf(activePoint.date) : '';
+        const firstMonthLabel = cashFlowData.length ? monthLabelOf(cashFlowData[0].date) : '';
+        const lastMonthLabel = cashFlowData.length ? monthLabelOf(cashFlowData[cashFlowData.length - 1].date) : '';
+
+        // ========================================================
+        // 2. BIỂU ĐỒ CỘT: SỐ SINH VIÊN THEO KHÓA VÀ GIỚI TÍNH
+        // ========================================================
+        const existingStudentPlot = document.getElementById('student-plot-container');
+        const studentWidth = (existingStudentPlot && existingStudentPlot.clientWidth > 0) ? existingStudentPlot.clientWidth : 560;
+        const studentPlotHeight = 150;
+
+        const cohortStats = Array.isArray(d.cohortGenderStats) ? d.cohortGenderStats : [];
+        const studentGroups = cohortStats.map(item => ({
+            label: item.cohortName || (item.year ? `Khóa ${item.year}` : 'Khóa'),
+            values: {
+                male: Number(item.maleCount) || 0,
+                female: Number(item.femaleCount) || 0
+            }
+        }));
+
+        const maxStudentCount = studentGroups.reduce((max, group) => Math.max(max, group.values.male, group.values.female), 0);
+        const studentTicks = buildCountTicks(maxStudentCount);
+        const studentBase = studentPlotHeight - 1; // 149
+        const studentSpan = 142;
+        const studentLo = studentTicks[0];
+        const studentHi = studentTicks[studentTicks.length - 1];
+        const studentLevel = (val) => studentHi > studentLo
+            ? studentBase - Math.round(((Math.min(Math.max(val, studentLo), studentHi) - studentLo) / (studentHi - studentLo)) * studentSpan)
+            : studentBase;
+
+        const studentSeries = [
+            { id: "male", label: "Nam" },
+            { id: "female", label: "Nữ" }
+        ];
+
+        const studentLayout = layoutStudentChart(studentGroups, studentSeries, [], studentTicks, studentWidth);
+
+        studentChartState = {
+            width: studentLayout.width,
+            height: studentPlotHeight,
+            data: studentGroups,
+            series: studentSeries,
+            ticks: studentTicks,
+            groups: studentLayout.groups,
+            columns: studentLayout.columns,
+            dividers: studentLayout.dividers,
+            barWidth: studentLayout.barWidth,
+            hiddenSeries: [],
+            selectedIndex: studentGroups.length ? 0 : null,
+            isHovering: false
+        };
+
+        const defaultActiveGroup = studentLayout.groups[0] || {
+            label: '',
+            values: { male: 0, female: 0 },
+            left: 0,
+            right: 0,
+            top: studentPlotHeight
+        };
+        const studentTipLeft = Math.round(defaultActiveGroup.right + 8);
+        const studentTipTop = Math.round(defaultActiveGroup.top + 6);
+
+        const studentGroupBarsHtml = studentLayout.groups.map((g, i) => {
+            return g.bars.map((bar, j) => {
+                const isSolid = bar.id === 'male';
+                const toneFill = isSolid
+                    ? 'from-[#60a5fa] via-[#0562ef] to-[#0047cc]'
+                    : 'from-[#e0edff] via-[#bfdbfe] to-[#93c5fd]';
+                const toneShadow = isSolid
+                    ? 'shadow-[0_6.171px_11.1px_-3.085px_rgba(38,45,58,0.2),0_0_0_1px_#0562ef]'
+                    : 'shadow-[0_6.171px_11.1px_-3.085px_rgba(38,45,58,0.1),0_0_0_1px_#bfdbfe]';
+                const toneValue = isSolid
+                    ? 'font-bold text-[#0562ef] dark:text-[#3179ff]'
+                    : 'font-semibold text-[#60a5fa]';
+                const animDelayClass = `mebius-bar-delay-${i * 2 + j}`;
+
+                return `
+                    <div
+                        data-slot="revenue-by-product-line-chart-column"
+                        data-group-idx="${i}"
+                        data-series-id="${bar.id}"
+                        class="absolute bottom-px flex flex-col items-center transition-opacity duration-300 pointer-events-none"
+                        style="left: ${bar.x}px; width: ${studentLayout.barWidth}px; gap: 4px;"
+                    >
+                        <span
+                            data-slot="revenue-by-product-line-chart-value"
+                            data-target="${bar.value}"
+                            class="${toneValue} whitespace-nowrap text-[11px] font-sans font-medium transition-opacity duration-300"
+                        >
+                            ${Math.round(bar.value)}
+                        </span>
+                        <span
+                            data-slot="revenue-by-product-line-chart-bar"
+                            data-line="${i}"
+                            data-position="${j}"
+                            data-target-height="${bar.height}"
+                            class="relative w-full shrink-0 rounded-t-xl rounded-b-[2px] bg-gradient-to-b ${toneFill} ${toneShadow} transition-all duration-300"
+                            style="height: ${bar.height}px;"
+                        >
+                            <span class="absolute inset-0 rounded-[inherit] pointer-events-none shadow-[inset_0_0_24px_rgba(255,255,255,0.45)]"></span>
+                            <span class="absolute inset-0 rounded-[inherit] pointer-events-none shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)] [mask-image:linear-gradient(to_bottom,#000,transparent)]"></span>
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }).join('');
+
+        const studentColumnsOverlayHtml = studentLayout.columns.map((col, i) => `
+            <button
+                type="button"
+                data-slot="revenue-by-product-line-chart-line"
+                data-index="${i}"
+                aria-label="${studentLayout.groups[i].label}"
+                onpointerenter="KtxApp.onStudentGroupHover(${i})"
+                onpointermove="KtxApp.onStudentGroupHover(${i})"
+                onclick="KtxApp.onStudentGroupClick(${i})"
+                class="group/line absolute inset-y-0 cursor-pointer outline-none"
+                style="left: ${col.left}px; width: ${col.width}px;"
+            >
+                <span
+                    aria-hidden="true"
+                    class="pointer-events-none absolute rounded-2xl opacity-0 ring-2 ring-blue-500/40 transition-opacity duration-150 group-focus-visible/line:opacity-100"
+                    style="left: ${studentLayout.groups[i].left - col.left - 6}px; width: ${studentLayout.groups[i].right - studentLayout.groups[i].left + 12}px; top: ${Math.max(0, studentLayout.groups[i].top - 24)}px; bottom: 0px;"
+                ></span>
+            </button>
+        `).join('');
+
+        // ========================================================
+        // 3. BIỂU ĐỒ NỬA HÌNH TRÒN: TỶ LỆ PHÒNG ĐÃ ĐƯỢC THUÊ
+        // ========================================================
+        const occupiedRooms = Number(d.occupiedRooms) || 0;
+        const totalRooms = Number(d.totalRooms) || 0;
+        const roomOccupancyPercent = Number(d.roomOccupancyPercent) || 0;
+        const roomAngle = 180 + 180 * Math.min(1, Math.max(0, roomOccupancyPercent / 100));
+        const roomOccupancyPath = segmentPath(CX, CY, BAND_INNER, BAND_OUTER, 180, roomAngle, CORNER);
+        const roomOccupancyArcPath = segmentPath(CX, CY, RING_INNER, RING_OUTER, 180, roomAngle);
+        // Không dùng dữ liệu mẫu của biểu đồ doanh thu cũ.
+        revenueOverviewChartState = null;
+
+        // ========================================================
+        // 4. BIỂU ĐỒ VÒNG: SỐ PHÒNG THEO LOẠI DỊCH VỤ
+        // ========================================================
+        const roomTypeStats = Array.isArray(d.roomTypeStats) ? d.roomTypeStats : [];
+        const roomTypeTotal = roomTypeStats.reduce((sum, item) => sum + (Number(item.roomCount) || 0), 0);
+        const roomTypeColors = ['blue', 'green', 'yellow', 'orange', 'purple'];
+        expensesCategories = roomTypeStats.map((item, index) => ({
+            id: `room-type-${index}`,
+            label: item.name || 'Chưa phân loại',
+            color: roomTypeColors[index % roomTypeColors.length],
+            occupiedCount: Number(item.occupiedCount) || 0
+        }));
+        expensesPeriods = [{
+            value: 'all',
+            label: 'Tất cả',
+            values: expensesCategories.reduce((acc, cat, index) => {
+                acc[cat.id] = Number(roomTypeStats[index].roomCount) || 0;
+                return acc;
+            }, {}),
+            budget: roomTypeTotal,
+            previous: 0,
+            changeLabel: ''
+        }];
+        expensesChartState = { period: 'all', pinned: null, preview: null, donut: null };
+
+        const initialExpPeriod = expensesPeriods[0];
+        const initialDonut = layoutDonutExp(
+            expensesCategories.map(c => initialExpPeriod.values[c.id] || 0),
+            initialExpPeriod.budget
+        );
+        expensesChartState.donut = initialDonut;
+
+        const initialRestShape = restShapesExp(initialDonut.rest);
+        const expOrder = expensesCategories.map((c, i) => ({ c, i, color: c.color || 'orange' }));
+        const coredCats = expOrder.filter(o => expColors[o.color] && expColors[o.color].glow);
+        const flatCats = expOrder.filter(o => !expColors[o.color] || !expColors[o.color].glow);
+
 
         return `
-            <div class="flex flex-col w-full space-y-6">
-                <!-- 1. Hero Welcome Banner -->
-                <section class="page-title-banner relative overflow-hidden">
+            <div class="flex flex-col w-full space-y-4">
+                <!-- 1. Hero Welcome Banner (Giữ nguyên y chang bản gốc của người dùng) -->
+                <section class="page-title-banner relative overflow-hidden" aria-label="Tổng quan hệ thống ký túc xá">
                     <div class="dashboard-title-content relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
                             <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-white font-headline">Tổng quan KTX</h1>
-                            <p class="text-blue-200/80 text-xs">Hệ thống quản lý thời gian thực Ký túc xá Phân hiệu UTC2 TP.HCM</p>
+                            <p class="text-blue-100 text-sm mt-0.5">Hệ thống quản lý thời gian thực Ký túc xá Phân hiệu UTC2 TP.HCM</p>
                         </div>
                         <div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">
-                            <button type="button" onclick="KtxApp.openNewContractModal()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-xs hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1.5">
-                                <span class="material-symbols-outlined text-[18px]">post_add</span>
+                            <button type="button" onclick="KtxApp.openNewContractModal()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-sm hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                <span class="material-symbols-outlined text-[20px] text-[#0b2a5b]">post_add</span>
                                 <span>Lập hợp đồng mới</span>
                             </button>
-                            <button type="button" onclick="KtxApp.exportReport()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-xs hover:bg-blue-50 transition-colors flex items-center gap-1.5 border border-white">
-                                <span class="material-symbols-outlined text-[18px]">ios_share</span>
+                            <button type="button" onclick="KtxApp.exportReport()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-sm hover:bg-blue-50 transition-colors flex items-center gap-1.5 border border-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                <span class="material-symbols-outlined text-[20px] text-[#0b2a5b]">ios_share</span>
                                 <span>Báo cáo nhanh</span>
                             </button>
                         </div>
                     </div>
                 </section>
 
-                <!-- 2. Hàng 4 Chỉ số KPI Cốt Lõi -->
-                <section class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <!-- KPI 1 -->
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">SINH VIÊN NỘI TRÚ</span>
-                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#0b2a5b] dark:text-blue-400">
-                                <span class="material-symbols-outlined text-[18px]">badge</span>
-                            </div>
-                        </div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                ${new Intl.NumberFormat('vi-VN').format(d.totalStudents)} <span class="text-sm font-normal text-slate-500">sinh viên</span>
-                            </div>
-                        </div>
-                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-[#375ba9] dark:text-blue-400 font-semibold">${new Intl.NumberFormat('vi-VN').format(d.totalCapacity)} giường · ${d.occupancyPercent}%</span>
-                            <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 2 -->
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">THU PHÍ THÁNG</span>
-                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#375ba9] dark:text-blue-400">
-                                <span class="material-symbols-outlined text-[18px]">payments</span>
-                            </div>
-                        </div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-[#0b2a5b] dark:text-blue-300 tracking-tight">
-                                ${formatVND(d.totalFeeRevenue, true)}
-                            </div>
-                        </div>
-                        <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <div class="flex min-w-0 items-center gap-2">
-                                <span class="text-[#375ba9] dark:text-blue-400 font-semibold">Đã thu ${d.collectedPercent}%</span>
-                                <span class="text-red-600 dark:text-red-400 font-semibold">Nợ ${formatVND(d.debtAmount, true)}</span>
-                            </div>
-                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 3 -->
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">ĐƠN CHỜ DUYỆT</span>
-                            <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                                <span class="material-symbols-outlined text-[18px]">how_to_reg</span>
-                            </div>
-                        </div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                ${d.pendingApplicationsCount} <span class="text-sm font-normal text-slate-500">hồ sơ</span>
-                            </div>
-                        </div>
-                        <div class="text-xs text-[#375ba9] dark:text-blue-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
-                            <span>Ưu tiên xét duyệt</span>
-                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                        </div>
-                    </div>
-
-                    <!-- KPI 4 -->
-                    <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">YÊU CẦU SỬA CHỮA</span>
-                            <div class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-red-600 dark:text-red-400">
-                                <span class="material-symbols-outlined text-[18px]">build</span>
-                            </div>
-                        </div>
-                        <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-red-600 dark:text-red-400 tracking-tight">
-                                ${d.repairRequestsCount} <span class="text-sm font-normal text-slate-500">yêu cầu</span>
-                            </div>
-                        </div>
-                        <div class="text-xs text-red-600 dark:text-red-400 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 font-semibold">
-                            <span>Điều phối kỹ thuật</span>
-                            <span class="material-symbols-outlined shrink-0 text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 3. Khối Công suất & Tác vụ khẩn -->
-                <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    <!-- Left: Công suất & Tài chính (7 cols) -->
-                    <div class="lg:col-span-7 space-y-6">
-                        <!-- Card Công suất lấp đầy -->
-                        <div class="bg-white dark:bg-[#121826] p-6 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] space-y-4">
-                            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                                <div class="flex items-center gap-2">
-                                    <span class="material-symbols-outlined text-[#375ba9] dark:text-blue-400 text-[20px]">analytics</span>
-                                    <h2 class="text-base font-bold text-slate-900 dark:text-white">Công suất lấp đầy phân khu</h2>
+                <!-- 2. Hệ thống Lưới 4 Khối Biểu đồ Mebius Design -->
+                <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch" aria-label="Trung tâm dữ liệu và phân tích ký túc xá">
+                    
+                    <!-- ===================================================== -->
+                    <!-- CARD 1: CASH FLOW (Chuẩn 100% Mã Nguồn React Mebius)  -->
+                    <!-- ===================================================== -->
+                    <article class="mebius-card p-4 sm:p-5 flex flex-col justify-between relative group/card">
+                        <!-- Header -->
+                        <div class="flex items-center justify-between gap-3 mb-1.5">
+                            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="flex shrink-0 text-[#0562ef] dark:text-[#3179ff]">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <line x1="7" y1="17" x2="17" y2="7"></line>
+                                            <polyline points="7 7 17 7 17 17"></polyline>
+                                        </svg>
+                                    </span>
+                                    <h2 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight leading-none">Doanh thu lũy kế</h2>
                                 </div>
-                                <span class="text-xs text-[#0B2A5B] dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 rounded-md border border-blue-200/40">Tổng: ${d.occupancyPercent}%</span>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-400 truncate">Tổng tiền thu được năm nay so với cùng kỳ năm trước</p>
                             </div>
+                            <button type="button" onclick="KtxApp.navigate('hoa-don')" class="size-7 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors shrink-0" title="Tùy chọn">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <circle cx="3.5" cy="8" r="1.2" />
+                                    <circle cx="8" cy="8" r="1.2" />
+                                    <circle cx="12.5" cy="8" r="1.2" />
+                                </svg>
+                            </button>
+                        </div>
 
-                            <div class="space-y-4 pt-1">
-                                ${zoneOccupancies.length === 0 ? `
-                                    <div class="min-h-[112px] flex items-center justify-center text-xs text-slate-400">Không có dữ liệu.</div>
-                                ` : zoneOccupancies.map(z => `
-                                    <div class="space-y-1.5">
-                                        <div class="flex items-center justify-between text-xs">
-                                            <span class="font-semibold text-slate-800 dark:text-slate-200">${z.zoneName}</span>
-                                            <span class="font-bold text-[#0B2A5B] dark:text-blue-400">${z.percent}% <span class="font-normal text-slate-400 text-[11px]">(${z.occupied}/${z.total})</span></span>
+                        <!-- 2 Cột KPI có vạch ngăn dọc (Chuẩn 100% React Mebius) -->
+                        <div class="flex items-center gap-3 py-1 border-b border-slate-100 dark:border-slate-800/80 mb-1.5">
+                            <div class="flex min-w-0 flex-1 flex-col items-center gap-0.5">
+                                <p class="text-[11px] font-normal text-slate-400 dark:text-slate-400">Năm nay (${new Date().getFullYear()})</p>
+                                <p id="cf-kpi-total" data-target="${currentYearRevenue}" class="text-[20px] sm:text-[22px] font-bold text-slate-900 dark:text-white tracking-tight whitespace-nowrap tabular-nums">
+                                    ${formatVND(currentYearRevenue)}
+                                </p>
+                            </div>
+                            <span aria-hidden="true" class="h-[34px] w-px shrink-0 bg-slate-200 dark:bg-slate-700"></span>
+                            <div class="flex min-w-0 flex-1 flex-col items-center gap-0.5">
+                                <p class="text-[11px] font-normal text-slate-400 dark:text-slate-400">Cùng kỳ năm trước (${new Date().getFullYear() - 1})</p>
+                                <p id="cf-kpi-change" data-target="${previousYearRevenue}" class="text-[20px] sm:text-[22px] font-bold text-slate-700 dark:text-slate-200 tracking-tight whitespace-nowrap tabular-nums">
+                                    ${formatVND(previousYearRevenue)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Khu vực Vẽ Biểu Đồ & Trục Tọa Độ -->
+                        <div class="flex flex-col gap-1">
+                            <div class="flex items-start gap-2.5">
+                                <!-- Plot Area + X-Axis Container -->
+                                <div class="flex-1 min-w-0 flex flex-col">
+                                    <div id="cf-plot-container" class="relative min-w-0 w-full select-none" style="height: 150px;">
+                                        <!-- Trục hoành đáy 1px -->
+                                        <span class="absolute inset-x-0 bottom-0 h-px bg-slate-100 dark:bg-slate-800 pointer-events-none"></span>
+
+                                        <!-- SVG Lưới & Đường Path -->
+                                        <svg viewBox="0 0 ${CF_PLOT_WIDTH} ${CF_PLOT_HEIGHT}" class="pointer-events-none absolute inset-0 size-full overflow-visible" role="img" aria-label="Biểu đồ doanh thu lũy kế theo tháng">
+                                            <defs>
+                                                <linearGradient id="cfMebiusFillGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stop-color="#0562ef" stop-opacity="0.24" />
+                                                    <stop offset="100%" stop-color="#0562ef" stop-opacity="0" />
+                                                </linearGradient>
+                                            </defs>
+
+                                            <!-- 13 Đường Kẻ Dọc Nét Đứt 4/4 (Grid Lines) -->
+                                            ${chartLayout.grid.map(gx => `
+                                                <line x1="${gx.toFixed(1)}" x2="${gx.toFixed(1)}" y1="0" y2="${CF_PLOT_HEIGHT}" stroke="currentColor" class="text-slate-100 dark:text-slate-800" stroke-dasharray="4 4" stroke-width="1" />
+                                            `).join('')}
+
+                                            <!-- Đường Previous (Last month - Grey 1.4px) -->
+                                            <path d="${previousPath}" fill="none" stroke="#cbd5e1" class="dark:stroke-slate-600" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+
+                                            <!-- Dải Area Fill Gradient Xanh mờ dần -->
+                                            <path d="${areaFillPath}" fill="url(#cfMebiusFillGrad)" class="chart-fade-anim" />
+
+                                            <!-- Đường Current (Blue 1.5px) -->
+                                            <path d="${currentPath}" fill="none" stroke="#0562ef" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="chart-line-anim" />
+
+                                            <!-- Con trỏ Cursor Nét Đứt kèm 2 Chóp Tam Giác Đều 5px (Figma Caps) -->
+                                            <g id="cf-cursor-group" class="pointer-events-none">
+                                                <line x1="${activePoint.x.toFixed(1)}" x2="${activePoint.x.toFixed(1)}" y1="${CF_CAP - 0.5}" y2="${CF_PLOT_HEIGHT - CF_CAP + 0.5}" stroke="#0562ef" stroke-dasharray="4 4" stroke-width="1" />
+                                                <polygon points="${(activePoint.x - CF_CAP_HALF).toFixed(1)},0 ${(activePoint.x + CF_CAP_HALF).toFixed(1)},0 ${(activePoint.x + 0.5).toFixed(1)},${CF_CAP} ${(activePoint.x - 0.5).toFixed(1)},${CF_CAP}" fill="#0562ef" />
+                                                <polygon points="${(activePoint.x - CF_CAP_HALF).toFixed(1)},${CF_PLOT_HEIGHT} ${(activePoint.x + CF_CAP_HALF).toFixed(1)},${CF_PLOT_HEIGHT} ${(activePoint.x + 0.5).toFixed(1)},${CF_PLOT_HEIGHT - CF_CAP} ${(activePoint.x - 0.5).toFixed(1)},${CF_PLOT_HEIGHT - CF_CAP}" fill="#0562ef" />
+                                            </g>
+                                        </svg>
+
+                                        ${cashFlowData.length === 0 ? `
+                                            <div class="absolute inset-0 flex items-center justify-center text-[12px] text-slate-400">
+                                                Chưa có dữ liệu doanh thu
+                                            </div>
+                                        ` : ''}
+
+                                        <!-- Marker 1 (Current Blue Marker 12px viền Conic-gradient) -->
+                                        <div id="cf-marker-current" class="pointer-events-none absolute transition-transform duration-75" style="left: calc(${(activePoint.x / CF_PLOT_WIDTH * 100).toFixed(2)}% - ${CF_MARKER / 2}px); top: ${(activePoint.y - CF_MARKER / 2).toFixed(1)}px; width: ${CF_MARKER}px; height: ${CF_MARKER}px;">
+                                            <div class="flex size-full rounded-full p-0.5 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.12)] mebius-marker-ring">
+                                                <div class="size-full rounded-full bg-[#0562ef]"></div>
+                                            </div>
                                         </div>
-                                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                                            <div class="bg-[#0B2A5B] dark:bg-blue-500 h-full rounded-full transition-all duration-500" style="width: ${z.percent}%"></div>
+
+                                        <!-- Marker 2 (Compare Grey Marker 12px) -->
+                                        <div id="cf-marker-compare" class="pointer-events-none absolute transition-transform duration-75" style="left: calc(${(activePoint.x / CF_PLOT_WIDTH * 100).toFixed(2)}% - ${CF_MARKER / 2}px); top: ${(defaultCompareY - CF_MARKER / 2).toFixed(1)}px; width: ${CF_MARKER}px; height: ${CF_MARKER}px;">
+                                            <div class="flex size-full rounded-full p-0.5 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.12)] mebius-marker-ring">
+                                                <div class="size-full rounded-full bg-[#cbd5e1] dark:bg-slate-500"></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Tương tác chuột Scrubber bao phủ toàn bộ đồ thị -->
+                                        <div
+                                            id="cf-scrubber"
+                                            role="slider"
+                                            tabindex="0"
+                                            aria-label="Chọn tháng để xem doanh thu"
+                                            onpointermove="KtxApp.onCashFlowPointerMove(event)"
+                                            onpointerleave="KtxApp.onCashFlowPointerLeave()"
+                                            class="absolute inset-0 cursor-pointer touch-pan-y rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 z-20"
+                                        ></div>
+
+                                        <!-- TOOLTIP NỔI CHUẨN 100% SOURCE CODE MEBIUS -->
+                                        <div
+                                            id="cf-tooltip"
+                                            class="pointer-events-none absolute flex flex-col items-start gap-1.5 overflow-hidden rounded-xl bg-white dark:bg-[#111827] px-3.5 py-2 whitespace-nowrap shadow-[0_12px_32px_-4px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.06)] z-30 transition-all duration-100"
+                                            style="top: 54px; left: ${(activePoint.x + CF_TIP_GAP).toFixed(1)}px; opacity: 0;"
+                                        >
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="h-4 w-1 bg-[#0562ef] rounded-xs shrink-0"></span>
+                                                <span class="text-[12px] font-bold text-slate-900 dark:text-white tabular-nums font-sans">${formatVND(activePoint.value)}</span>
+                                                <span class="text-[10px] text-slate-400 font-sans">${activeMonthLabel ? `Tháng ${activePoint.date ? Number(activePoint.date.slice(5, 7)) : ''}` : ''}</span>
+                                            </div>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="h-4 w-1 bg-slate-300 dark:bg-slate-600 rounded-xs shrink-0"></span>
+                                                <span class="text-[11px] font-medium text-slate-600 dark:text-slate-300 tabular-nums font-sans">${formatVND(defaultCompareValue)}</span>
+                                                <span class="text-[10px] text-slate-400 font-sans">Cùng kỳ năm trước</span>
+                                            </div>
+                                            <div class="w-full border-t border-slate-100 dark:border-slate-800 border-dashed my-0.5"></div>
+                                            <div class="flex items-center gap-1 ${activePoint.value >= defaultCompareValue ? 'text-emerald-500' : 'text-red-500'}">
+                                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true">
+                                                    <circle cx="8" cy="8" r="6.75" />
+                                                    <line x1="5.5" y1="8" x2="10.5" y2="8" />
+                                                </svg>
+                                                <span class="text-[11px] font-bold font-sans tabular-nums">${activePoint.value >= defaultCompareValue ? '+' : '-'}${formatVND(Math.abs(activePoint.value - defaultCompareValue))}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                `).join('')}
-                            </div>
-                        </div>
 
-                        <!-- Card Thu phí -->
-                        <div class="bg-white dark:bg-[#121826] p-6 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] space-y-4">
-                            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                                <div class="flex items-center gap-2">
-                                    <span class="material-symbols-outlined text-[#375ba9] dark:text-blue-400 text-[20px]">account_balance_wallet</span>
-                                    <h2 class="text-base font-bold text-slate-900 dark:text-white">Tiến độ thu tài chính & Dịch vụ</h2>
+                                    <!-- TRỤC X BÊN DƯỚI: Nằm gọn gàng 100% trong khung Plot, tuyệt đối không tràn -->
+                                    <div aria-hidden="true" class="relative h-4 select-none w-full mt-2">
+                                        ${cashFlowData.length > 1 ? `<span class="absolute top-0 text-[11px] font-medium text-slate-400" style="left: ${(CF_INSET / CF_PLOT_WIDTH * 100).toFixed(2)}%; transform: translateX(-50%);">${firstMonthLabel}</span>` : ''}
+                                        <span id="cf-active-label" class="absolute top-0" style="left: ${(activePoint.x / CF_PLOT_WIDTH * 100).toFixed(2)}%;">
+                                            <span class="text-[11px] font-bold text-[#0562ef] dark:text-[#3179ff] block -translate-x-1/2 whitespace-nowrap">${activeMonthLabel}</span>
+                                        </span>
+                                        ${cashFlowData.length > 1 ? `<span class="absolute top-0 text-[11px] font-medium text-slate-400" style="left: ${((CF_PLOT_WIDTH - CF_INSET) / CF_PLOT_WIDTH * 100).toFixed(2)}%; transform: translateX(-50%);">${lastMonthLabel}</span>` : ''}
+                                    </div>
                                 </div>
-                                <span class="text-xs text-[#375ba9] dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 rounded-md">Tỷ lệ thu ${d.collectedPercent}%</span>
-                            </div>
-                            <div class="grid grid-cols-3 gap-3 text-center">
-                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-100 dark:border-[#232B3B]">
-                                    <span class="text-[11px] text-slate-500 block uppercase tracking-wider font-semibold">Kế hoạch</span>
-                                    <span class="text-xl font-bold text-slate-900 dark:text-white mt-1 block">${formatVND(d.totalFeeRevenue + d.debtAmount, true)}</span>
-                                </div>
-                                <div class="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
-                                    <span class="text-[11px] text-[#0B2A5B] dark:text-blue-400 block uppercase tracking-wider font-semibold">Đã thu</span>
-                                    <span class="text-xl font-bold text-[#0B2A5B] dark:text-blue-300 mt-1 block">${formatVND(d.totalFeeRevenue, true)}</span>
-                                </div>
-                                <div class="p-3 rounded-xl bg-red-50/60 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40">
-                                    <span class="text-[11px] text-red-600 block uppercase tracking-wider font-semibold">Còn nợ</span>
-                                    <span class="text-xl font-bold text-red-600 mt-1 block">${formatVND(d.debtAmount, true)}</span>
+
+                                <!-- CỘT TRỤC Y BÊN PHẢI (34px wide, spread top to bottom) -->
+                                <div aria-hidden="true" class="flex min-w-[44px] shrink-0 flex-col justify-between self-stretch pb-6 text-right" style="height: ${CF_PLOT_HEIGHT}px;">
+                                    ${[...cashFlowTicks].reverse().map(tick => {
+                                        const isHighlight = tick === cashFlowTicks[cashFlowTicks.length - 1];
+                                        return `
+                                            <span data-slot="cash-flow-tick" data-tick="${tick}" class="text-[11px] font-${isHighlight ? 'bold text-[#0562ef] dark:text-[#3179ff]' : 'medium text-slate-400'} font-sans transition-colors duration-200">
+                                                ${formatCompactVND(tick)}
+                                            </span>
+                                        `;
+                                    }).join('')}
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </article>
 
-                    <!-- Right: Cần xử lý ngay (5 cols) -->
-                    <div class="lg:col-span-5 bg-white dark:bg-[#121826] p-6 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between">
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                                <div class="flex items-center gap-2">
-                                    <h2 class="text-base font-bold text-slate-900 dark:text-white">Cần xử lý ngay</h2>
-                                    <span class="w-6 h-6 rounded-full bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-300 flex items-center justify-center text-xs font-bold">${activeTaskCount}</span>
-                                </div>
-                                <button type="button" onclick="KtxApp.navigate('don-dang-ky')" class="text-xs text-[#375ba9] dark:text-blue-400 font-semibold hover:underline flex items-center gap-1">
-                                    Xem tất cả <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+
+                    <!-- ======================================================================= -->
+                    <!-- CARD 2: REVENUE BY PRODUCT LINE (Chuẩn 100% Mã Nguồn Mebius React)       -->
+                    <!-- ======================================================================= -->
+                    <article class="mebius-card flex flex-col justify-between relative group/card overflow-hidden">
+                        <!-- Header with compact padding -->
+                        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/80 px-4 py-2.5">
+                            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <h2 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight -my-0.5 truncate py-0.5 leading-tight font-sans">Sinh viên theo khóa</h2>
+                                <p class="text-[11px] font-medium text-slate-400 dark:text-slate-400 -my-0.5 truncate py-0.5 font-sans">Số lượng nam và nữ của từng khóa đang lưu trú</p>
+                            </div>
+                        </div>
+
+                        <!-- Sub-header: Số lượng sinh viên & Interactive Legend items -->
+                        <div class="flex items-start gap-4 px-4 py-2">
+                            <p class="text-[11px] font-normal min-w-0 flex-1 text-slate-600 dark:text-slate-300 font-sans">Số lượng sinh viên</p>
+                            <div class="flex shrink-0 items-center gap-3">
+                                <button type="button" data-slot="revenue-legend-male" aria-pressed="true" onclick="KtxApp.toggleStudentSeries('male')" class="cursor-pointer rounded-md outline-none transition-opacity duration-200">
+                                    <span data-slot="legend-dot-wrapper" class="flex items-center gap-1.5 transition-opacity duration-200">
+                                        <span class="size-2.5 rounded-full bg-[#0562ef] ring-2 ring-[#0562ef]/30 shrink-0"></span>
+                                        <span class="text-[11px] font-medium whitespace-nowrap text-slate-500 dark:text-slate-400 font-sans">Nam</span>
+                                    </span>
+                                </button>
+                                <button type="button" data-slot="revenue-legend-female" aria-pressed="true" onclick="KtxApp.toggleStudentSeries('female')" class="cursor-pointer rounded-md outline-none transition-opacity duration-200">
+                                    <span data-slot="legend-dot-wrapper" class="flex items-center gap-1.5 transition-opacity duration-200">
+                                        <span class="size-2.5 rounded-full bg-[#93c5fd] ring-2 ring-[#93c5fd]/30 shrink-0"></span>
+                                        <span class="text-[11px] font-medium whitespace-nowrap text-slate-500 dark:text-slate-400 font-sans">Nữ</span>
+                                    </span>
                                 </button>
                             </div>
+                        </div>
 
-                            <div class="divide-y divide-slate-100 dark:divide-slate-800/80 pt-1">
-                                ${urgentTasks.length === 0 ? `
-                                    <div class="min-h-[112px] flex items-center justify-center text-xs text-slate-400">Không có dữ liệu.</div>
-                                ` : urgentTasks.map(task => `
-                                    <div class="py-3 flex items-center justify-between gap-3 transition-opacity ${task.completed ? 'opacity-40 line-through' : ''}">
-                                        <div class="flex items-center gap-3 min-w-0">
-                                            <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                                                task.tagType === 'error' ? 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400' :
-                                                task.tagType === 'warning' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400' :
-                                                'bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-400'
-                                            }">
-                                                <span class="material-symbols-outlined text-[19px]">${task.icon}</span>
+                        <!-- Main Plot Area -->
+                        <div class="flex flex-col gap-3 px-4 pb-3 pt-0">
+                            <div class="flex items-start gap-3">
+                                <!-- Trục tung: số sinh viên, mốc tự tính theo dữ liệu thật -->
+                                <div aria-hidden="true" class="flex min-w-[28px] shrink-0 flex-col justify-between text-left" style="height: ${studentPlotHeight}px;">
+                                    ${[...studentTicks].reverse().map(tick => `
+                                        <span class="text-[11px] font-normal text-slate-400 font-sans whitespace-nowrap">${tick}</span>
+                                    `).join('')}
+                                </div>
+
+                                <!-- Plot Container (Relative, Height 260px) -->
+                                <div class="flex min-w-0 flex-1 flex-col gap-4">
+                                    <div id="student-plot-container" class="relative select-none" style="height: ${studentPlotHeight}px;" onpointerleave="KtxApp.onStudentGroupLeave()">
+                                        <!-- SVG Lưới Ngang & Vạch Ngăn Dọc -->
+                                        <svg class="pointer-events-none absolute inset-0 size-full overflow-visible" role="img" aria-label="Lưới biểu đồ cột đôi">
+                                            ${studentTicks.map(tick => {
+                                                const y = studentLevel(tick);
+                                                const isBase = tick === 0;
+                                                return `
+                                                    <line data-slot="student-grid-line" x1="0" x2="${studentLayout.width}" y1="${y + 0.5}" y2="${y + 0.5}" stroke="currentColor" class="${isBase ? 'text-slate-200 dark:text-slate-700' : 'text-slate-100 dark:text-slate-800'}" ${isBase ? '' : 'stroke-dasharray="5 5"'} stroke-width="1" />
+                                                `;
+                                            }).join('')}
+                                            <!-- 1px Vertical Axis line & dividers between product lines -->
+                                            <line x1="0.5" x2="0.5" y1="0" y2="${studentPlotHeight}" stroke="currentColor" class="text-slate-200 dark:text-slate-700" stroke-width="1" />
+                                            ${studentLayout.dividers.map(x => `
+                                                <line data-slot="student-divider" x1="${x + 0.5}" x2="${x + 0.5}" y1="0" y2="${studentPlotHeight}" stroke="currentColor" class="text-slate-100 dark:text-slate-800" stroke-dasharray="5 5" stroke-width="1" />
+                                            `).join('')}
+                                        </svg>
+
+                                        <!-- HTML Columns with Glassy Gloss Bars & Value Labels -->
+                                        <div aria-hidden="true" class="pointer-events-none absolute inset-0">
+                                            ${studentGroupBarsHtml}
+                                        </div>
+
+                                        <!-- Interactive Click / Hover Touch Areas -->
+                                        <div role="group" aria-label="Biểu đồ sinh viên theo khóa" class="absolute inset-0 z-10">
+                                            ${studentColumnsOverlayHtml}
+                                        </div>
+
+                                        <!-- FLOATING TOOLTIP (Chuẩn 100% Mebius React Source Code) -->
+                                        <div
+                                            id="student-tooltip"
+                                            class="pointer-events-none absolute z-20 flex flex-col items-start gap-1.5 overflow-hidden rounded-xl bg-white dark:bg-[#171d2b] px-3 py-2 whitespace-nowrap shadow-[0_0_0_1px_#ececec,0_2px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.08)] transition-all duration-200"
+                                            style="left: ${studentTipLeft}px; top: ${studentTipTop}px; opacity: 0;"
+                                        >
+                                            <span class="text-[12px] font-bold text-slate-900 dark:text-white">${defaultActiveGroup.label}</span>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="h-4 w-1 rounded-xs bg-[#0562ef] shrink-0"></span>
+                                                <span class="text-[12px] font-bold text-slate-900 dark:text-white font-sans tabular-nums">${defaultActiveGroup.values.male} sinh viên</span>
+                                                <span class="text-[10px] text-slate-400">Nam</span>
                                             </div>
-                                            <div class="min-w-0">
-                                                <div class="flex items-center gap-2 flex-wrap">
-                                                    <span class="text-xs font-bold text-slate-900 dark:text-white truncate">${task.title}</span>
-                                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                                        task.tagType === 'error' ? 'bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300' :
-                                                        task.tagType === 'warning' ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300' :
-                                                        'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                                                    }">${task.tag}</span>
-                                                </div>
-                                                <span class="text-[11px] text-slate-500 dark:text-slate-400 block truncate mt-0.5">${task.subtitle}</span>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="h-4 w-1 rounded-xs bg-[#93c5fd] shrink-0"></span>
+                                                <span class="text-[11px] font-medium text-slate-700 dark:text-slate-300 font-sans tabular-nums">${defaultActiveGroup.values.female} sinh viên</span>
+                                                <span class="text-[10px] text-slate-400">Nữ</span>
+                                            </div>
+                                            <div class="w-full border-t border-slate-100 dark:border-slate-800 border-dashed my-0.5"></div>
+                                            <div class="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                                                <span class="text-[11px] font-semibold font-sans">Tổng: ${defaultActiveGroup.values.male + defaultActiveGroup.values.female} sinh viên</span>
                                             </div>
                                         </div>
 
-                                        <button type="button" ${task.completed ? 'disabled' : ''} onclick="KtxApp.actionTask('${task.id}', '${task.type}')" class="h-9 w-[92px] shrink-0 inline-flex items-center justify-center rounded-lg text-xs font-semibold text-center transition-colors ${
-                                            task.tagType === 'error' ? 'bg-red-600 text-white hover:bg-red-700' :
-                                            task.tagType === 'warning' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' :
-                                            'bg-[#0B2A5B] text-white hover:bg-[#143F8C]'
-                                        } disabled:opacity-50">
-                                            ${task.completed ? 'Đã xong' : task.actionText}
-                                        </button>
+                                        ${studentGroups.length === 0 ? `
+                                            <div class="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-white/70 dark:bg-slate-900/50 text-[12px] text-slate-400">
+                                                Chưa có dữ liệu sinh viên theo khóa
+                                            </div>
+                                        ` : ''}
                                     </div>
-                                `).join('')}
+
+                                    <!-- Bottom Axis Labels: Centered under each group -->
+                                    <div aria-hidden="true" class="relative h-4 select-none">
+                                        ${studentLayout.groups.map((g, i) => `
+                                            <span data-slot="revenue-by-product-line-chart-axis-label" data-index="${i}" class="absolute top-0" style="left: ${g.centre}px;">
+                                                <span id="student-axis-label-${i}" class="text-[12px] block -translate-x-1/2 whitespace-nowrap transition-colors duration-200 ${i === 0 ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'}">
+                                                    ${g.label}
+                                                </span>
+                                            </span>
+                                        `).join('')}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </article>
+
+
+                    <!-- ===================================================== -->
+                    <!-- CARD 3: TỶ LỆ PHÒNG ĐÃ THUÊ (Biểu đồ nửa hình tròn) -->
+                    <!-- ===================================================== -->
+                    <article class="mebius-card p-4 sm:p-5 flex flex-col justify-between relative group/card">
+                        <!-- Header -->
+                        <div class="flex items-center justify-between gap-3 mb-1.5">
+                            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <h2 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight leading-tight font-sans">Tỷ lệ phòng đã thuê</h2>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-400 font-sans truncate">Phòng có hợp đồng lưu trú trên tổng số phòng đang hoạt động</p>
+                            </div>
+                            <button type="button" onclick="KtxApp.navigate('phong-va-giuong')" class="size-7 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors shrink-0" title="Xem sơ đồ phòng">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <circle cx="3.5" cy="8" r="1.2" />
+                                    <circle cx="8" cy="8" r="1.2" />
+                                    <circle cx="12.5" cy="8" r="1.2" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Gauge Box 720x362 scaled to card width -->
+                        <div id="room-occupancy-gauge-container" class="relative my-1 select-none max-w-[340px] sm:max-w-[355px] mx-auto w-full" style="aspect-ratio: 720 / 362;">
+                            <svg aria-hidden="true" viewBox="0 0 720 362" class="pointer-events-none absolute inset-0 size-full overflow-visible">
+                                <defs>
+                                    <linearGradient id="ro-band-fade" gradientUnits="userSpaceOnUse" x1="73.9067" y1="360" x2="449.907" y2="96">
+                                        <stop offset="0" stop-color="#93c5fd" />
+                                        <stop offset="0.228391" stop-color="#60a5fa" />
+                                        <stop offset="1" stop-color="#0562ef" />
+                                    </linearGradient>
+                                    <linearGradient id="ro-arc-fade" gradientUnits="userSpaceOnUse" x1="20.0283" y1="243.5" x2="360.028" y2="0">
+                                        <stop offset="0" stop-color="#eff6ff" stop-opacity="0" />
+                                        <stop offset="0.358169" stop-color="#bfdbfe" />
+                                        <stop offset="1" stop-color="#0562ef" />
+                                    </linearGradient>
+                                </defs>
+
+                                <!-- Đường nền màu xám -->
+                                <g class="text-slate-100 dark:text-slate-800" fill="currentColor">
+                                    <path d="${segmentPath(CX, CY, RING_INNER, RING_OUTER, 180, 360)}" />
+                                    <path d="${segmentPath(CX, CY, BAND_INNER, BAND_OUTER, 180, 360, CORNER)}" />
+                                </g>
+
+                                <!-- Viền mảnh và dải màu theo tỷ lệ phòng đã thuê -->
+                                <path id="room-occupancy-arc" d="${roomOccupancyArcPath}" fill="url(#ro-arc-fade)" />
+                                <path id="room-occupancy-band" d="${roomOccupancyPath}" fill="url(#ro-band-fade)" />
+                            </svg>
+
+                            <!-- Số liệu trung tâm -->
+                            <div class="pointer-events-none absolute inset-x-0 bottom-1 sm:bottom-2 flex flex-col items-center">
+                                <span class="flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 text-[#0562ef] dark:text-blue-400 ring-1 ring-blue-200 dark:ring-blue-800/40 shadow-xs">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+                                        <path d="M3 21V8l9-5 9 5v13" />
+                                        <path d="M9 21v-6h6v6" />
+                                    </svg>
+                                    <span class="text-[11px] font-semibold whitespace-nowrap font-sans">Phòng đã thuê</span>
+                                </span>
+                                <p id="room-occupancy-value" data-occupied="${occupiedRooms}" data-total="${totalRooms}" class="text-2xl sm:text-[26px] font-extrabold mt-1 whitespace-nowrap text-slate-900 dark:text-white font-sans tabular-nums tracking-tight">
+                                    ${occupiedRooms}/${totalRooms} phòng
+                                </p>
+                                <p id="room-occupancy-percent" data-target="${roomOccupancyPercent}" class="mt-0.5 flex items-center gap-1.5 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400 font-sans">
+                                    <span class="font-semibold text-[#0562ef] dark:text-blue-400">${roomOccupancyPercent}%</span>
+                                    <span>công suất sử dụng</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <div class="flex flex-col items-center">
+                                <span class="text-[11px] text-slate-400 font-sans">Tổng số phòng</span>
+                                <span class="text-sm font-bold text-slate-900 dark:text-white tabular-nums">${totalRooms}</span>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                <span class="text-[11px] text-slate-400 font-sans">Phòng còn trống</span>
+                                <span class="text-sm font-bold text-slate-900 dark:text-white tabular-nums">${Math.max(0, totalRooms - occupiedRooms)}</span>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- ===================================================== -->
+                    <!-- CARD 4: EXPENSES CHART (Chuẩn 100% Figma & React Mebius) -->
+                    <!-- ===================================================== -->
+                    <article class="mebius-card p-4 sm:p-5 flex flex-col justify-between relative group/card overflow-hidden">
+                        <!-- Top Row: Title & More Button -->
+                        <div class="flex items-center justify-between gap-3 mb-1.5">
+                            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <h2 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight leading-none">Phòng theo loại dịch vụ</h2>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-400 font-sans truncate">Số lượng phòng của từng loại đang hoạt động</p>
+                            </div>
+                            <button type="button" onclick="KtxApp.navigate('phong-va-giuong')" class="size-7 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors" title="Xem sơ đồ phòng">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <circle cx="3.5" cy="8" r="1.2" />
+                                    <circle cx="8" cy="8" r="1.2" />
+                                    <circle cx="12.5" cy="8" r="1.2" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- KPI Row: Tổng số phòng theo loại -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <div class="flex flex-col items-start">
+                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-400">Tổng số phòng</span>
+                                <span id="expenses-total-val" class="text-xl sm:text-[22px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums leading-tight">${roomTypeTotal} phòng</span>
+                            </div>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#0562ef] dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60">
+                                ${roomTypeStats.length} loại phòng
+                            </span>
+                        </div>
+
+                        <!-- Main Grid: 2 Columns (Categories List on Left, SVG Ring on Right) -->
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                            <!-- Left: Interactive Category Rows -->
+                            <div class="md:col-span-7 flex flex-col gap-2 min-w-0">
+                                ${expensesCategories.length === 0 ? `
+                                    <div class="flex items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 px-3 py-6 text-center text-[12px] text-slate-400">
+                                        Chưa có dữ liệu loại phòng
+                                    </div>
+                                ` : ''}
+                                ${expensesCategories.map((c) => {
+                                    const col = expColors[c.color || 'orange'];
+                                    const val = initialExpPeriod.values[c.id] || 0;
+                                    return `
+                                        <button
+                                            type="button"
+                                            id="exp-row-${c.id}"
+                                            data-slot="expenses-chart-category"
+                                            onclick="KtxApp.onExpensesRowClick('${c.id}')"
+                                            onpointerenter="KtxApp.onExpensesRowHover('${c.id}', true)"
+                                            onpointerleave="KtxApp.onExpensesRowHover('${c.id}', false)"
+                                            class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-slate-200/70 dark:border-slate-700/60 bg-slate-50/70 dark:bg-slate-800/40 px-2.5 py-2 text-left outline-none transition-[background-color,box-shadow,opacity,border-color] duration-200 hover:bg-white dark:hover:bg-slate-800 focus-visible:ring-2 select-none"
+                                        >
+                                            <span class="flex min-w-0 items-center gap-2">
+                                                <span class="relative size-2.5 shrink-0 rounded-full" style="background-color: ${col.fill}; box-shadow: 0 4px 8px -2px rgba(38,45,58,0.2), 0 0 0 0.7px ${col.dotRing};"></span>
+                                                <span class="text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-200 whitespace-normal">${c.label}</span>
+                                            </span>
+                                            <span id="exp-val-${c.id}" data-val="${val}" class="text-[12px] font-semibold text-slate-900 dark:text-white font-sans tabular-nums whitespace-nowrap">
+                                                ${formatRoomCount(val)}
+                                            </span>
+                                        </button>
+                                    `;
+                                }).join('')}
+                            </div>
+
+                            <!-- Right: SVG Scaled Ring + Center Display -->
+                            <div class="md:col-span-5 flex items-center justify-center relative min-w-0">
+                                <div
+                                    id="exp-ring-container"
+                                    class="relative w-[155px] h-[155px] sm:w-[170px] sm:h-[170px] shrink-0 touch-pan-y select-none max-w-full"
+                                    onpointermove="KtxApp.onExpensesRingPointerMove(event)"
+                                    onpointerleave="KtxApp.onExpensesRingPointerLeave()"
+                                    onclick="KtxApp.onExpensesRingClick(event)"
+                                >
+                                    <svg id="expenses-ring-svg" viewBox="0 0 ${EXP_SIZE} ${EXP_SIZE}" class="pointer-events-none absolute inset-0 size-full overflow-visible">
+                                        <defs>
+                                            <filter id="exp-light" filterUnits="userSpaceOnUse" x="-60" y="-60" width="440" height="440" color-interpolation-filters="sRGB">
+                                                <feGaussianBlur stdDeviation="2.7" />
+                                            </filter>
+                                            <filter id="exp-core" filterUnits="userSpaceOnUse" x="-60" y="-60" width="440" height="440" color-interpolation-filters="sRGB">
+                                                <feGaussianBlur stdDeviation="10.8" />
+                                            </filter>
+                                            <clipPath id="exp-rest-clip">
+                                                <path data-rest="bars" d="${initialRestShape.bars}" />
+                                            </clipPath>
+                                            ${expensesCategories.map((c, i) => `
+                                                <clipPath id="exp-segment-${i}">
+                                                    <path data-shape="fill" d="${segmentShapesExp(initialDonut.arcs[i]).fill}" />
+                                                </clipPath>
+                                            `).join('')}
+                                        </defs>
+
+                                        <!-- Rest / Hatched bars section -->
+                                        <g id="exp-rest-group" class="transition-opacity duration-200">
+                                            <g clip-path="url(#exp-rest-clip)" fill="#ffedd5" class="dark:fill-orange-950/40">
+                                                ${EXP_TICKS.map(t => `<path data-slot="expenses-chart-bar" data-end="${t.end}" d="${t.d}" />`).join('')}
+                                            </g>
+                                            <path data-slot="expenses-chart-outline" data-rest="outerLine" d="${initialRestShape.outerLine}" fill="none" stroke="#fdba74" class="dark:stroke-orange-500/40" />
+                                            <path data-slot="expenses-chart-outline" data-rest="innerLine" d="${initialRestShape.innerLine}" fill="none" stroke="#fdba74" class="dark:stroke-orange-500/40" />
+                                        </g>
+
+                                        <!-- Cored Segments Base: Rim, Fill, Inner Light -->
+                                        ${coredCats.map(({ c, i, color }) => renderSegmentSvg(c, i, color, initialDonut.arcs[i])).join('')}
+
+                                        <!-- Cores: Blurred overlays (mix-blend-mode: darken) -->
+                                        ${coredCats.map(({ c, i, color }) => `
+                                            <g data-pop="${i}" class="transition-opacity duration-200">
+                                                <g data-arc="${i}" data-slot="expenses-chart-core" style="mix-blend-mode: darken;">
+                                                    <path data-shape="glow" d="${segmentShapesExp(initialDonut.arcs[i]).glow}" fill="${expColors[color].glow}" filter="url(#exp-core)" />
+                                                </g>
+                                            </g>
+                                        `).join('')}
+
+                                        <!-- Flat Segments (Asset / Yellow, etc.) -->
+                                        ${flatCats.map(({ c, i, color }) => renderSegmentSvg(c, i, color, initialDonut.arcs[i])).join('')}
+                                    </svg>
+
+                                    <!-- Center Information Box (Pops up on hover / pinned) -->
+                                    <div
+                                        id="expenses-center-box"
+                                        class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 opacity-0 scale-90 transition-all duration-300"
+                                    >
+                                        <span id="expenses-center-label" class="text-[10px] font-medium text-slate-400 dark:text-slate-400 truncate"></span>
+                                        <span id="expenses-center-val" class="text-[17px] sm:text-[19px] font-bold text-slate-900 dark:text-white font-sans tracking-tight tabular-nums"></span>
+                                        <span id="expenses-center-note" class="text-[10px] text-slate-400 dark:text-slate-400 font-normal">—</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
                 </section>
             </div>
         `;
@@ -1303,27 +3684,74 @@ const KtxApp = (function () {
     // 2. Admissions View Renderer (Đợt & Đơn đăng ký)
     function renderAdmissionsView() {
         const apps = state.applications || [];
-        const approvedCount = apps.filter(a => a.status === 'Đã duyệt').length;
-        const pendingCount = apps.filter(a => a.status === 'Chờ duyệt').length;
-        const rejectedCount = apps.filter(a => a.status === 'Bị từ chối').length;
-        let filtered = apps;
 
+        // 1. Áp dụng trước các bộ lọc tìm kiếm, diện ưu tiên và chất lượng phòng
+        let contextualApps = apps;
+
+        if (state.admissionsSearch && state.admissionsSearch.trim()) {
+            contextualApps = contextualApps.filter(a =>
+                fuzzyMatch(
+                    state.admissionsSearch,
+                    a.applicationCode,
+                    a.studentName,
+                    a.mssv,
+                    a.major,
+                    a.priorityCategory,
+                    a.roomPreference,
+                    a.status
+                )
+            );
+        }
+
+        if (state.admissionsPriority) {
+            contextualApps = contextualApps.filter(a =>
+                (a.priorityCategory || '').toLowerCase().includes(state.admissionsPriority.toLowerCase())
+            );
+        }
+
+        if (state.admissionsRoomType) {
+            const rt = state.admissionsRoomType.toLowerCase();
+            contextualApps = contextualApps.filter(a => {
+                const pref = String(a.roomPreference || '').toLowerCase();
+                const gender = String(a.gender || '').toLowerCase();
+                const isClc = pref.includes('chất lượng cao') || pref.includes('clc');
+                const isTieuChuan = pref.includes('tiêu chuẩn') || pref.includes('thường');
+                const isNam = pref.includes('nam') || gender === 'nam';
+                const isNu = pref.includes('nữ') || pref.includes('nu') || gender === 'nữ' || gender === 'nu';
+                if (rt === 'clc' || rt === 'cao') {
+                    return isClc;
+                }
+                if (rt === 'clc_nam') {
+                    return isClc && !pref.includes('nữ') && isNam;
+                }
+                if (rt === 'clc_nu') {
+                    return isClc && !pref.includes('nam') && isNu;
+                }
+                if (rt === 'tieuchuan' || rt === 'thuong') {
+                    return isTieuChuan;
+                }
+                if (rt === 'nam') {
+                    return !isClc && (pref.includes('nam') || (isTieuChuan && gender === 'nam'));
+                }
+                if (rt === 'nu') {
+                    return !isClc && (pref.includes('nữ') || pref.includes('nu') || (isTieuChuan && (gender === 'nữ' || gender === 'nu')));
+                }
+                return pref.includes(rt);
+            });
+        }
+
+        // 2. Tính số lượng các tab trạng thái dựa trên danh sách đã lọc theo tiêu chí tìm kiếm/diện/chất lượng
+        const pendingCount = contextualApps.filter(a => a.status === 'Chờ duyệt').length;
+        const approvedCount = contextualApps.filter(a => a.status === 'Đã duyệt').length;
+        const rejectedCount = contextualApps.filter(a => a.status === 'Bị từ chối').length;
+        const totalCount = contextualApps.length;
+
+        // 3. Sau đó mới lọc theo tab trạng thái đang chọn để hiển thị trên bảng
+        let filtered = contextualApps;
         if (state.admissionsTab !== 'all') {
             if (state.admissionsTab === 'pending') filtered = filtered.filter(a => a.status === 'Chờ duyệt');
             else if (state.admissionsTab === 'approved') filtered = filtered.filter(a => a.status === 'Đã duyệt');
             else if (state.admissionsTab === 'rejected') filtered = filtered.filter(a => a.status === 'Bị từ chối');
-        }
-
-        if (state.admissionsPriority) {
-            filtered = filtered.filter(a => a.priorityCategory.toLowerCase().includes(state.admissionsPriority.toLowerCase()));
-        }
-
-        if (state.admissionsSearch.trim()) {
-            const query = state.admissionsSearch.trim().toLowerCase();
-            filtered = filtered.filter(a =>
-                [a.applicationCode, a.studentName, a.mssv, a.major, a.priorityCategory, a.roomPreference]
-                    .some(value => String(value || '').toLowerCase().includes(query))
-            );
         }
 
         return `
@@ -1338,6 +3766,10 @@ const KtxApp = (function () {
                         <button type="button" onclick="KtxApp.exportReport('Danh sách đơn đăng ký lưu trú')" class="h-10 px-4 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-[18px] text-slate-500">file_download</span>
                             <span>Xuất danh sách</span>
+                        </button>
+                        <button type="button" onclick="KtxApp.openManageRoundsModal()" class="h-10 px-4 rounded-xl bg-white dark:bg-[#1E293B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">event_note</span>
+                            <span>Quản lý đợt đăng ký</span>
                         </button>
                         <button type="button" onclick="KtxApp.openCreateRoundModal()" class="h-10 px-4 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs transition-all shadow-sm flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-[18px]">add</span>
@@ -1357,7 +3789,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                ${apps.length} <span class="text-sm font-normal text-slate-500">hồ sơ</span>
+                                ${totalCount} <span class="text-sm font-normal text-slate-500">hồ sơ</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
@@ -1421,105 +3853,155 @@ const KtxApp = (function () {
                     </div>
                 </div>
 
-                <!-- Tabs & Filter Bar -->
-                <div class="page-filter-bar flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-3 bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
-                    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-                        <button type="button" onclick="KtxApp.setAdmissionsTab('pending')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
-                            state.admissionsTab === 'pending' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }">
-                            <span>Chờ duyệt</span>
-                            <span class="px-1.5 py-0.2 rounded-full bg-white/20 text-white text-[10px] font-bold">${pendingCount}</span>
-                        </button>
-                        <button type="button" onclick="KtxApp.setAdmissionsTab('approved')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
-                            state.admissionsTab === 'approved' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }">
-                            <span>Đã duyệt</span>
-                            <span class="text-[11px] text-slate-400">${approvedCount}</span>
-                        </button>
-                        <button type="button" onclick="KtxApp.setAdmissionsTab('rejected')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
-                            state.admissionsTab === 'rejected' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }">
-                            <span>Bị từ chối</span>
-                            <span class="text-[11px] text-slate-400">${rejectedCount}</span>
-                        </button>
-                        <button type="button" onclick="KtxApp.setAdmissionsTab('all')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
-                            state.admissionsTab === 'all' ? 'bg-[#0B2A5B] text-white shadow-2xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }">Tất cả (${apps.length})</button>
-                    </div>
-
-                    <div class="page-filter-search flex-1 flex items-center gap-2 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B]">
+                <!-- Search & Filter Bar -->
+                <div class="page-filter-bar flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
+                    <!-- 1. Tìm kiếm (kéo giãn hết khoảng trống còn lại) -->
+                    <div class="page-filter-search flex-1 min-w-[240px] w-full flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B]">
                         <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
-                        <input type="text" value="${state.admissionsSearch}" oninput="KtxApp.setAdmissionsSearch(this.value)" placeholder="Tìm mã đơn, tên sinh viên, MSSV..." class="min-w-0 flex-1 bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
+                        <input id="admissionsSearchInput" type="text" value="${escapeHtml(state.admissionsSearch || '')}" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.setAdmissionsSearch(this.value);}" placeholder="Tìm mã đơn, tên sinh viên, MSSV... (Nhấn Enter)" class="min-w-0 flex-1 bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                     </div>
 
-                    <div class="flex items-center gap-2 flex-wrap shrink-0">
-                        <select onchange="KtxApp.setAdmissionsPriority(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
-                            <option value="">Diện: Tất cả</option>
-                            <option value="chính sách">Chính sách</option>
-                            <option value="hộ nghèo">Hộ nghèo</option>
-                            <option value="vùng sâu">Vùng sâu</option>
-                            <option value="điểm">Điểm cao (>27đ)</option>
+                    <!-- 2. Bộ lọc Trạng thái, Diện ưu tiên & Chất lượng phòng -->
+                    <div class="flex items-center gap-2 shrink-0 flex-wrap page-filter-controls">
+                        <!-- Bộ lọc Trạng thái -->
+                        <select onchange="KtxApp.setAdmissionsTab(this.value)" aria-label="Lọc theo trạng thái đơn" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
+                            <option value="all" ${state.admissionsTab === 'all' ? 'selected' : ''}>Trạng thái: Tất cả</option>
+                            <option value="pending" ${state.admissionsTab === 'pending' ? 'selected' : ''}>Chờ duyệt</option>
+                            <option value="approved" ${state.admissionsTab === 'approved' ? 'selected' : ''}>Đã duyệt</option>
+                            <option value="rejected" ${state.admissionsTab === 'rejected' ? 'selected' : ''}>Bị từ chối</option>
                         </select>
+
+                        <!-- Bộ lọc Diện ưu tiên -->
+                        <select onchange="KtxApp.setAdmissionsPriority(this.value)" aria-label="Lọc theo diện ưu tiên" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
+                            <option value="">Diện: Tất cả</option>
+                            <option value="chính sách" ${state.admissionsPriority === 'chính sách' ? 'selected' : ''}>Chính sách</option>
+                            <option value="hộ nghèo" ${state.admissionsPriority === 'hộ nghèo' ? 'selected' : ''}>Hộ nghèo</option>
+                            <option value="vùng sâu" ${state.admissionsPriority === 'vùng sâu' ? 'selected' : ''}>Vùng sâu</option>
+                            <option value="điểm" ${state.admissionsPriority === 'điểm' ? 'selected' : ''}>Điểm cao (>27đ)</option>
+                        </select>
+
+                        <!-- Bộ lọc Chất lượng phòng -->
+                        <select onchange="KtxApp.setAdmissionsRoomType(this.value)" aria-label="Lọc theo chất lượng phòng" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
+                            <option value="">Chất lượng: Tất cả</option>
+                            <option value="clc_nam" ${state.admissionsRoomType === 'clc_nam' ? 'selected' : ''}>Chất lượng cao Nam</option>
+                            <option value="clc_nu" ${state.admissionsRoomType === 'clc_nu' ? 'selected' : ''}>Chất lượng cao Nữ</option>
+                            <option value="tieuchuan" ${state.admissionsRoomType === 'tieuchuan' ? 'selected' : ''}>Tiêu chuẩn (Thường)</option>
+                            <option value="nam" ${state.admissionsRoomType === 'nam' ? 'selected' : ''}>Tiêu chuẩn Nam</option>
+                            <option value="nu" ${state.admissionsRoomType === 'nu' ? 'selected' : ''}>Tiêu chuẩn Nữ</option>
+                        </select>
+
+                        <!-- Nút Hủy bộ lọc -->
+                        <button type="button" onclick="KtxApp.resetAdmissionsFilters()" class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-500 hover:text-red-600 hover:border-red-200 dark:hover:text-red-400 dark:hover:border-red-900/60 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all flex items-center justify-center shrink-0 shadow-2xs group" title="Hủy bỏ toàn bộ bộ lọc" aria-label="Hủy bộ lọc">
+                            <span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">filter_alt_off</span>
+                        </button>
                     </div>
                 </div>
 
                 <!-- Table -->
                 <div class="bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs">
+                        <table class="w-full min-w-[780px] text-left border-collapse text-xs">
                             <thead>
                                 <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                                    <th class="py-3.5 px-4">Mã đơn</th>
-                                    <th class="py-3.5 px-4">Sinh viên</th>
-                                    <th class="py-3.5 px-4">Diện ưu tiên</th>
-                                    <th class="py-3.5 px-4">Nguyện vọng</th>
-                                    <th class="py-3.5 px-4 text-center">Điểm ĐX</th>
-                                    <th class="py-3.5 px-4">Nộp lúc</th>
-                                    <th class="py-3.5 px-4 text-right">Duyệt 1-chạm</th>
+                                    <th class="w-[14%] py-3.5 pl-6 pr-3 whitespace-nowrap">Mã đơn</th>
+                                    <th class="w-[28%] py-3.5 px-4 whitespace-nowrap">Sinh viên</th>
+                                    <th class="w-[16%] py-3.5 px-4 text-left whitespace-nowrap">Diện ưu tiên</th>
+                                    <th class="w-[28%] py-3.5 px-4 whitespace-nowrap">Nguyện vọng phòng</th>
+                                    <th class="w-[14%] py-3.5 pl-3 pr-6 text-center whitespace-nowrap">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
-                                ${filtered.map(app => `
-                                    <tr onclick="KtxApp.inspectCandidate('${app.id}')" class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
-                                        <td class="py-3.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">${app.applicationCode}</td>
-                                        <td class="py-3.5 px-4">
+                                ${filtered.map(app => {
+                                    const safeAppId = escapeHtml(String(app.id ?? ''));
+                                    const safeStudentName = escapeHtml(String(app.studentName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+                                    const hasPriority = app.priorityCategory && app.priorityCategory !== '—' && app.priorityCategory !== '-' && app.priorityCategory !== 'Không';
+                                    const isPending = app.status === 'Chờ duyệt';
+                                    const statusBadgeClass = app.status === 'Đã duyệt'
+                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                        : (isPending
+                                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                                            : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300');
+                                    return `
+                                    <tr onclick="KtxApp.inspectCandidate('${safeAppId}')" class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
+                                        <td class="py-3.5 pl-6 pr-3 align-middle font-mono font-semibold text-slate-900 dark:text-white whitespace-nowrap">${escapeHtml(app.applicationCode)}</td>
+                                        <td class="py-3.5 px-4 align-middle">
                                             <div class="flex items-center gap-3 min-w-[200px]">
                                                 <span class="w-8 h-8 rounded-full shrink-0 ring-1 ring-slate-200 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xs font-bold">${getUserInitial(app.studentName)}</span>
                                                 <div class="flex flex-col min-w-0">
-                                                    <span class="font-semibold text-slate-900 dark:text-white group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors truncate">${app.studentName}</span>
-                                                    <span class="text-[11px] text-slate-400 font-mono">${app.mssv} • ${app.major}</span>
+                                                    <span class="font-semibold text-slate-900 dark:text-white group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors truncate">${escapeHtml(app.studentName)}</span>
+                                                    <span class="text-[11px] text-slate-400 font-mono truncate">${escapeHtml(app.mssv)} • ${escapeHtml(app.major)}</span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3.5 px-4">
-                                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-300">${app.priorityCategory}</span>
-                                        </td>
-                                        <td class="py-3.5 px-4">
-                                            <div class="flex items-center gap-1.5 font-medium">
-                                                <span class="material-symbols-outlined text-[16px] text-[#375ba9]">apartment</span>
-                                                <span>${app.roomPreference}</span>
-                                            </div>
-                                        </td>
-                                        <td class="py-3.5 px-4 text-center font-bold text-base text-[#0B2A5B] dark:text-blue-400 font-headline">${app.scoreDX ?? '—'}</td>
-                                        <td class="py-3.5 px-4 text-slate-500 text-[11px]">${app.submittedAt}</td>
-                                        <td class="py-3.5 px-4 text-right" onclick="event.stopPropagation()">
-                                            ${app.status === 'Chờ duyệt' ? `
-                                                <div class="flex items-center justify-end gap-1.5">
-                                                    <button type="button" onclick="KtxApp.approveApp('${app.id}', '${app.studentName}')" class="h-8 px-3 rounded-lg bg-[#0B2A5B] text-white hover:bg-[#143F8C] text-xs font-semibold transition-all flex items-center gap-1 shadow-2xs">
-                                                        <span class="material-symbols-outlined text-[16px]">check</span>
-                                                        <span>Duyệt</span>
-                                                    </button>
-                                                    <button type="button" onclick="KtxApp.rejectApp('${app.id}', '${app.studentName}')" class="h-8 w-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center justify-center">
-                                                        <span class="material-symbols-outlined text-[16px]">close</span>
-                                                    </button>
-                                                </div>
+                                        <td class="py-3.5 px-4 text-left align-middle whitespace-nowrap">
+                                            ${hasPriority ? `
+                                                <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50/90 dark:bg-blue-950/40 text-[#1d4ed8] dark:text-blue-300 border border-[#bfdbfe] dark:border-blue-900/60 shadow-2xs whitespace-nowrap">${escapeHtml(app.priorityCategory)}</span>
                                             ` : `
-                                                <span class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${app.status === 'Đã duyệt' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}">${app.status}</span>
+                                                <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-lg text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 font-mono">—</span>
                                             `}
                                         </td>
+                                        <td class="py-3.5 px-4 align-middle">
+                                            <div class="flex flex-col gap-0.5 min-w-[180px]">
+                                                <div class="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-100">
+                                                    <span class="material-symbols-outlined text-[16px] text-[#375ba9] shrink-0">apartment</span>
+                                                    <span>${escapeHtml(app.roomPreference)}</span>
+                                                </div>
+                                                <span class="pl-[22px] text-[11px] text-slate-400 whitespace-nowrap">${escapeHtml(app.submittedAt || '—')}</span>
+                                            </div>
+                                        </td>
+                                        <td class="py-3.5 pl-3 pr-6 text-center align-middle whitespace-nowrap" onclick="event.stopPropagation(); KtxApp.closeAdmissionsActionMenus();">
+                                            <div class="relative inline-flex items-center justify-center">
+                                                <button type="button"
+                                                    onclick="KtxApp.toggleAdmissionsActionMenu('${safeAppId}', event)"
+                                                    aria-haspopup="menu"
+                                                    aria-expanded="false"
+                                                    aria-controls="admissions-action-menu-${safeAppId}"
+                                                    title="Thao tác"
+                                                    aria-label="Mở menu thao tác cho đơn ${escapeHtml(app.applicationCode)}"
+                                                    class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-[#0B2A5B] hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 mx-auto">
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                        <circle cx="3.5" cy="8" r="1.25" />
+                                                        <circle cx="8" cy="8" r="1.25" />
+                                                        <circle cx="12.5" cy="8" r="1.25" />
+                                                    </svg>
+                                                </button>
+                                                <div id="admissions-action-menu-${safeAppId}"
+                                                    data-admissions-menu="true"
+                                                    role="menu"
+                                                    class="hidden fixed z-50 w-48 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1.5 text-left animate-fade-in">
+                                                    ${!isPending ? `
+                                                        <div class="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                                            <span class="text-[11px] text-slate-400">Trạng thái</span>
+                                                            <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${statusBadgeClass}">${escapeHtml(app.status)}</span>
+                                                        </div>
+                                                    ` : ''}
+                                                    <button type="button" role="menuitem"
+                                                        onclick="KtxApp.closeAdmissionsActionMenus(); KtxApp.inspectCandidate('${safeAppId}');"
+                                                        class="w-full px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/70 flex items-center gap-2 transition-colors text-left">
+                                                        <span class="material-symbols-outlined text-[16px] text-slate-500">visibility</span>
+                                                        <span>Xem chi tiết hồ sơ</span>
+                                                    </button>
+                                                    ${isPending ? `
+                                                        <button type="button" role="menuitem"
+                                                            onclick="KtxApp.closeAdmissionsActionMenus(); KtxApp.approveApp('${safeAppId}', '${safeStudentName}');"
+                                                            class="w-full px-3 py-2 text-xs font-semibold text-[#0B2A5B] dark:text-blue-400 hover:bg-blue-50/70 dark:hover:bg-blue-950/30 flex items-center gap-2 transition-colors text-left">
+                                                            <span class="material-symbols-outlined text-[16px]">check</span>
+                                                            <span>Duyệt hồ sơ</span>
+                                                        </button>
+                                                        <button type="button" role="menuitem"
+                                                            onclick="KtxApp.closeAdmissionsActionMenus(); KtxApp.rejectApp('${safeAppId}', '${safeStudentName}');"
+                                                            class="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50/80 dark:hover:bg-red-950/30 flex items-center gap-2 transition-colors text-left">
+                                                            <span class="material-symbols-outlined text-[16px]">close</span>
+                                                            <span>Từ chối đơn</span>
+                                                        </button>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>
-                                `).join('')}
-                                ${filtered.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
+                                `;
+                                }).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="5" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1531,23 +4013,60 @@ const KtxApp = (function () {
     // 3. Contracts View Renderer (Quản lý hợp đồng)
     function renderContractsView() {
         const contracts = state.contracts || [];
-        const validCount = contracts.filter(c => c.status === 'Hiệu lực').length;
-        const expiringCount = contracts.filter(c => c.status === 'Sắp hết hạn').length;
-        const endedCount = contracts.filter(c => c.status === 'Đã thanh lý').length;
-        let filtered = contracts;
+        const availableRooms = Array.from(new Set(
+            contracts
+                .filter(c => state.contractsBuilding === 'all' || c.buildingId === state.contractsBuilding)
+                .map(c => c.roomNumber)
+                .filter(Boolean)
+        )).sort();
 
-        if (state.contractsTab === 'valid') filtered = filtered.filter(c => c.status === 'Hiệu lực');
-        else if (state.contractsTab === 'expiring') filtered = filtered.filter(c => c.status === 'Sắp hết hạn');
-        else if (state.contractsTab === 'ended') filtered = filtered.filter(c => c.status === 'Đã thanh lý');
+        // 1. Áp dụng trước các bộ lọc theo ngữ cảnh: Tòa, Phòng, Tìm kiếm
+        let contextualContracts = contracts;
 
         if (state.contractsBuilding !== 'all') {
-            filtered = filtered.filter(c => c.buildingId === state.contractsBuilding);
+            contextualContracts = contextualContracts.filter(c => c.buildingId === state.contractsBuilding);
         }
 
-        if (state.contractsSearch) {
-            const q = state.contractsSearch.toLowerCase();
-            filtered = filtered.filter(c => c.contractNumber.toLowerCase().includes(q) || c.studentName.toLowerCase().includes(q) || c.mssv.includes(q));
+        if (state.contractsRoom && state.contractsRoom !== 'all') {
+            contextualContracts = contextualContracts.filter(c => (c.roomNumber || '') === state.contractsRoom);
         }
+
+        if (state.contractsSearch && state.contractsSearch.trim()) {
+            contextualContracts = contextualContracts.filter(c =>
+                fuzzyMatch(
+                    state.contractsSearch,
+                    c.contractNumber,
+                    c.studentName,
+                    c.mssv,
+                    c.roomNumber,
+                    c.buildingId,
+                    c.bedNumber,
+                    c.status
+                )
+            );
+        }
+
+        // 2. Tính số lượng các tab trạng thái và KPI dựa trên tập hợp đồng đã áp dụng bộ lọc
+        const validCount = contextualContracts.filter(c => c.status === 'Hiệu lực').length;
+        const expiringCount = contextualContracts.filter(c => c.status === 'Sắp hết hạn').length;
+        const endedCount = contextualContracts.filter(c => c.status === 'Đã thanh lý').length;
+        const totalFilteredCount = contextualContracts.length;
+
+        // Tính tổng tiền cọc của tập hợp đồng đang lọc (nếu cọc là số thì cộng dồn, format VND)
+        const totalFilteredDeposit = contextualContracts.reduce((sum, c) => sum + (Number(c.depositAmount) || 0), 0);
+        const formattedDeposit = totalFilteredDeposit > 0
+            ? (totalFilteredDeposit >= 1000000000
+                ? (totalFilteredDeposit / 1000000000).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' tỷ đồng'
+                : (totalFilteredDeposit >= 1000000
+                    ? (totalFilteredDeposit / 1000000).toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' triệu đồng'
+                    : formatVND(totalFilteredDeposit)))
+            : '0 đ';
+
+        // 3. Sau đó mới lọc theo trạng thái đang chọn để hiển thị bảng
+        let filtered = contextualContracts;
+        if (state.contractsTab === 'valid' || state.contractsTab === 'active') filtered = filtered.filter(c => c.status === 'Hiệu lực');
+        else if (state.contractsTab === 'expiring') filtered = filtered.filter(c => c.status === 'Sắp hết hạn');
+        else if (state.contractsTab === 'ended' || state.contractsTab === 'liquidated') filtered = filtered.filter(c => c.status === 'Đã thanh lý');
 
         return `
             <div class="flex flex-col w-full space-y-6">
@@ -1634,7 +4153,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-[#0b2a5b] dark:text-emerald-400 tracking-tight">
-                                1,62 <span class="text-sm font-normal text-slate-500">tỷ đồng</span>
+                                ${formattedDeposit}
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
@@ -1645,35 +4164,25 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- Filters Strip -->
-                <div class="page-filter-bar bg-white dark:bg-[#121826] rounded-2xl p-4 shadow-xs border border-slate-200/80 dark:border-[#232B3B] space-y-4">
-                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-                            <button type="button" onclick="KtxApp.setContractsTab('valid')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-2 ${
-                                state.contractsTab === 'valid' ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-                            }">
-                                <span>Đang hiệu lực</span>
-                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold">${validCount}</span>
-                            </button>
-                            <button type="button" onclick="KtxApp.setContractsTab('expiring')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-2 ${
-                                state.contractsTab === 'expiring' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-                            }">
-                                <span>Sắp hết hạn</span>
-                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">${expiringCount}</span>
-                            </button>
-                            <button type="button" onclick="KtxApp.setContractsTab('ended')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-2 ${
-                                state.contractsTab === 'ended' ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-                            }">
-                                <span>Đã thanh lý</span>
-                                <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700">${endedCount}</span>
-                            </button>
-                            <button type="button" onclick="KtxApp.setContractsTab('all')" class="px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all ${
-                                state.contractsTab === 'all' ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-                            }">Tất cả</button>
+                <div class="page-filter-bar bg-white dark:bg-[#121826] rounded-2xl p-3 shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <!-- 1. Thanh tìm kiếm (kéo giãn hết khoảng trống còn lại) -->
+                        <div class="page-filter-search flex-1 min-w-[240px] w-full flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B]">
+                            <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
+                            <input id="contractsSearchInput" type="text" value="${escapeHtml(state.contractsSearch || '')}" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.setContractsSearch(this.value);}" placeholder="Số HĐ hoặc tên/MSSV... (Nhấn Enter)" class="min-w-0 flex-1 bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
                         </div>
 
-                        <div class="flex items-center gap-2.5 flex-1 min-w-0">
-                            <input type="text" oninput="KtxApp.setContractsSearch(this.value)" placeholder="Số HĐ hoặc tên/MSSV..." class="flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs text-slate-800 dark:text-white focus:outline-none" />
-                            <select onchange="KtxApp.setContractsBuilding(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                        <!-- 2. Bộ lọc Trạng thái, Tòa & Phòng -->
+                        <div class="flex items-center gap-2 shrink-0 flex-wrap page-filter-controls">
+                            <select onchange="KtxApp.setContractsTab(this.value)" aria-label="Lọc theo trạng thái hợp đồng" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="all" ${state.contractsTab === 'all' ? 'selected' : ''}>Trạng thái: Tất cả</option>
+                                <option value="active" ${state.contractsTab === 'active' || state.contractsTab === 'valid' ? 'selected' : ''}>Đang hiệu lực</option>
+                                <option value="expiring" ${state.contractsTab === 'expiring' ? 'selected' : ''}>Sắp hết hạn</option>
+                                <option value="liquidated" ${state.contractsTab === 'liquidated' || state.contractsTab === 'ended' ? 'selected' : ''}>Đã thanh lý</option>
+                            </select>
+
+                            <!-- Bộ lọc Tòa -->
+                            <select onchange="KtxApp.setContractsBuilding(this.value)" aria-label="Lọc theo tòa nhà" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                                 <option value="all">Tất cả Tòa</option>
                                 ${(state.contractBuildings || []).map(building => {
                                     const buildingId = building.id ?? building.code ?? building.maToaNha ?? building.MaToaNha;
@@ -1682,6 +4191,17 @@ const KtxApp = (function () {
                                     return `<option value="${escapeHtml(buildingId)}" ${state.contractsBuilding === buildingId ? 'selected' : ''}>${escapeHtml(buildingName)}</option>`;
                                 }).join('')}
                             </select>
+
+                            <!-- Bộ lọc Phòng -->
+                            <select onchange="KtxApp.setContractsRoom(this.value)" aria-label="Lọc theo phòng" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="all">Tất cả Phòng</option>
+                                ${availableRooms.map(r => `<option value="${escapeHtml(r)}" ${state.contractsRoom === r ? 'selected' : ''}>Phòng ${escapeHtml(r)}</option>`).join('')}
+                            </select>
+
+                            <!-- Nút Hủy bộ lọc Hợp đồng -->
+                            <button type="button" onclick="KtxApp.resetContractsFilters()" class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-500 hover:text-red-600 hover:border-red-200 dark:hover:text-red-400 dark:hover:border-red-900/60 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all flex items-center justify-center shrink-0 shadow-2xs group" title="Hủy bỏ toàn bộ bộ lọc hợp đồng" aria-label="Hủy bộ lọc hợp đồng">
+                                <span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">filter_alt_off</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1689,75 +4209,135 @@ const KtxApp = (function () {
                 <!-- Table -->
                 <div class="bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs">
+                        <table class="w-full min-w-[820px] table-fixed text-left border-collapse text-xs">
                             <thead>
                                 <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                                    <th class="py-3.5 px-4">Số HĐ</th>
-                                    <th class="py-3.5 px-4">Sinh viên</th>
-                                    <th class="py-3.5 px-4">Phòng / Giường</th>
-                                    <th class="py-3.5 px-4">Thời hạn</th>
-                                    <th class="py-3.5 px-4 text-right">Tiền phòng/tháng</th>
-                                    <th class="py-3.5 px-4 text-right">Tiền cọc</th>
-                                    <th class="py-3.5 px-4 text-center">Trạng thái</th>
-                                    <th class="py-3.5 px-4 text-center">Thao tác</th>
+                                    <th class="w-[13%] py-3.5 pl-6 pr-3 text-left whitespace-nowrap">Số HĐ</th>
+                                    <th class="w-[22%] py-3.5 px-3 text-left whitespace-nowrap">Sinh viên</th>
+                                    <th class="w-[18%] py-3.5 px-3 text-left whitespace-nowrap">Phòng / Giường</th>
+                                    <th class="w-[17%] py-3.5 px-3 text-left whitespace-nowrap">Thời hạn</th>
+                                    <th class="w-[11%] py-3.5 px-3 text-right whitespace-nowrap">Tiền phòng/tháng</th>
+                                    <th class="w-[11%] py-3.5 px-3 text-right whitespace-nowrap">Tiền cọc</th>
+                                    <th class="w-[8%] py-3.5 pl-3 pr-6 text-center whitespace-nowrap">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
-                                ${filtered.map(c => `
-                                    <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors ${c.status === 'Sắp hết hạn' ? 'bg-amber-50/30' : ''}">
-                                        <td class="py-3.5 px-4 font-mono font-semibold text-[#0B2A5B] dark:text-blue-400">${c.contractNumber}</td>
-                                        <td class="py-3.5 px-4">
-                                            <div class="flex items-center gap-2.5">
-                                                <div class="w-8 h-8 rounded-full bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xs font-bold shrink-0">${c.avatarInitials}</div>
+                                ${filtered.map(c => {
+                                    const safeContractId = escapeHtml(String(c.contractNumber ?? c.id ?? ''));
+                                    const safeContractJs = escapeHtml(String(c.contractNumber ?? c.id ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+                                    const isActionable = c.status !== 'Đã thanh lý' && c.status !== 'Đã hủy';
+                                    const canCheckIn = (c.status === 'Hiệu lực' || c.status === 'Sắp hết hạn' || c.statusCode === 'hieuLuc') && !c.actualCheckInDate;
+                                    const canRenew = c.status === 'Hiệu lực' || c.status === 'Sắp hết hạn' || c.statusCode === 'hieuLuc';
+                                    const statusBadgeClass = c.status === 'Hiệu lực'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60'
+                                        : c.status === 'Sắp hết hạn'
+                                            ? 'bg-amber-50 text-amber-700 border border-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60'
+                                            : 'bg-slate-100 text-slate-600 border border-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+
+                                    return `
+                                    <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors ${c.status === 'Sắp hết hạn' ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}">
+                                        <td class="py-3.5 pl-6 pr-3 align-middle font-mono font-semibold text-[#0B2A5B] dark:text-blue-400 whitespace-nowrap">${escapeHtml(c.contractNumber)}</td>
+                                        <td class="py-3.5 px-3 align-middle">
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <div class="w-8 h-8 rounded-full bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xs font-bold shrink-0">${escapeHtml(c.avatarInitials)}</div>
                                                 <div class="flex flex-col min-w-0">
-                                                    <span class="font-semibold text-slate-900 dark:text-white truncate">${c.studentName}</span>
-                                                    <span class="text-[11px] text-slate-400 font-mono">MSSV: ${c.mssv}</span>
+                                                    <span class="font-semibold text-slate-900 dark:text-white truncate">${escapeHtml(c.studentName)}</span>
+                                                    <span class="text-[11px] text-slate-400 font-mono truncate">MSSV: ${escapeHtml(c.mssv)}</span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3.5 px-4">
-                                            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-medium">
-                                                <span class="material-symbols-outlined text-[16px] text-[#375ba9]">meeting_room</span>
-                                                <span class="font-bold text-[#0B2A5B] dark:text-white">${c.roomNumber}</span>
-                                                <span class="text-slate-400">·</span>
-                                                <span>${c.bedNumber}</span>
+                                        <td class="py-3.5 px-3 align-middle">
+                                            <div class="flex flex-col items-start gap-1.5">
+                                                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-medium text-xs">
+                                                    <span class="material-symbols-outlined text-[15px] text-[#375ba9]">meeting_room</span>
+                                                    <span class="font-bold text-[#0B2A5B] dark:text-white">${escapeHtml(c.roomNumber)}</span>
+                                                    <span class="text-slate-400">·</span>
+                                                    <span>${escapeHtml(c.bedNumber)}</span>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${statusBadgeClass}">${escapeHtml(c.status)}</span>
+                                                    ${isActionable ? `
+                                                        <span class="text-[11px] ${c.actualCheckInDate ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-400'}">
+                                                            ${c.actualCheckInDate ? '• Đã nhận phòng' : '• Chưa nhận phòng'}
+                                                        </span>
+                                                    ` : ''}
+                                                </div>
                                             </div>
                                         </td>
-                                        <td class="py-3.5 px-4">
+                                        <td class="py-3.5 px-3 align-middle">
                                             <div class="flex flex-col">
-                                                <span class="font-medium text-slate-800 dark:text-slate-200">${c.startDate} → ${c.endDate}</span>
-                                                <span class="text-[11px] ${c.remainingDays <= 15 && c.remainingDays > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}">
+                                                <span class="font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">${escapeHtml(c.startDate)} → ${escapeHtml(c.endDate)}</span>
+                                                <span class="text-[11px] mt-0.5 ${c.remainingDays <= 15 && c.remainingDays > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}">
                                                     ${c.remainingDays > 0 ? `Còn ${c.remainingDays} ngày` : 'Đã tất toán'}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td class="py-3.5 px-4 text-right font-mono font-semibold">${formatVND(c.monthlyFee)}</td>
-                                        <td class="py-3.5 px-4 text-right font-mono font-semibold">
+                                        <td class="py-3.5 px-3 align-middle text-right font-mono font-semibold whitespace-nowrap">${formatVND(c.monthlyFee)}</td>
+                                        <td class="py-3.5 px-3 align-middle text-right font-mono font-semibold whitespace-nowrap">
                                             <div>${formatVND(c.depositAmount)}</div>
-                                            <span class="text-[10px] font-bold uppercase text-blue-600">${c.depositStatus}</span>
+                                            <span class="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400">${escapeHtml(c.depositStatus)}</span>
                                         </td>
-                                        <td class="py-3.5 px-4 text-center whitespace-nowrap">
-                                            <span class="inline-flex min-w-max items-center justify-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                                                c.status === 'Hiệu lực' ? 'bg-emerald-50 text-emerald-700' :
-                                                c.status === 'Sắp hết hạn' ? 'bg-amber-50 text-amber-700' :
-                                                'bg-slate-100 text-slate-600'
-                                            }">${c.status}</span>
-                                        </td>
-                                        <td class="py-3.5 px-4 text-center">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <button type="button" onclick="KtxApp.openPrintModal('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 text-xs font-semibold" title="In hợp đồng">In HĐ</button>
-                                                ${c.status !== 'Đã thanh lý' && c.status !== 'Đã hủy' ? `
-                                                    ${(c.status === 'Hiệu lực' || c.statusCode === 'hieuLuc') && !c.actualCheckInDate ? `
-                                                        <button type="button" onclick="KtxApp.checkInContract('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-xs font-semibold transition-all" title="Ghi nhận sinh viên nhận phòng">Nhận phòng</button>
+                                        <td class="py-3.5 pl-3 pr-6 text-center align-middle whitespace-nowrap" onclick="event.stopPropagation();">
+                                            <div class="relative inline-flex items-center justify-center">
+                                                <button type="button"
+                                                    onclick="KtxApp.toggleContractsActionMenu('${safeContractJs}', event)"
+                                                    aria-haspopup="menu"
+                                                    aria-expanded="false"
+                                                    aria-controls="contracts-action-menu-${safeContractId}"
+                                                    title="Thao tác"
+                                                    aria-label="Mở menu thao tác cho hợp đồng ${safeContractId}"
+                                                    class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-[#0B2A5B] hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 mx-auto">
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                        <circle cx="3.5" cy="8" r="1.25" />
+                                                        <circle cx="8" cy="8" r="1.25" />
+                                                        <circle cx="12.5" cy="8" r="1.25" />
+                                                    </svg>
+                                                </button>
+                                                <div id="contracts-action-menu-${safeContractId}"
+                                                    data-contracts-menu="true"
+                                                    role="menu"
+                                                    class="hidden fixed z-50 w-52 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1.5 text-left animate-fade-in">
+                                                    <div class="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                                        <span class="text-[11px] text-slate-400 font-mono">${safeContractId}</span>
+                                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold ${statusBadgeClass}">${escapeHtml(c.status)}</span>
+                                                    </div>
+                                                    <button type="button" role="menuitem"
+                                                        onclick="KtxApp.closeContractsActionMenus(); KtxApp.openPrintModal('${safeContractJs}');"
+                                                        class="w-full px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors">
+                                                        <span class="material-symbols-outlined text-[16px] text-[#0B2A5B] dark:text-blue-400">print</span>
+                                                        <span>Xem &amp; In hợp đồng (A4)</span>
+                                                    </button>
+                                                    ${canCheckIn ? `
+                                                        <button type="button" role="menuitem"
+                                                            onclick="KtxApp.closeContractsActionMenus(); KtxApp.checkInContract('${safeContractJs}');"
+                                                            class="w-full px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 flex items-center gap-2 transition-colors font-medium">
+                                                            <span class="material-symbols-outlined text-[16px]">how_to_reg</span>
+                                                            <span>Ghi nhận nhận phòng</span>
+                                                        </button>
                                                     ` : ''}
-                                                    <button type="button" onclick="KtxApp.renewContract('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg bg-blue-50 text-[#0B2A5B] hover:bg-[#0B2A5B] hover:text-white text-xs font-semibold transition-all">Gia hạn</button>
-                                                    <button type="button" onclick="KtxApp.liquidateContract('${c.contractNumber}')" class="px-2.5 py-1 rounded-lg hover:bg-red-50 text-red-600 text-xs font-medium">Thanh lý</button>
-                                                ` : ''}
+                                                    ${canRenew ? `
+                                                        <button type="button" role="menuitem"
+                                                            onclick="KtxApp.closeContractsActionMenus(); KtxApp.openRenewContractModal('${safeContractJs}');"
+                                                            class="w-full px-3 py-2 text-xs text-[#0B2A5B] dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-2 transition-colors font-semibold">
+                                                            <span class="material-symbols-outlined text-[16px]">update</span>
+                                                            <span>Gia hạn hợp đồng</span>
+                                                        </button>
+                                                    ` : ''}
+                                                    ${isActionable ? `
+                                                        <button type="button" role="menuitem"
+                                                            onclick="KtxApp.closeContractsActionMenus(); KtxApp.openLiquidateContractModal('${safeContractJs}');"
+                                                            class="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 transition-colors font-semibold">
+                                                            <span class="material-symbols-outlined text-[16px]">assignment_turned_in</span>
+                                                            <span>Thanh lý hợp đồng</span>
+                                                        </button>
+                                                    ` : ''}
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
-                                `).join('')}
-                                ${filtered.length === 0 ? '<tr><td colspan="8" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
+                                    `;
+                                }).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1773,21 +4353,60 @@ const KtxApp = (function () {
             .sort((a, b) => a.localeCompare(b, 'vi'));
         const majors = [...new Set(students.map(student => student.major).filter(major => major && major !== '—'))]
             .sort((a, b) => a.localeCompare(b, 'vi'));
-        const residents = students.filter(s => s.residenceStatus === 'Đang ở');
-        const maleResidents = residents.filter(s => s.gender === 'Nam').length;
-        const femaleResidents = residents.filter(s => s.gender === 'Nữ').length;
-        const nonResidentStudents = students.filter(s => s.residenceStatus !== 'Đang ở').length;
-        let filtered = students;
+
+        // 1. Áp dụng các bộ lọc ngữ cảnh trước: Tìm kiếm, Thanh toán, Khóa, Khoa viện
+        let contextualStudents = students;
+
+        if (state.studentsSearch && state.studentsSearch.trim()) {
+            contextualStudents = contextualStudents.filter(s =>
+                fuzzyMatch(
+                    state.studentsSearch,
+                    s.name,
+                    s.mssv,
+                    s.cccd,
+                    s.roomNumber,
+                    s.className,
+                    s.major,
+                    s.phone,
+                    s.hometown,
+                    s.residenceStatus,
+                    s.paymentStatus
+                )
+            );
+        }
+
+        if (state.studentsPayment && state.studentsPayment !== 'all') {
+            if (state.studentsPayment === 'paid') {
+                contextualStudents = contextualStudents.filter(s => s.paymentStatus === 'Đủ' || s.paymentStatus === 'Đã đóng');
+            } else if (state.studentsPayment === 'debt') {
+                contextualStudents = contextualStudents.filter(s => s.paymentStatus === 'Nợ' || s.paymentStatus === 'Nợ phí');
+            } else if (state.studentsPayment === 'none') {
+                contextualStudents = contextualStudents.filter(s => s.paymentStatus !== 'Đủ' && s.paymentStatus !== 'Đã đóng' && s.paymentStatus !== 'Nợ' && s.paymentStatus !== 'Nợ phí');
+            }
+        }
 
         if (state.studentsCohort) {
-            filtered = filtered.filter(s => s.cohort.toLowerCase().includes(state.studentsCohort.toLowerCase()));
+            contextualStudents = contextualStudents.filter(s => (s.cohort || '').toLowerCase().includes(state.studentsCohort.toLowerCase()));
         }
+
         if (state.studentsMajor) {
-            filtered = filtered.filter(s => s.major.toLowerCase().includes(state.studentsMajor.toLowerCase()));
+            contextualStudents = contextualStudents.filter(s => (s.major || '').toLowerCase().includes(state.studentsMajor.toLowerCase()));
         }
-        if (state.studentsSearch) {
-            const q = state.studentsSearch.toLowerCase();
-            filtered = filtered.filter(s => s.name.toLowerCase().includes(q) || s.mssv.includes(q) || s.cccd.includes(q) || s.roomNumber.toLowerCase().includes(q));
+
+        // 2. Tính số lượng KPI và các tab trạng thái dựa trên dữ liệu đã áp dụng bộ lọc (thay đổi linh hoạt)
+        const totalFilteredStudents = contextualStudents.length;
+        const residents = contextualStudents.filter(s => s.residenceStatus === 'Đang ở');
+        const residentCount = residents.length;
+        const maleResidents = residents.filter(s => s.gender === 'Nam').length;
+        const femaleResidents = residents.filter(s => s.gender === 'Nữ').length;
+        const nonResidentStudents = contextualStudents.filter(s => s.residenceStatus !== 'Đang ở').length;
+
+        // 3. Sau đó mới lọc theo tab trạng thái (đang ở, chưa nội trú, tất cả)
+        let filtered = contextualStudents;
+        if (state.studentsTab === 'resident') {
+            filtered = filtered.filter(s => s.residenceStatus === 'Đang ở');
+        } else if (state.studentsTab === 'non_resident') {
+            filtered = filtered.filter(s => s.residenceStatus !== 'Đang ở');
         }
 
         return `
@@ -1821,7 +4440,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                ${residents.length.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">sinh viên</span>
+                                ${residentCount.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">sinh viên</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
@@ -1868,7 +4487,7 @@ const KtxApp = (function () {
 
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
-                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">CHƯA NỘI TRÚ</span>
+                            <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">CHƯA Ở</span>
                             <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
                                 <span class="material-symbols-outlined text-[18px]">event_busy</span>
                             </div>
@@ -1886,76 +4505,148 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- Filters Strip -->
-                <div class="page-filter-bar p-4 rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col xl:flex-row items-stretch xl:items-center gap-3">
-                    <input type="text" oninput="KtxApp.setStudentsSearch(this.value)" placeholder="Tìm tên, MSSV, CCCD, số phòng..." class="w-full xl:flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs text-slate-800 dark:text-white focus:outline-none" />
-                    
-                    <div class="flex flex-wrap items-center gap-2 shrink-0">
-                        <select onchange="KtxApp.setStudentsCohort(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
-                            <option value="">Tất cả Khóa</option>
-                            ${cohorts.map(cohort => `<option value="${cohort}" ${state.studentsCohort === cohort ? 'selected' : ''}>Khóa ${cohort}</option>`).join('')}
-                        </select>
-                        <select onchange="KtxApp.setStudentsMajor(this.value)" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
-                            <option value="">Tất cả Khoa viện</option>
-                            ${majors.map(major => `<option value="${major}" ${state.studentsMajor === major ? 'selected' : ''}>${major}</option>`).join('')}
-                        </select>
-                        <button type="button" onclick="KtxApp.resetStudentsFilters()" class="p-2.5 rounded-xl border border-slate-200 dark:border-[#232B3B] bg-slate-50 dark:bg-[#0B0F1A] text-slate-500 hover:text-slate-900 transition-colors" title="Đặt lại bộ lọc">
-                            <span class="material-symbols-outlined text-[18px]">filter_alt_off</span>
-                        </button>
+                <div class="page-filter-bar bg-white dark:bg-[#121826] rounded-2xl p-3 shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <!-- 1. Thanh tìm kiếm (kéo giãn hết khoảng trống còn lại) -->
+                        <div class="page-filter-search flex-1 min-w-[240px] w-full flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B]">
+                            <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
+                            <input id="studentsSearchInput" type="text" value="${escapeHtml(state.studentsSearch || '')}" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.setStudentsSearch(this.value);}" placeholder="Tìm tên, MSSV, CCCD, số phòng... (Nhấn Enter)" class="min-w-0 flex-1 bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
+                        </div>
+
+                        <!-- 2. Bộ lọc Trạng thái, Thanh toán, Khóa, Khoa viện, và Hủy lọc -->
+                        <div class="flex items-center gap-2 shrink-0 flex-wrap page-filter-controls">
+                            <!-- Bộ lọc Trạng thái lưu trú -->
+                            <select onchange="KtxApp.setStudentsTab(this.value)" aria-label="Lọc theo trạng thái lưu trú" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="all" ${(state.studentsTab || 'all') === 'all' ? 'selected' : ''}>Trạng thái: Tất cả</option>
+                                <option value="resident" ${state.studentsTab === 'resident' ? 'selected' : ''}>Đang ở</option>
+                                <option value="non_resident" ${state.studentsTab === 'non_resident' ? 'selected' : ''}>Chưa ở</option>
+                            </select>
+
+                            <!-- Bộ lọc Thanh toán -->
+                            <select onchange="KtxApp.setStudentsPayment(this.value)" aria-label="Lọc theo tình trạng thanh toán" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="all" ${state.studentsPayment === 'all' ? 'selected' : ''}>Thanh toán: Tất cả</option>
+                                <option value="paid" ${state.studentsPayment === 'paid' ? 'selected' : ''}>Đã đóng đủ</option>
+                                <option value="debt" ${state.studentsPayment === 'debt' ? 'selected' : ''}>Còn nợ phí</option>
+                                <option value="none" ${state.studentsPayment === 'none' ? 'selected' : ''}>Chưa có hóa đơn</option>
+                            </select>
+
+                            <!-- Bộ lọc Khóa -->
+                            <select onchange="KtxApp.setStudentsCohort(this.value)" aria-label="Lọc theo khóa học" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="">Khóa: Tất cả</option>
+                                ${cohorts.map(cohort => `<option value="${escapeHtml(cohort)}" ${state.studentsCohort === cohort ? 'selected' : ''}>Khóa ${escapeHtml(cohort)}</option>`).join('')}
+                            </select>
+
+                            <!-- Bộ lọc Khoa Viện -->
+                            <select onchange="KtxApp.setStudentsMajor(this.value)" aria-label="Lọc theo khoa viện" class="h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="">Khoa viện: Tất cả</option>
+                                ${majors.map(major => `<option value="${escapeHtml(major)}" ${state.studentsMajor === major ? 'selected' : ''}>${escapeHtml(major)}</option>`).join('')}
+                            </select>
+
+                            <!-- Nút Hủy bộ lọc -->
+                            <button type="button" onclick="KtxApp.resetStudentsFilters()" class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-500 hover:text-red-600 hover:border-red-200 dark:hover:text-red-400 dark:hover:border-red-900/60 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all flex items-center justify-center shrink-0 shadow-2xs group" title="Hủy bỏ toàn bộ bộ lọc sinh viên" aria-label="Hủy bộ lọc sinh viên">
+                                <span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">filter_alt_off</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Table -->
                 <div class="rounded-2xl bg-white dark:bg-[#121826] shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs">
+                        <table class="w-full min-w-[820px] table-fixed text-left border-collapse text-xs">
                             <thead>
-                                <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                                    <th class="py-3.5 px-4">MSSV</th>
-                                    <th class="py-3.5 px-4">Họ và tên</th>
-                                    <th class="py-3.5 px-4">Khoa / Lớp</th>
-                                    <th class="py-3.5 px-4">Phòng & Giường</th>
-                                    <th class="py-3.5 px-4">Điện thoại</th>
-                                    <th class="py-3.5 px-4">Quê quán</th>
-                                    <th class="py-3.5 px-4">Thanh toán</th>
-                                    <th class="py-3.5 px-4">Trạng thái</th>
-                                    <th class="py-3.5 px-4 text-right">Hành động</th>
+                                <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px] whitespace-nowrap">
+                                    <th class="w-[12%] py-3.5 pl-6 pr-3 text-left whitespace-nowrap">MSSV</th>
+                                    <th class="w-[22%] py-3.5 px-3 text-left whitespace-nowrap">Họ và tên</th>
+                                    <th class="w-[16%] py-3.5 px-3 text-left whitespace-nowrap">Khoa / Lớp</th>
+                                    <th class="w-[18%] py-3.5 px-3 text-left whitespace-nowrap">Phòng & Giường</th>
+                                    <th class="w-[12%] py-3.5 px-3 text-left whitespace-nowrap">Điện thoại</th>
+                                    <th class="w-[12%] py-3.5 px-3 text-left whitespace-nowrap">Quê quán</th>
+                                    <th class="w-[8%] py-3.5 pl-3 pr-6 text-center whitespace-nowrap">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
-                                ${filtered.map(s => `
+                                ${filtered.map(s => {
+                                    const safeMssvId = escapeHtml(String(s.mssv ?? ''));
+                                    const safeMssvJs = escapeHtml(String(s.mssv ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+                                    const paymentLabel = (s.paymentStatus === 'Đủ' || s.paymentStatus === 'Đã đóng')
+                                        ? 'Đã đóng'
+                                        : (s.paymentStatus === 'Nợ' || s.paymentStatus === 'Nợ phí')
+                                            ? 'Nợ phí'
+                                            : (s.paymentStatus || 'Chưa đóng');
+                                    const paymentBadgeClass = (s.paymentStatus === 'Đủ' || s.paymentStatus === 'Đã đóng')
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60'
+                                        : (s.paymentStatus === 'Nợ' || s.paymentStatus === 'Nợ phí')
+                                            ? 'bg-red-50 text-red-700 border border-red-200/70 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60'
+                                            : 'bg-slate-100 text-slate-600 border border-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+                                    const residenceLabel = s.residenceStatus === 'Đang ở' ? 'Đang ở' : 'Chưa ở';
+                                    const residenceBadgeClass = s.residenceStatus === 'Đang ở'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60'
+                                        : 'bg-amber-50 text-amber-700 border border-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60';
+
+                                    return `
                                     <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
-                                        <td class="py-3.5 px-4 font-mono font-semibold text-[#0B2A5B] dark:text-blue-400">${s.mssv}</td>
-                                        <td class="py-3.5 px-4">
-                                            <div class="flex items-center gap-2.5">
+                                        <td class="py-3.5 pl-6 pr-3 align-middle font-mono font-semibold text-[#0B2A5B] dark:text-blue-400 truncate">${safeMssvId}</td>
+                                        <td class="py-3.5 px-3 align-middle">
+                                            <div class="flex items-center gap-2.5 min-w-0">
                                                 <span class="w-8 h-8 rounded-full shrink-0 ring-1 ring-slate-200 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xs font-bold">${getUserInitial(s.name)}</span>
                                                 <div class="flex flex-col min-w-0">
-                                                    <span class="font-semibold text-slate-900 dark:text-white truncate">${s.name}</span>
-                                                    <span class="text-[11px] text-slate-400">${s.className}</span>
+                                                    <span class="font-semibold text-slate-900 dark:text-white truncate">${escapeHtml(s.name)}</span>
+                                                    <span class="text-[11px] text-slate-400 truncate">${escapeHtml(s.className)}</span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3.5 px-4">${s.major}</td>
-                                        <td class="py-3.5 px-4">
-                                            <span class="font-bold text-[#0B2A5B] dark:text-white">${s.roomNumber}</span> - <span>${s.bedNumber}</span>
+                                        <td class="py-3.5 px-3 align-middle truncate" title="${escapeHtml(s.major)}">${escapeHtml(s.major)}</td>
+                                        <td class="py-3.5 px-3 align-middle">
+                                            <div class="flex flex-col items-start gap-1.5">
+                                                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-medium text-xs max-w-full">
+                                                    <span class="material-symbols-outlined text-[15px] text-[#375ba9] shrink-0">meeting_room</span>
+                                                    <span class="font-bold text-[#0B2A5B] dark:text-white truncate">${escapeHtml(s.roomNumber || '—')}</span>
+                                                    <span class="text-slate-400 shrink-0">·</span>
+                                                    <span class="truncate">${escapeHtml(s.bedNumber || '—')}</span>
+                                                </div>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${paymentBadgeClass}">${escapeHtml(paymentLabel)}</span>
+                                            </div>
                                         </td>
-                                        <td class="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-300">${s.phone}</td>
-                                        <td class="py-3.5 px-4">${s.hometown}</td>
-                                        <td class="py-3.5 px-4">
-                                            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.paymentStatus === 'Đủ' ? 'bg-emerald-50 text-emerald-700' : s.paymentStatus === 'Nợ' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}">${s.paymentStatus === 'Đủ' ? 'Đã đóng' : s.paymentStatus === 'Nợ' ? 'Nợ phí' : s.paymentStatus}</span>
-                                        </td>
-                                        <td class="py-3.5 px-4">
-                                            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.residenceStatus === 'Đang ở' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}">${s.residenceStatus}</span>
-                                        </td>
-                                        <td class="py-3.5 px-4 text-right">
-                                            <div class="inline-flex items-center gap-1">
-                                                <button type="button" onclick="KtxApp.openStudentModal('${s.mssv}')" class="p-1 rounded-lg text-slate-400 hover:text-[#0B2A5B]" title="Xem hồ sơ">
-                                                    <span class="material-symbols-outlined text-[18px]">visibility</span>
+                                        <td class="py-3.5 px-3 align-middle font-mono text-slate-600 dark:text-slate-300 truncate">${escapeHtml(s.phone || '—')}</td>
+                                        <td class="py-3.5 px-3 align-middle truncate" title="${escapeHtml(s.hometown || '')}">${escapeHtml(s.hometown || '—')}</td>
+                                        <td class="py-3.5 pl-3 pr-6 text-center align-middle whitespace-nowrap" onclick="event.stopPropagation();">
+                                            <div class="relative inline-flex items-center justify-center">
+                                                <button type="button"
+                                                    onclick="KtxApp.toggleStudentsActionMenu('${safeMssvJs}', event)"
+                                                    aria-haspopup="menu"
+                                                    aria-expanded="false"
+                                                    aria-controls="students-action-menu-${safeMssvId}"
+                                                    title="Thao tác"
+                                                    aria-label="Mở menu thao tác cho sinh viên ${safeMssvId}"
+                                                    class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-[#0B2A5B] hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 mx-auto">
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                        <circle cx="3.5" cy="8" r="1.25" />
+                                                        <circle cx="8" cy="8" r="1.25" />
+                                                        <circle cx="12.5" cy="8" r="1.25" />
+                                                    </svg>
                                                 </button>
+                                                <div id="students-action-menu-${safeMssvId}"
+                                                    data-students-menu="true"
+                                                    role="menu"
+                                                    class="hidden fixed z-50 w-52 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1.5 text-left animate-fade-in">
+                                                    <div class="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                                        <span class="text-[11px] text-slate-400 font-mono">${safeMssvId}</span>
+                                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold ${residenceBadgeClass}">${residenceLabel}</span>
+                                                    </div>
+                                                    <button type="button" role="menuitem"
+                                                        onclick="KtxApp.closeStudentsActionMenus(); KtxApp.openStudentModal('${safeMssvJs}');"
+                                                        class="w-full px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors">
+                                                        <span class="material-symbols-outlined text-[16px] text-[#0B2A5B] dark:text-blue-400">badge</span>
+                                                        <span>Xem chi tiết hồ sơ</span>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
-                                `).join('')}
-                                ${filtered.length === 0 ? '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
+                                    `;
+                                }).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1967,27 +4658,55 @@ const KtxApp = (function () {
     // 5. Rooms View Renderer (Sơ đồ Phòng & Giường - Roster vs Grid view)
     function renderRoomsView() {
         const rooms = state.rooms || [];
-        const beds = rooms.flatMap(room => room.beds || []);
-        const occupiedBeds = beds.filter(bed => bed.status === 'Đang ở').length;
-        const vacantBeds = beds.filter(bed => bed.status === 'Giường trống').length;
-        const maintenanceBeds = beds.filter(bed => bed.status === 'Bảo trì').length;
-        const occupancyRate = beds.length ? Math.round(occupiedBeds / beds.length * 100) : 0;
         const isGrid = state.roomsViewMode === 'grid';
         const buildings = [...new Set(rooms.map(room => room.buildingId).filter(Boolean))].sort();
+
+        // 1. Áp dụng trước các bộ lọc ngữ cảnh: Tòa, Giới tính, Số phòng, Tìm kiếm
         const filteredByBuilding = state.roomsBuilding === 'all'
             ? rooms
             : rooms.filter(room => room.buildingId === state.roomsBuilding);
-        const floors = [...new Set(filteredByBuilding.map(room => String(room.floor)).filter(Boolean))]
-            .sort((a, b) => Number(a) - Number(b));
-        const filteredByFloor = state.roomsFloor === 'all'
+        const filteredByGender = (!state.roomsGender || state.roomsGender === 'all')
             ? filteredByBuilding
-            : filteredByBuilding.filter(room => String(room.floor) === state.roomsFloor);
-        const roomNumbers = [...new Set(filteredByFloor.map(room => room.roomNumber).filter(Boolean))]
+            : filteredByBuilding.filter(room => room.gender === state.roomsGender);
+        const roomNumbers = [...new Set(filteredByGender.map(room => room.roomNumber).filter(Boolean))]
             .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
-        const filteredRooms = state.roomsRoomNumber === 'all'
-            ? filteredByFloor
-            : filteredByFloor.filter(room => room.roomNumber === state.roomsRoomNumber);
-        const selectClass = 'h-10 min-w-[140px] px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer';
+        const filteredByRoomNum = state.roomsRoomNumber === 'all'
+            ? filteredByGender
+            : filteredByGender.filter(room => room.roomNumber === state.roomsRoomNumber);
+        const contextualRooms = (state.roomsSearch && state.roomsSearch.trim())
+            ? filteredByRoomNum.filter(room =>
+                fuzzyMatch(
+                    state.roomsSearch,
+                    room.roomNumber,
+                    room.buildingId,
+                    room.buildingName,
+                    `Tầng ${room.floor}`,
+                    ...(room.beds || []).flatMap(b => [b.bedNumber, b.status, b.studentName, b.mssv])
+                )
+            )
+            : filteredByRoomNum;
+
+        // 2. Tính số lượng KPI và các tab trạng thái giường dựa trên tập phòng đang lọc (thay đổi linh hoạt)
+        const contextualBeds = contextualRooms.flatMap(room => room.beds || []);
+        const totalRoomsCount = contextualRooms.length;
+        const totalBedsCount = contextualBeds.length;
+        const occupiedBeds = contextualBeds.filter(bed => bed.status === 'Đang ở').length;
+        const vacantBeds = contextualBeds.filter(bed => bed.status === 'Giường trống').length;
+        const maintenanceBeds = contextualBeds.filter(bed => bed.status === 'Bảo trì').length;
+        const occupancyRate = totalBedsCount ? Math.round(occupiedBeds / totalBedsCount * 100) : 0;
+
+        // 3. Lọc theo tab trạng thái giường nếu có chọn ('occupied', 'vacant', 'maintenance')
+        let finalRooms = contextualRooms;
+        if (state.roomsBedStatus && state.roomsBedStatus !== 'all') {
+            const targetStatus = state.roomsBedStatus === 'occupied' ? 'Đang ở' :
+                                 state.roomsBedStatus === 'vacant' ? 'Giường trống' :
+                                 state.roomsBedStatus === 'maintenance' ? 'Bảo trì' : null;
+            if (targetStatus) {
+                finalRooms = contextualRooms.filter(r => (r.beds || []).some(b => b.status === targetStatus));
+            }
+        }
+        const filteredRooms = finalRooms;
+        const selectClass = 'h-10 min-w-[130px] px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer';
 
         return `
             <div class="flex flex-col w-full space-y-5">
@@ -2020,7 +4739,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                ${rooms.length.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">phòng</span>
+                                ${totalRoomsCount.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">phòng</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
@@ -2038,7 +4757,7 @@ const KtxApp = (function () {
                         </div>
                         <div class="my-3">
                             <div class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                                ${beds.length.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">giường</span>
+                                ${totalBedsCount.toLocaleString('vi-VN')} <span class="text-sm font-normal text-slate-500">giường</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
@@ -2084,42 +4803,65 @@ const KtxApp = (function () {
                     </div>
                 </div>
 
-                <!-- Toggle Roster vs Grid View -->
-                <div class="relative z-20 flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs overflow-visible">
-                    <div class="flex items-center p-1 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs shrink-0">
-                        <button type="button" onclick="KtxApp.setRoomsViewMode('roster')" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            !isGrid ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-                        }">
-                            <span class="material-symbols-outlined text-[17px]">badge</span>
-                            <span>Danh sách theo phòng</span>
-                        </button>
-                        <button type="button" onclick="KtxApp.setRoomsViewMode('grid')" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            isGrid ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-                        }">
-                            <span class="material-symbols-outlined text-[17px]">grid_view</span>
-                            <span>Sơ đồ buồng phòng</span>
-                        </button>
-                    </div>
+                <!-- Filter Strip -->
+                <div class="page-filter-bar bg-white dark:bg-[#121826] rounded-2xl p-3 shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <!-- 1. Thanh tìm kiếm (đem ra trước) -->
+                        <div class="page-filter-search flex-1 min-w-[220px] w-full flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B]">
+                            <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
+                            <input id="roomsSearchInput" type="text" value="${escapeHtml(state.roomsSearch || '')}" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.setRoomsSearch(this.value);}" placeholder="Tìm phòng, tòa, tên SV, MSSV... (Nhấn Enter)" class="min-w-0 flex-1 bg-transparent text-xs text-slate-800 dark:text-white focus:outline-none" />
+                        </div>
 
-                    <div class="flex flex-wrap items-center gap-2 shrink-0">
-                        <select aria-label="Lọc theo tòa" onchange="KtxApp.setRoomsBuilding(this.value)" class="${selectClass}">
-                            <option value="all">Tòa: Tất cả</option>
-                            ${buildings.map(building => `<option value="${building}" ${state.roomsBuilding === building ? 'selected' : ''}>Tòa ${building}</option>`).join('')}
-                        </select>
-                        <select aria-label="Lọc theo tầng" onchange="KtxApp.setRoomsFloor(this.value)" class="${selectClass}">
-                            <option value="all">Tầng: Tất cả</option>
-                            ${floors.map(floor => `<option value="${floor}" ${state.roomsFloor === floor ? 'selected' : ''}>Tầng ${floor}</option>`).join('')}
-                        </select>
-                        <select aria-label="Lọc theo phòng" onchange="KtxApp.setRoomsRoomNumber(this.value)" class="${selectClass}">
-                            <option value="all" ${state.roomsRoomNumber === 'all' ? 'selected' : ''}>Phòng: Tất cả</option>
-                            ${roomNumbers.map(roomNumber => `<option value="${roomNumber}" ${state.roomsRoomNumber === roomNumber ? 'selected' : ''}>Phòng ${roomNumber}</option>`).join('')}
-                        </select>
-                    </div>
+                        <!-- 2. Bộ lọc Tòa, Giới tính, Phòng & Nút Hủy lọc -->
+                        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                            <select aria-label="Lọc theo tòa" onchange="KtxApp.setRoomsBuilding(this.value)" class="${selectClass}">
+                                <option value="all">Tòa: Tất cả</option>
+                                ${buildings.map(building => `<option value="${building}" ${state.roomsBuilding === building ? 'selected' : ''}>Tòa ${building}</option>`).join('')}
+                            </select>
+                            <select aria-label="Lọc theo giới tính" onchange="KtxApp.setRoomsGender(this.value)" class="${selectClass}">
+                                <option value="all" ${(!state.roomsGender || state.roomsGender === 'all') ? 'selected' : ''}>Giới tính: Tất cả</option>
+                                <option value="Nam" ${state.roomsGender === 'Nam' ? 'selected' : ''}>Phòng Nam</option>
+                                <option value="Nữ" ${state.roomsGender === 'Nữ' ? 'selected' : ''}>Phòng Nữ</option>
+                            </select>
+                            <!-- Custom Room Dropdown (xổ xuống dưới, cuộn mượt mà, khung ngắn gọn) -->
+                            <div class="relative inline-block" id="roomsRoomDropdownContainer">
+                                <button type="button" onclick="KtxApp.toggleRoomsRoomDropdown(event)" class="${selectClass} flex items-center justify-between gap-2 text-left">
+                                    <span class="truncate">${state.roomsRoomNumber === 'all' ? 'Phòng: Tất cả' : 'Phòng ' + state.roomsRoomNumber}</span>
+                                    <span class="material-symbols-outlined text-[18px] text-slate-400 transition-transform ${state.roomsRoomDropdownOpen ? 'rotate-180' : ''}">expand_more</span>
+                                </button>
+                                <div id="roomsRoomDropdownMenu" class="${state.roomsRoomDropdownOpen ? '' : 'hidden'} absolute left-0 top-full mt-1.5 w-48 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1 z-50 animate-fade-in custom-scrollbar">
+                                    <button type="button" onclick="KtxApp.selectRoomsRoomNumber('all')" class="w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between ${state.roomsRoomNumber === 'all' ? 'bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-400 font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'}">
+                                        <span>Phòng: Tất cả</span>
+                                        ${state.roomsRoomNumber === 'all' ? '<span class="material-symbols-outlined text-[16px]">check</span>' : ''}
+                                    </button>
+                                    ${roomNumbers.map(rn => `
+                                        <button type="button" onclick="KtxApp.selectRoomsRoomNumber('${rn}')" class="w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between ${state.roomsRoomNumber === rn ? 'bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-400 font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'}">
+                                            <span>Phòng ${rn}</span>
+                                            ${state.roomsRoomNumber === rn ? '<span class="material-symbols-outlined text-[16px]">check</span>' : ''}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <button type="button" onclick="KtxApp.resetRoomsFilters()" class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-500 hover:text-red-600 hover:border-red-200 dark:hover:text-red-400 dark:hover:border-red-900/60 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all flex items-center justify-center shrink-0 shadow-2xs group" title="Hủy bỏ toàn bộ bộ lọc phòng" aria-label="Hủy bộ lọc phòng">
+                                <span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">filter_alt_off</span>
+                            </button>
+                        </div>
 
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600 dark:text-slate-400 shrink-0">
-                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#375ba9]"></span> Đang ở (342)</span>
-                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Giường trống (38)</span>
-                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Bảo trì (4)</span>
+                        <!-- 3. Chuyển chế độ xem (Danh sách vs Sơ đồ) -->
+                        <div class="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] shadow-2xs shrink-0">
+                            <button type="button" onclick="KtxApp.setRoomsViewMode('roster')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                !isGrid ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                            }">
+                                <span class="material-symbols-outlined text-[16px]">badge</span>
+                                <span>Danh sách</span>
+                            </button>
+                            <button type="button" onclick="KtxApp.setRoomsViewMode('grid')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                isGrid ? 'bg-[#0B2A5B] text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                            }">
+                                <span class="material-symbols-outlined text-[16px]">grid_view</span>
+                                <span>Sơ đồ buồng</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -2191,68 +4933,141 @@ const KtxApp = (function () {
     }
 
     function renderRoomsRosterView() {
-        const students = (state.students || []).filter(student =>
-            (state.roomsBuilding === 'all' || student.buildingId === state.roomsBuilding) &&
-            (state.roomsFloor === 'all' || String(student.floor) === state.roomsFloor) &&
-            (state.roomsRoomNumber === 'all' || student.roomNumber === state.roomsRoomNumber)
-        );
+        const students = (state.students || []).filter(student => {
+            const matchBuilding = state.roomsBuilding === 'all' || student.buildingId === state.roomsBuilding;
+            const matchGender = (!state.roomsGender || state.roomsGender === 'all') || student.gender === state.roomsGender;
+            const matchRoom = state.roomsRoomNumber === 'all' || student.roomNumber === state.roomsRoomNumber;
+            const matchBedStatus = state.roomsBedStatus === 'all' ||
+                (state.roomsBedStatus === 'occupied' && student.residenceStatus === 'Đang ở') ||
+                (state.roomsBedStatus === 'vacant' && student.residenceStatus !== 'Đang ở') ||
+                (state.roomsBedStatus === 'maintenance' && student.residenceStatus === 'Bảo trì');
+            const matchSearch = !state.roomsSearch || !state.roomsSearch.trim() || fuzzyMatch(
+                state.roomsSearch,
+                student.mssv,
+                student.name,
+                student.className,
+                student.buildingId,
+                student.roomNumber,
+                student.bedNumber,
+                student.residenceStatus
+            );
+            return matchBuilding && matchGender && matchRoom && matchBedStatus && matchSearch;
+        });
         return `
             <div class="bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs border-collapse">
+                    <table class="w-full min-w-[820px] table-fixed text-left text-xs border-collapse">
                         <thead>
-                            <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                                <th class="py-3.5 px-4">MSSV</th>
-                                <th class="py-3.5 px-4">Họ và tên sinh viên</th>
-                                <th class="py-3.5 px-3">Giới tính / Khóa</th>
-                                <th class="py-3.5 px-3">Tòa / Tầng</th>
-                                <th class="py-3.5 px-3">Phòng</th>
-                                <th class="py-3.5 px-3">Vị trí giường</th>
-                                <th class="py-3.5 px-3">Ngày vào</th>
-                                <th class="py-3.5 px-3">Học phí / KTX</th>
-                                <th class="py-3.5 px-3">Tình trạng</th>
-                                <th class="py-3.5 px-4 text-right">Thao tác</th>
+                            <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px] whitespace-nowrap">
+                                <th class="w-[12%] py-3.5 pl-6 pr-3 text-left whitespace-nowrap">MSSV</th>
+                                <th class="w-[22%] py-3.5 px-3 text-left whitespace-nowrap">Họ và tên</th>
+                                <th class="w-[18%] py-3.5 px-3 text-left whitespace-nowrap">Phòng & Giường</th>
+                                <th class="w-[10%] py-3.5 px-3 text-left whitespace-nowrap">Tòa</th>
+                                <th class="w-[14%] py-3.5 px-3 text-left whitespace-nowrap">Giới tính / Khóa</th>
+                                <th class="w-[16%] py-3.5 px-3 text-center whitespace-nowrap">Học phí / KTX</th>
+                                <th class="w-[8%] py-3.5 pl-3 pr-6 text-center whitespace-nowrap">Thao tác</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
-                            ${students.map(s => `
+                            ${students.map(s => {
+                                const safeMssvId = escapeHtml(String(s.mssv ?? ''));
+                                const safeMssvJs = escapeHtml(String(s.mssv ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+                                const matchedRoom = (state.rooms || []).find(r =>
+                                    r.roomNumber === s.roomNumber && (!s.buildingId || r.buildingId === s.buildingId)
+                                );
+                                const safeRoomIdJs = matchedRoom
+                                    ? escapeHtml(String(matchedRoom.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))
+                                    : '';
+                                const paymentLabel = (s.paymentStatus === 'Đủ' || s.paymentStatus === 'Đã đóng')
+                                    ? 'Đã đóng'
+                                    : (s.paymentStatus === 'Nợ' || s.paymentStatus === 'Nợ phí')
+                                        ? 'Nợ phí'
+                                        : (s.paymentStatus || 'Chưa có hóa đơn');
+                                const paymentBadgeClass = (s.paymentStatus === 'Đủ' || s.paymentStatus === 'Đã đóng')
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : (s.paymentStatus === 'Nợ' || s.paymentStatus === 'Nợ phí')
+                                        ? 'bg-red-50 text-red-700'
+                                        : 'bg-slate-100 text-slate-600';
+                                const residenceLabel = s.residenceStatus === 'Đang ở' ? 'Đang ở' : 'Chưa ở';
+                                const residenceBadgeClass = s.residenceStatus === 'Đang ở'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60';
+
+                                return `
                                 <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
-                                    <td class="py-3.5 px-4 font-mono font-semibold text-[#0B2A5B] dark:text-blue-400">${s.mssv}</td>
-                                    <td class="py-3.5 px-4">
-                                        <div class="flex items-center gap-2.5 min-w-[190px]">
+                                    <td class="py-3.5 pl-6 pr-3 align-middle font-mono font-semibold text-[#0B2A5B] dark:text-blue-400 truncate">${safeMssvId}</td>
+                                    <td class="py-3.5 px-3 align-middle">
+                                        <div class="flex items-center gap-2.5 min-w-0">
                                             <span class="w-7 h-7 rounded-full shrink-0 ring-1 ring-slate-200 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-[10px] font-bold">${getUserInitial(s.name)}</span>
                                             <div class="min-w-0">
-                                                <div class="font-semibold text-slate-900 dark:text-white leading-tight truncate">${s.name}</div>
-                                                <div class="text-[11px] text-slate-400 truncate">${s.className}</div>
+                                                <div class="font-semibold text-slate-900 dark:text-white leading-tight truncate">${escapeHtml(s.name)}</div>
+                                                <div class="text-[11px] text-slate-400 truncate">${escapeHtml(s.className)}</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="py-3.5 px-3">
-                                        <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${s.gender === 'Nam' ? 'bg-blue-100 text-[#0B2A5B]' : 'bg-pink-100 text-pink-700'}">${s.gender}</span>
-                                        <span class="text-[11px] text-slate-500 font-medium ml-1">${s.cohort}</span>
+                                    <td class="py-3.5 px-3 align-middle">
+                                        <div class="flex flex-col items-start gap-1">
+                                            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-medium text-xs max-w-full">
+                                                <span class="material-symbols-outlined text-[15px] text-[#375ba9] shrink-0">meeting_room</span>
+                                                <span class="font-bold text-[#0B2A5B] dark:text-white truncate">${escapeHtml(s.roomNumber || 'Chưa xếp')}</span>
+                                                ${s.bedNumber && s.bedNumber !== '—' ? `<span class="text-slate-400 shrink-0">·</span><span class="font-mono font-bold text-[#375ba9] dark:text-blue-400 truncate">${escapeHtml(s.bedNumber)}</span>` : ''}
+                                            </div>
+                                            <span class="text-[11px] text-slate-400">Ngày vào: ${escapeHtml(s.admissionDate || '—')}</span>
+                                        </div>
                                     </td>
-                                    <td class="py-3.5 px-3 font-medium">Tòa ${s.buildingId} · Tầng ${s.floor}</td>
-                                    <td class="py-3.5 px-3 font-bold text-[#0B2A5B] dark:text-white">${s.roomNumber}</td>
-                                    <td class="py-3.5 px-3">
-                                        <span class="px-2 py-0.5 rounded-md bg-blue-50 text-[#375ba9] font-mono font-bold text-xs">${s.bedNumber}</span>
+                                    <td class="py-3.5 px-3 align-middle font-medium whitespace-nowrap">${s.buildingId ? 'Tòa ' + escapeHtml(s.buildingId) : '—'}</td>
+                                    <td class="py-3.5 px-3 align-middle whitespace-nowrap">
+                                        <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${s.gender === 'Nam' ? 'bg-blue-100 text-[#0B2A5B]' : 'bg-pink-100 text-pink-700'}">${escapeHtml(s.gender || '—')}</span>
+                                        <span class="text-[11px] text-slate-500 font-medium ml-1">${escapeHtml(s.cohort || '')}</span>
                                     </td>
-                                    <td class="py-3.5 px-3 text-slate-500 text-[11px]">${s.admissionDate}</td>
-                                    <td class="py-3.5 px-3">
-                                        <span class="px-2 py-0.5 rounded-full text-[11px] font-medium ${s.paymentStatus === 'Đủ' ? 'bg-emerald-50 text-emerald-700' : s.paymentStatus === 'Nợ' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}">${s.paymentStatus === 'Đủ' ? 'Đã đóng' : s.paymentStatus === 'Nợ' ? 'Nợ phí' : s.paymentStatus}</span>
+                                    <td class="py-3.5 px-3 align-middle text-center whitespace-nowrap">
+                                        <span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold ${paymentBadgeClass}">${escapeHtml(paymentLabel)}</span>
                                     </td>
-                                    <td class="py-3.5 px-3">
-                                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${s.residenceStatus === 'Đang ở' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}">${s.residenceStatus}</span>
-                                    </td>
-                                    <td class="py-3.5 px-4 text-right">
-                                        <div class="inline-flex items-center gap-1">
-                                            <button type="button" onclick="KtxApp.openStudentModal('${s.mssv}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#0B2A5B]">
-                                                <span class="material-symbols-outlined text-[17px]">visibility</span>
+                                    <td class="py-3.5 pl-3 pr-6 text-center align-middle whitespace-nowrap" onclick="event.stopPropagation();">
+                                        <div class="relative inline-flex items-center justify-center">
+                                            <button type="button"
+                                                onclick="KtxApp.toggleStudentsActionMenu('${safeMssvJs}', event)"
+                                                aria-haspopup="menu"
+                                                aria-expanded="false"
+                                                aria-controls="students-action-menu-${safeMssvId}"
+                                                title="Thao tác"
+                                                aria-label="Mở menu thao tác cho sinh viên ${safeMssvId}"
+                                                class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-[#0B2A5B] hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 mx-auto">
+                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                    <circle cx="3.5" cy="8" r="1.25" />
+                                                    <circle cx="8" cy="8" r="1.25" />
+                                                    <circle cx="12.5" cy="8" r="1.25" />
+                                                </svg>
                                             </button>
+                                            <div id="students-action-menu-${safeMssvId}"
+                                                data-students-menu="true"
+                                                role="menu"
+                                                class="hidden fixed z-50 w-52 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1.5 text-left animate-fade-in">
+                                                <div class="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                                    <span class="text-[11px] text-slate-400 font-mono">${safeMssvId}</span>
+                                                    <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold ${residenceBadgeClass}">${residenceLabel}</span>
+                                                </div>
+                                                <button type="button" role="menuitem"
+                                                    onclick="KtxApp.closeStudentsActionMenus(); KtxApp.openStudentModal('${safeMssvJs}');"
+                                                    class="w-full px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors">
+                                                    <span class="material-symbols-outlined text-[16px] text-[#0B2A5B] dark:text-blue-400">badge</span>
+                                                    <span>Xem hồ sơ sinh viên</span>
+                                                </button>
+                                                ${safeRoomIdJs ? `
+                                                    <button type="button" role="menuitem"
+                                                        onclick="KtxApp.closeStudentsActionMenus(); KtxApp.inspectRoom('${safeRoomIdJs}');"
+                                                        class="w-full px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors">
+                                                        <span class="material-symbols-outlined text-[16px] text-[#375ba9] dark:text-blue-400">meeting_room</span>
+                                                        <span>Xem chi tiết buồng phòng</span>
+                                                    </button>
+                                                ` : ''}
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
-                            `).join('')}
-                            ${students.length === 0 ? '<tr><td colspan="10" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
+                                `;
+                            }).join('')}
+                            ${students.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu.</td></tr>' : ''}
                         </tbody>
                     </table>
                 </div>
@@ -2260,19 +5075,66 @@ const KtxApp = (function () {
         `;
     }
 
-    // Modal Actions
-    function openNewContractModal() {
+    async function openNewContractModal() {
         if (!state.selectedAcademicYear) {
             showToast('Vui lòng chọn năm học trước khi lập hợp đồng.', 'error');
             return;
         }
         const container = document.getElementById('modalsContainer');
         if (!container) return;
-        const students = (state.students || []).filter(student => student.mssv);
-        const availableBeds = (state.rooms || []).flatMap(room =>
-            (room.beds || [])
-                .filter(bed => bed.status === 'Giường trống')
-                .map(bed => ({ ...bed, room })));
+
+        // Nạp lại danh sách sinh viên, phòng/giường và hợp đồng hiện có để dropdown luôn đầy đủ dữ liệu
+        const yearQuery = `academicYear=${encodeURIComponent(state.selectedAcademicYear)}`;
+        try {
+            const [studentsData, roomsData, contractsData] = await Promise.all([
+                fetchApiData(`/api/sinhvien?${yearQuery}&pageSize=500`),
+                fetchApiData(`/api/phong?${yearQuery}`),
+                fetchApiData(`/api/hopdong?${yearQuery}`)
+            ]);
+            state.students = Array.isArray(studentsData) ? studentsData : [];
+            state.rooms = Array.isArray(roomsData) ? roomsData : [];
+            state.contracts = Array.isArray(contractsData) ? contractsData : [];
+        } catch (e) {
+            if (!Array.isArray(state.students) || state.students.length === 0) await loadStudents();
+            if (!Array.isArray(state.rooms) || state.rooms.length === 0) await loadRooms();
+            if (!Array.isArray(state.contracts) || state.contracts.length === 0) await loadContracts();
+        }
+
+        const activeStudentMssvs = new Set(
+            (state.contracts || [])
+                .filter(c => c.status !== 'Đã thanh lý' && c.status !== 'Đã hủy')
+                .map(c => c.mssv)
+        );
+        const allStudents = (state.students || []).filter(student => student.mssv);
+        const eligibleStudents = allStudents.filter(s => !activeStudentMssvs.has(s.mssv));
+        const existingContractStudents = allStudents.filter(s => activeStudentMssvs.has(s.mssv));
+
+        const availableBeds = (state.rooms || [])
+            .flatMap(room =>
+                (room.beds || [])
+                    .filter(bed => bed.status === 'Giường trống')
+                    .map(bed => ({ ...bed, room })))
+            .sort((a, b) => {
+                const cmpB = String(a.room.buildingId || '').localeCompare(String(b.room.buildingId || ''));
+                if (cmpB !== 0) return cmpB;
+                return String(a.room.roomNumber || '').localeCompare(String(b.room.roomNumber || ''));
+            });
+
+        const currentYearObj = (state.academicYears || []).find(y => getAcademicYearCode(y) === state.selectedAcademicYear);
+        const defaultStart = currentYearObj && (currentYearObj.ngayBatDau || currentYearObj.NgayBatDau)
+            ? String(currentYearObj.ngayBatDau || currentYearObj.NgayBatDau).slice(0, 10)
+            : new Date().toISOString().slice(0, 10);
+        const defaultEndDateObj = new Date(defaultStart);
+        defaultEndDateObj.setMonth(defaultEndDateObj.getMonth() + 10);
+        const defaultEnd = currentYearObj && (currentYearObj.ngayKetThuc || currentYearObj.NgayKetThuc)
+            ? String(currentYearObj.ngayKetThuc || currentYearObj.NgayKetThuc).slice(0, 10)
+            : defaultEndDateObj.toISOString().slice(0, 10);
+
+        const renderStudentOption = (student) => {
+            const label = `${student.mssv} · ${student.name}${student.gender ? ` (${student.gender})` : ''}`;
+            return `<option value="${escapeHtml(student.mssv)}" data-gender="${escapeHtml(student.gender || '')}">${escapeHtml(label)}</option>`;
+        };
+
         container.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
                 <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B] animate-fade-in">
@@ -2281,47 +5143,56 @@ const KtxApp = (function () {
                             <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">post_add</span>
                             <h3 class="text-base font-bold text-slate-900 dark:text-white">Lập hợp đồng nội trú mới</h3>
                         </div>
-                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600">
+                        <button type="button" onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600">
                             <span class="material-symbols-outlined text-[20px]">close</span>
                         </button>
                     </div>
 
                     <form onsubmit="event.preventDefault(); KtxApp.submitNewContract();" class="py-4 space-y-4 text-xs">
                         <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Sinh viên</label>
-                            <select id="ncMssv" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                            <label for="ncMssv" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Sinh viên (${allStudents.length} hồ sơ)</label>
+                            <select id="ncMssv" required onchange="KtxApp.onNewContractSelectionCheck()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                                 <option value="">Chọn sinh viên</option>
-                                ${students.map(student => `<option value="${student.mssv}">${student.name} · ${student.mssv}</option>`).join('')}
+                                ${eligibleStudents.length > 0 ? `<optgroup label="Sinh viên chưa có hợp đồng">${eligibleStudents.map(renderStudentOption).join('')}</optgroup>` : ''}
+                                ${existingContractStudents.length > 0 ? `<optgroup label="Sinh viên đã có hợp đồng trong năm học">${existingContractStudents.map(renderStudentOption).join('')}</optgroup>` : ''}
                             </select>
+                            ${allStudents.length === 0 ? '<p class="text-[11px] text-amber-600 mt-1">Chưa có sinh viên nào trong năm học đang chọn.</p>' : ''}
                         </div>
 
                         <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giường còn trống</label>
-                            <select id="ncBedId" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                            <label for="ncBedId" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giường còn trống (${availableBeds.length} giường)</label>
+                            <select id="ncBedId" required onchange="KtxApp.onNewContractBedChange(this.value)" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none cursor-pointer">
                                 <option value="">Chọn giường</option>
-                                ${availableBeds.map(bed => `<option value="${bed.id}">${bed.room.buildingId}-${bed.room.roomNumber} · ${bed.bedNumber}</option>`).join('')}
+                                ${availableBeds.map(bed => {
+                                    const fee = Number(bed.room.pricePerMonth ?? bed.room.price ?? 0);
+                                    const label = `${bed.room.buildingId} · Phòng ${bed.room.roomNumber} (${bed.room.gender}) · ${bed.bedNumber} · ${formatVND(fee)}/tháng`;
+                                    return `<option value="${escapeHtml(bed.id)}" data-fee="${fee}" data-gender="${escapeHtml(bed.room.gender || '')}">${escapeHtml(label)}</option>`;
+                                }).join('')}
                             </select>
+                            ${availableBeds.length === 0 ? '<p class="text-[11px] text-amber-600 mt-1">Hiện tại không còn giường trống khả dụng.</p>' : ''}
                         </div>
+
+                        <div id="ncCompatHint" class="hidden p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-[11px]"></div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tiền phòng / tháng (VND)</label>
+                                <label for="ncMonthlyFee" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tiền phòng / tháng (VND)</label>
                                 <input type="number" id="ncMonthlyFee" required min="0.01" step="0.01" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
                             </div>
                             <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tiền cọc giữ chỗ (VND)</label>
+                                <label for="ncDepositAmount" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tiền cọc giữ chỗ (VND)</label>
                                 <input type="number" id="ncDepositAmount" required min="0" step="0.01" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày bắt đầu</label>
-                                <input type="date" id="ncStartDate" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
+                                <label for="ncStartDate" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày bắt đầu</label>
+                                <input type="date" id="ncStartDate" value="${escapeHtml(defaultStart)}" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
                             </div>
                             <div>
-                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày kết thúc</label>
-                                <input type="date" id="ncEndDate" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
+                                <label for="ncEndDate" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày kết thúc</label>
+                                <input type="date" id="ncEndDate" value="${escapeHtml(defaultEnd)}" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none" />
                             </div>
                         </div>
 
@@ -2337,6 +5208,58 @@ const KtxApp = (function () {
                 </div>
             </div>
         `;
+    }
+
+    function onNewContractSelectionCheck() {
+        const studentSel = document.getElementById('ncMssv');
+        const bedSel = document.getElementById('ncBedId');
+        const hintEl = document.getElementById('ncCompatHint');
+        if (!hintEl) return;
+
+        const warnings = [];
+        const mssv = studentSel?.value || '';
+        const bedOpt = bedSel?.selectedOptions?.[0];
+        const studentOpt = studentSel?.selectedOptions?.[0];
+        const studentGender = studentOpt?.dataset?.gender || '';
+        const bedGender = bedOpt?.dataset?.gender || '';
+
+        if (mssv) {
+            const hasActive = (state.contracts || []).some(c => c.mssv === mssv && c.status !== 'Đã thanh lý' && c.status !== 'Đã hủy');
+            if (hasActive) {
+                warnings.push('Sinh viên này đang có hợp đồng chưa thanh lý trong năm học.');
+            }
+        }
+        if (studentGender && bedGender && studentGender !== '—' && bedGender !== '—' && studentGender !== bedGender) {
+            warnings.push(`Lưu ý: Giới tính sinh viên (${studentGender}) khác quy định tòa nhà (${bedGender}).`);
+        }
+
+        if (warnings.length > 0) {
+            hintEl.textContent = warnings.join(' ');
+            hintEl.classList.remove('hidden');
+        } else {
+            hintEl.textContent = '';
+            hintEl.classList.add('hidden');
+        }
+    }
+
+    function onNewContractBedChange(bedId) {
+        const feeInput = document.getElementById('ncMonthlyFee');
+        const depositInput = document.getElementById('ncDepositAmount');
+        let fee = 0;
+
+        for (const room of (state.rooms || [])) {
+            if ((room.beds || []).some(bed => bed.id === bedId)) {
+                fee = Number(room.pricePerMonth ?? room.price ?? 0);
+                break;
+            }
+        }
+        if (fee > 0) {
+            if (feeInput) feeInput.value = fee;
+            if (depositInput && (!depositInput.value || Number(depositInput.value) === 0)) {
+                depositInput.value = fee;
+            }
+        }
+        onNewContractSelectionCheck();
     }
 
     async function submitNewContract() {
@@ -2360,17 +5283,19 @@ const KtxApp = (function () {
                     endDate
                 })
             });
-            const json = await res.json();
-            if (json.success) {
+            const json = await res.json().catch(() => ({}));
+            if (res.ok && json.success) {
                 showToast('Đã ban hành hợp đồng nội trú mới thành công!', 'success');
                 closeModal();
-                await loadContracts();
-                if (state.currentTab === 'hop-dong') renderActiveView();
+                await Promise.all([loadContracts(), loadStudents(), loadRooms(), loadDashboard()]);
+                if (['hop-dong', 'dashboard', 'sinh-vien', 'phong-va-giuong'].includes(state.currentTab)) {
+                    renderActiveView();
+                }
             } else {
-                showToast(json.message || 'Lỗi tạo hợp đồng', 'error');
+                showToast(json.message || 'Không tạo được hợp đồng. Vui lòng kiểm tra giới tính tòa nhà, thời hạn và sinh viên.', 'error');
             }
         } catch (e) {
-            showToast('Lỗi gửi yêu cầu', 'error');
+            showToast('Lỗi gửi yêu cầu lập hợp đồng', 'error');
         }
     }
 
@@ -2447,78 +5372,186 @@ const KtxApp = (function () {
         }
     }
 
+    function buildContractA4Html(c, studentDetail) {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+
+        const studentClass = studentDetail?.className ? escapeHtml(studentDetail.className) : '—';
+        const studentCccd = studentDetail?.cccd ? escapeHtml(studentDetail.cccd) : '—';
+        const studentPhone = studentDetail?.phone ? escapeHtml(studentDetail.phone) : '—';
+        const studentHometown = studentDetail?.hometown ? escapeHtml(studentDetail.hometown) : '—';
+
+        return `
+            <div style="font-family: 'Times New Roman', Times, serif; color: #000000; background: #ffffff; font-size: 11.5pt; line-height: 1.42; page-break-inside: avoid; break-inside: avoid;">
+                <div style="text-align: center; margin-bottom: 10px;">
+                    <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.3px;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                    <div style="font-size: 11.5pt; font-weight: bold; margin-top: 1px;">Độc lập - Tự do - Hạnh phúc</div>
+                    <div style="width: 140px; height: 1px; background: #000000; margin: 3px auto 8px;"></div>
+                    <div style="font-size: 14pt; font-weight: bold; text-transform: uppercase; margin-top: 4px;">HỢP ĐỒNG THUÊ CHỖ Ở NỘI TRÚ KÝ TÚC XÁ</div>
+                    <div style="font-size: 11pt; font-style: italic; margin-top: 2px;">Số: ${escapeHtml(c.contractNumber)}/HĐ-KTX</div>
+                </div>
+
+                <p style="margin: 0 0 8px; text-align: justify; text-indent: 22px;">
+                    Hôm nay, ngày ${day} tháng ${month} năm ${year}, tại Văn phòng Ban Quản lý Ký túc xá Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh, hai bên chúng tôi gồm có:
+                </p>
+
+                <div style="margin-bottom: 7px;">
+                    <p style="margin: 0 0 2px; font-weight: bold;">I. BÊN CHO THUÊ CHỖ Ở NỘI TRÚ (BÊN A): BAN QUẢN LÝ KÝ TÚC XÁ UTC2</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">Đại diện: Ông Nguyễn Văn An &nbsp;—&nbsp; Chức vụ: Trưởng Ban Quản lý Ký túc xá</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">Địa chỉ: Số 450–451 Lê Văn Việt, Phường Tăng Nhơn Phú A, TP. Thủ Đức, TP. Hồ Chí Minh</p>
+                    <p style="margin: 0; padding-left: 14px;">Điện thoại liên hệ: (028) 3896 6780</p>
+                </div>
+
+                <div style="margin-bottom: 7px;">
+                    <p style="margin: 0 0 2px; font-weight: bold;">II. BÊN THUÊ CHỖ Ở NỘI TRÚ (BÊN B): SINH VIÊN</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">Họ và tên sinh viên: <strong>${escapeHtml(c.studentName)}</strong> &nbsp;—&nbsp; Giới tính: ${escapeHtml(c.gender || '—')}</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">Mã số sinh viên: <strong>${escapeHtml(c.mssv)}</strong> &nbsp;—&nbsp; Lớp: ${studentClass}</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">Số CCCD: ${studentCccd} &nbsp;—&nbsp; Điện thoại: ${studentPhone}</p>
+                    <p style="margin: 0; padding-left: 14px;">Địa chỉ thường trú: ${studentHometown}</p>
+                </div>
+
+                <p style="margin: 6px 0 6px; text-align: justify;">
+                    Sau khi thỏa thuận, hai bên thống nhất ký kết Hợp đồng thuê chỗ ở nội trú ký túc xá với các điều khoản cụ thể sau đây:
+                </p>
+
+                <div style="margin-bottom: 7px;">
+                    <p style="margin: 0 0 2px; font-weight: bold;">Điều 1. Vị trí bố trí chỗ ở và thời hạn hợp đồng</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">1. Bên A đồng ý cho Bên B thuê 01 (một) giường tiêu chuẩn tại: <strong>Phòng ${escapeHtml(c.roomNumber)} – Giường ${escapeHtml(c.bedNumber)}</strong> (Tòa <strong>${escapeHtml(c.buildingId)}</strong>).</p>
+                    <p style="margin: 0; padding-left: 14px;">2. Thời hạn thuê chỗ ở: Từ ngày <strong>${escapeHtml(c.startDate)}</strong> đến hết ngày <strong>${escapeHtml(c.endDate)}</strong>.</p>
+                </div>
+
+                <div style="margin-bottom: 7px;">
+                    <p style="margin: 0 0 2px; font-weight: bold;">Điều 2. Giá thuê chỗ ở, tiền đặt cọc và phương thức thanh toán</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">1. Đơn giá tiền phòng hàng tháng: <strong>${formatVND(c.monthlyFee)}/tháng</strong>.</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">2. Tiền đặt cọc giữ chỗ &amp; bảo đảm tài sản: <strong>${formatVND(c.depositAmount)}</strong> (${escapeHtml(c.depositStatus)}).</p>
+                    <p style="margin: 0; padding-left: 14px;">3. Chi phí điện, nước và dịch vụ phát sinh được thanh toán hàng tháng theo đơn giá quy định của Nhà trường.</p>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <p style="margin: 0 0 2px; font-weight: bold;">Điều 3. Cam kết và hiệu lực thi hành</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">1. Hai bên cam kết thực hiện đúng Quy chế công tác sinh viên nội trú và Nội quy Ký túc xá Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh.</p>
+                    <p style="margin: 0; padding-left: 14px;">2. Hợp đồng có hiệu lực kể từ ngày ký và được lập thành 02 (hai) bản có giá trị pháp lý như nhau, mỗi bên giữ 01 (một) bản để thực hiện.</p>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; text-align: center; margin-top: 14px; page-break-inside: avoid; break-inside: avoid;">
+                    <div>
+                        <div style="font-weight: bold; text-transform: uppercase;">ĐẠI DIỆN BÊN B</div>
+                        <div style="font-size: 10.5pt; font-style: italic;">(Ký và ghi rõ họ tên)</div>
+                        <div style="height: 44px;"></div>
+                        <div style="font-weight: bold;">${escapeHtml(c.studentName)}</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: bold; text-transform: uppercase;">ĐẠI DIỆN BÊN A</div>
+                        <div style="font-size: 10.5pt; font-style: italic;">(Ký tên và đóng dấu)</div>
+                        <div style="height: 44px;"></div>
+                        <div style="font-weight: bold;">Nguyễn Văn An</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function printContractDocument() {
+        const sheetEl = document.getElementById('contractPrintSheet');
+        if (!sheetEl) {
+            window.print();
+            return;
+        }
+
+        let printFrame = document.getElementById('ktxContractPrintFrame');
+        if (printFrame) printFrame.remove();
+
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'ktxContractPrintFrame';
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+        printFrame.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(printFrame);
+
+        const doc = printFrame.contentDocument || printFrame.contentWindow?.document;
+        if (!doc) {
+            window.print();
+            return;
+        }
+
+        doc.open();
+        doc.write(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<title>Hợp đồng nội trú KTX UTC2</title>
+<style>
+@page { size: A4 portrait; margin: 12mm 16mm; }
+html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-break-after: avoid; break-after: avoid; }
+</style>
+</head>
+<body>${sheetEl.innerHTML}</body>
+</html>`);
+        doc.close();
+
+        setTimeout(() => {
+            try {
+                printFrame.contentWindow.focus();
+                printFrame.contentWindow.print();
+            } catch (err) {
+                window.print();
+            }
+        }, 120);
+    }
+
     async function openPrintModal(contractNumber) {
         try {
-            const res = await fetch(`/api/hopdong/${contractNumber}`);
+            const res = await fetch(`/api/hopdong/${encodeURIComponent(contractNumber)}`);
             const json = await res.json();
-            if (!json.success || !json.data) return;
+            if (!json.success || !json.data) {
+                showToast('Không tìm thấy thông tin hợp đồng.', 'error');
+                return;
+            }
             const c = json.data;
+
+            let studentDetail = (state.students || []).find(s => s.mssv === c.mssv) || null;
+            if (!studentDetail && c.mssv) {
+                try {
+                    const sRes = await fetch(`/api/sinhvien/${encodeURIComponent(c.mssv)}`);
+                    const sJson = await sRes.json().catch(() => null);
+                    if (sRes.ok && sJson?.success && sJson.data) studentDetail = sJson.data;
+                } catch (_) {}
+            }
 
             const container = document.getElementById('modalsContainer');
             if (!container) return;
 
+            document.body.classList.add('ktx-printing-contract');
             container.innerHTML = `
-                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-                    <div class="w-full max-w-2xl bg-white text-slate-900 rounded-2xl p-7 shadow-2xl border border-slate-300 max-h-[90vh] overflow-y-auto animate-fade-in">
-                        <div class="flex justify-between items-start pb-4 border-b border-slate-200">
-                            <div class="text-center w-full">
-                                <h4 class="text-xs uppercase font-bold tracking-wider text-slate-600">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</h4>
-                                <p class="text-[11px] font-semibold text-slate-600">Độc lập - Tự do - Hạnh phúc</p>
-                                <div class="w-24 h-0.5 bg-slate-300 mx-auto my-1.5"></div>
-                                <h2 class="text-base font-bold text-[#0B2A5B] mt-2 uppercase">HỢP ĐỒNG THUÊ CHỖ Ở NỘI TRÚ KÝ TÚC XÁ</h2>
-                                <p class="text-xs text-slate-500 font-mono mt-0.5">Số: ${c.contractNumber}/HĐ-KTX</p>
-                            </div>
-                            <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-700">
-                                <span class="material-symbols-outlined text-[20px]">close</span>
-                            </button>
+                <div id="contractPrintModalShell" class="fixed inset-0 z-50 flex flex-col items-center justify-start p-4 md:p-6 bg-black/65 backdrop-blur-xs overflow-y-auto animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
+                    <div class="no-print w-full max-w-[210mm] shrink-0 flex items-center justify-between gap-3 mb-3 px-4 py-3 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-lg" onclick="event.stopPropagation()">
+                        <div class="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                            <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">description</span>
+                            <span>Xem trước văn bản hợp đồng (Khổ A4) · ${escapeHtml(c.contractNumber)}</span>
                         </div>
-
-                        <div class="py-4 space-y-3.5 text-xs text-slate-700 leading-relaxed">
-                            <p>Hôm nay, ngày ký hợp đồng tại Văn phòng Ban Quản lý KTX Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh, chúng tôi gồm có:</p>
-                            
-                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                                <p><strong>BÊN CHO THUÊ (BÊN A):</strong> BAN QUẢN LÝ KÝ TÚC XÁ UTC2</p>
-                                <p>Đại diện: Ông Nguyễn Văn An - Chức vụ: Trưởng Ban Quản lý KTX</p>
-                                <p>Địa chỉ: Số 450-451 Lê Văn Việt, Phường Tăng Nhơn Phú A, TP. Thủ Đức, TP.HCM</p>
-                            </div>
-
-                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                                <p><strong>BÊN THUÊ (BÊN B):</strong> ${c.studentName}</p>
-                                <p>Mã số sinh viên: ${c.mssv}</p>
-                                <p>Vị trí bố trí: <strong>Phòng ${c.roomNumber} - Giường ${c.bedNumber}</strong> (Tòa ${c.buildingId})</p>
-                                <p>Thời hạn thuê: Từ ngày <strong>${c.startDate}</strong> đến hết ngày <strong>${c.endDate}</strong></p>
-                                <p>Đơn giá tiền phòng: <strong>${formatVND(c.monthlyFee)}/tháng</strong></p>
-                                <p>Tiền cọc thế chân: <strong>${formatVND(c.depositAmount)}</strong> (Tình trạng: ${c.depositStatus})</p>
-                            </div>
-
-                            <p class="italic text-slate-600 text-[11px]">Hai bên cam kết thực hiện đúng nội quy nội trú của nhà trường. Hợp đồng được lập thành 02 bản có giá trị pháp lý như nhau.</p>
-
-                            <div class="grid grid-cols-2 pt-6 text-center">
-                                <div>
-                                    <p class="font-bold text-xs uppercase">ĐẠI DIỆN BÊN B</p>
-                                    <p class="text-[11px] text-slate-500">(Ký và ghi rõ họ tên)</p>
-                                    <div class="h-16 flex items-end justify-center font-semibold text-slate-800">${c.studentName}</div>
-                                </div>
-                                <div>
-                                    <p class="font-bold text-xs uppercase">ĐẠI DIỆN BÊN A</p>
-                                    <p class="text-[11px] text-slate-500">(Ký tên và đóng dấu)</p>
-                                    <div class="h-16 flex items-end justify-center font-semibold text-[#0B2A5B]">Nguyễn Văn An</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end gap-2.5 pt-4 border-t border-slate-200">
-                            <button onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold hover:bg-slate-100">Đóng</button>
-                            <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-xs font-semibold flex items-center gap-1.5">
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">Đóng</button>
+                            <button type="button" onclick="KtxApp.printContractDocument()" class="px-4 py-1.5 rounded-lg bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold flex items-center gap-1.5 shadow-2xs">
                                 <span class="material-symbols-outlined text-[16px]">print</span>
                                 <span>In văn bản hợp đồng</span>
                             </button>
                         </div>
                     </div>
+
+                    <div id="contractPrintSheet" onclick="event.stopPropagation()" class="w-full max-w-[210mm] h-auto bg-white text-black px-10 py-8 mb-6 shrink-0 shadow-2xl border border-slate-200">
+                        ${buildContractA4Html(c, studentDetail)}
+                    </div>
                 </div>
             `;
         } catch (e) {
             console.error(e);
+            showToast('Không tải được bản in hợp đồng.', 'error');
         }
     }
 
@@ -2602,18 +5635,124 @@ const KtxApp = (function () {
         }
     }
 
+    function closeAdmissionsActionMenus() {
+        closeActionMenusByAttr('[data-admissions-menu="true"]');
+    }
+
+    function toggleAdmissionsActionMenu(appId, event) {
+        if (event) event.stopPropagation();
+        closeContractsActionMenus();
+        closeStudentsActionMenus();
+        const menu = document.getElementById(`admissions-action-menu-${appId}`);
+        if (!menu) return;
+        const wasHidden = menu.classList.contains('hidden');
+        closeAdmissionsActionMenus();
+        if (!wasHidden) return;
+
+        const trigger = event?.currentTarget || menu.parentElement?.querySelector(`button[aria-controls="admissions-action-menu-${appId}"]`);
+        menu.classList.remove('hidden');
+        positionFloatingActionMenu(menu, trigger, 192, 130);
+    }
+
     function inspectCandidate(appId) {
         const app = (state.applications || []).find(a => a.id === appId);
         if (!app) return;
-        showToast(`Hồ sơ ứng viên: ${app.studentName} (${app.priorityCategory})`, 'info');
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+
+        const safeAppId = escapeHtml(String(app.id ?? ''));
+        const safeStudentName = escapeHtml(String(app.studentName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        const isPending = app.status === 'Chờ duyệt';
+        const isRejected = app.status === 'Bị từ chối';
+        const statusBadgeClass = app.status === 'Đã duyệt'
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60'
+            : (isPending
+                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60'
+                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60');
+        const classCohort = [
+            app.className && app.className !== '—' ? app.className : '',
+            app.intakeYear ? `Khóa ${app.intakeYear}` : (app.cohort && app.cohort !== '—' ? app.cohort : '')
+        ].filter(Boolean).join(' · ') || '—';
+        const feeText = app.monthlyFee != null ? `${formatVND(app.monthlyFee)} / tháng` : '—';
+        const rejectionText = app.rejectionReason || (isRejected ? (app.note || 'Chưa cập nhật lý do') : '');
+
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
+                <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F1A]">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-12 h-12 rounded-full ring-2 ring-[#0B2A5B]/20 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-lg font-bold shrink-0">${getUserInitial(app.studentName)}</span>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="text-base font-bold text-slate-900 dark:text-white truncate">${escapeHtml(app.studentName)}</h3>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${statusBadgeClass}">${escapeHtml(app.status)}</span>
+                                </div>
+                                <p class="text-xs text-slate-500 font-mono mt-0.5">${escapeHtml(app.applicationCode)} · MSSV: ${escapeHtml(app.mssv || '—')}</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="KtxApp.closeModal()" aria-label="Đóng chi tiết hồ sơ" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+
+                    <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-slate-700 dark:text-slate-300">
+                        ${isRejected ? `
+                            <div class="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 space-y-1">
+                                <div class="font-bold flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[16px]">cancel</span>
+                                    <span>Lý do từ chối hồ sơ</span>
+                                </div>
+                                <p class="leading-relaxed">${escapeHtml(rejectionText)}</p>
+                            </div>
+                        ` : ''}
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2.5">
+                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Thông tin sinh viên</h4>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Giới tính:</span><span class="font-semibold text-right">${escapeHtml(app.gender || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Ngày sinh:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.dateOfBirth || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Số CCCD:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.cccd || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Lớp / Khóa:</span><span class="font-semibold text-right">${escapeHtml(classCohort)}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Khoa / Ngành:</span><span class="font-semibold text-right">${escapeHtml(app.major || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Điện thoại:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.phone || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Email:</span><span class="font-semibold text-right break-all">${escapeHtml(app.email || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Thường trú:</span><span class="font-semibold text-right">${escapeHtml(app.hometown || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Diện ưu tiên:</span><span class="font-semibold text-[#1d4ed8] dark:text-blue-400 text-right">${escapeHtml(app.priorityCategory || 'Không')}</span></div>
+                            </div>
+
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2.5">
+                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Chi tiết đơn đăng ký</h4>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Mã hồ sơ:</span><span class="font-mono font-bold text-slate-900 dark:text-white text-right">${escapeHtml(app.applicationCode)}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Đợt đăng ký:</span><span class="font-semibold text-right">${escapeHtml(app.roundName || app.roundCode || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Nguyện vọng phòng:</span><span class="font-semibold text-[#0B2A5B] dark:text-blue-400 text-right">${escapeHtml(app.roomPreference || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Tòa nhà:</span><span class="font-semibold text-right">${escapeHtml(app.buildingName || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Đơn giá dự kiến:</span><span class="font-semibold text-right">${escapeHtml(feeText)}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Thời gian nộp:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.submittedAt || '—')}</span></div>
+                                ${app.approvedAt ? `<div class="flex justify-between gap-3"><span class="text-slate-400">Ngày xử lý:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.approvedAt)}</span></div>` : ''}
+                                ${app.approvedBy ? `<div class="flex justify-between gap-3"><span class="text-slate-400">Người xử lý:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.approvedBy)}</span></div>` : ''}
+                                ${app.note && !isRejected ? `<div class="pt-1 border-t border-slate-200/70 dark:border-slate-700/60"><span class="text-slate-400 block mb-0.5">Ghi chú hồ sơ:</span><p class="font-medium text-slate-700 dark:text-slate-200">${escapeHtml(app.note)}</p></div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0B0F1A]">
+                        <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50">Đóng</button>
+                        ${isPending ? `
+                            <button type="button" onclick="KtxApp.rejectApp('${safeAppId}', '${safeStudentName}')" class="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 font-semibold text-xs transition-colors">Từ chối đơn</button>
+                            <button type="button" onclick="KtxApp.closeModal(); KtxApp.approveApp('${safeAppId}', '${safeStudentName}')" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-xs transition-colors">Duyệt hồ sơ</button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     async function approveApp(appId, studentName) {
         try {
-            const res = await fetch(`/api/dondangky/${appId}/approve`, { method: 'POST' });
+            const res = await fetch(`/api/dondangky/${encodeURIComponent(appId)}/approve`, { method: 'POST' });
             const json = await res.json();
             if (json.success) {
-                showToast(`Đã duyệt 1-chạm: ${studentName}! Đã tự động tạo hợp đồng giữ chỗ 24h.`, 'success');
+                showToast(`Đã duyệt: ${studentName}! Đã tự động tạo hợp đồng giữ chỗ 24h.`, 'success');
                 await loadApplications();
                 if (state.currentTab === 'don-dang-ky') renderActiveView();
             } else {
@@ -2624,44 +5763,287 @@ const KtxApp = (function () {
         }
     }
 
-    async function rejectApp(appId, studentName) {
+    function rejectApp(appId, studentName) {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        const app = (state.applications || []).find(a => a.id === appId);
+        const displayName = studentName || app?.studentName || 'sinh viên';
+        const displayCode = app?.applicationCode || `#${appId}`;
+        const safeAppId = escapeHtml(String(appId ?? ''));
+        const quickReasons = [
+            'Không thuộc diện ưu tiên xét duyệt trong đợt này',
+            'Phòng đăng ký đã hết chỉ tiêu giường trống',
+            'Thông tin hồ sơ hoặc minh chứng chưa đầy đủ'
+        ];
+
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
+                <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-[18px]">block</span>
+                            </span>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Từ chối đơn đăng ký</h3>
+                        </div>
+                        <button type="button" onclick="KtxApp.closeModal()" aria-label="Đóng hộp thoại" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxApp.submitRejectApp('${safeAppId}');" class="space-y-4 pt-4 text-xs">
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            Bạn đang thao tác từ chối hồ sơ <strong class="font-mono text-slate-900 dark:text-white">${escapeHtml(displayCode)}</strong> của sinh viên <strong class="text-slate-900 dark:text-white">${escapeHtml(displayName)}</strong>. Lý do sẽ được gửi trực tiếp cho sinh viên.
+                        </p>
+                        <div>
+                            <label for="rejectReasonInput" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Lý do từ chối <span class="text-red-500">*</span></label>
+                            <textarea id="rejectReasonInput" required rows="3" maxlength="255" placeholder="Nhập lý do từ chối cụ thể..." class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500/30"></textarea>
+                            <p id="rejectReasonError" class="hidden text-[11px] text-red-600 font-medium mt-1">Vui lòng nhập lý do từ chối trước khi xác nhận.</p>
+                        </div>
+                        <div class="space-y-1.5">
+                            <span class="text-[11px] text-slate-400 block">Gợi ý lý do nhanh:</span>
+                            <div class="flex flex-wrap gap-1.5">
+                                ${quickReasons.map(r => `
+                                    <button type="button" onclick="document.getElementById('rejectReasonInput').value = '${escapeHtml(r)}'; document.getElementById('rejectReasonError')?.classList.add('hidden');" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] text-slate-700 dark:text-slate-300 transition-colors text-left">${escapeHtml(r)}</button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-xs">Xác nhận từ chối</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        setTimeout(() => document.getElementById('rejectReasonInput')?.focus(), 50);
+    }
+
+    async function submitRejectApp(appId) {
+        const input = document.getElementById('rejectReasonInput');
+        const err = document.getElementById('rejectReasonError');
+        const reason = (input?.value || '').trim();
+        if (!reason) {
+            err?.classList.remove('hidden');
+            input?.focus();
+            return;
+        }
+        err?.classList.add('hidden');
+
         try {
-            const res = await fetch(`/api/dondangky/${appId}/reject`, { method: 'POST' });
-            const json = await res.json();
-            if (json.success) {
-                showToast(`Đã từ chối đơn đăng ký của ${studentName}`, 'error');
+            const res = await fetch(`/api/dondangky/${encodeURIComponent(appId)}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationId: appId, reason })
+            });
+            const json = await res.json().catch(() => ({}));
+            if (res.ok && json.success) {
+                closeModal();
+                showToast(json.message || 'Đã từ chối đơn đăng ký.', 'success');
                 await loadApplications();
                 if (state.currentTab === 'don-dang-ky') renderActiveView();
+            } else {
+                showToast(json?.message || 'Không thể từ chối hồ sơ.', 'error');
             }
         } catch (e) {
             showToast('Lỗi từ chối hồ sơ', 'error');
         }
     }
 
-    async function renewContract(contractNumber) {
+    function closeActionMenusByAttr(selector) {
+        document.querySelectorAll(selector).forEach(menu => {
+            menu.classList.add('hidden');
+            const trigger = menu.parentElement?.querySelector(`button[aria-controls="${menu.id}"]`);
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    function positionFloatingActionMenu(menu, trigger, fallbackWidth, fallbackHeight) {
+        if (!menu || !trigger) return;
+        trigger.setAttribute('aria-expanded', 'true');
+        const rect = trigger.getBoundingClientRect();
+        const menuWidth = menu.offsetWidth || fallbackWidth || 208;
+        const menuHeight = menu.offsetHeight || fallbackHeight || 120;
+        const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8);
+        const fitsBelow = rect.bottom + 6 + menuHeight <= window.innerHeight - 8;
+        const top = fitsBelow
+            ? rect.bottom + 6
+            : Math.max(8, rect.top - menuHeight - 6);
+        menu.style.left = `${Math.round(left)}px`;
+        menu.style.top = `${Math.round(top)}px`;
+    }
+
+    function closeContractsActionMenus() {
+        closeActionMenusByAttr('[data-contracts-menu="true"]');
+    }
+
+    function toggleContractsActionMenu(contractId, event) {
+        if (event) event.stopPropagation();
+        closeAdmissionsActionMenus();
+        closeStudentsActionMenus();
+        const menu = document.getElementById(`contracts-action-menu-${contractId}`);
+        if (!menu) return;
+        const wasHidden = menu.classList.contains('hidden');
+        closeContractsActionMenus();
+        if (!wasHidden) return;
+
+        const trigger = event?.currentTarget || menu.parentElement?.querySelector(`button[aria-controls="contracts-action-menu-${contractId}"]`);
+        menu.classList.remove('hidden');
+        positionFloatingActionMenu(menu, trigger, 208, 160);
+    }
+
+    function closeStudentsActionMenus() {
+        closeActionMenusByAttr('[data-students-menu="true"]');
+    }
+
+    function toggleStudentsActionMenu(mssv, event) {
+        if (event) event.stopPropagation();
+        closeAdmissionsActionMenus();
+        closeContractsActionMenus();
+        const menu = document.getElementById(`students-action-menu-${mssv}`);
+        if (!menu) return;
+        const wasHidden = menu.classList.contains('hidden');
+        closeStudentsActionMenus();
+        if (!wasHidden) return;
+
+        const trigger = event?.currentTarget || menu.parentElement?.querySelector(`button[aria-controls="students-action-menu-${mssv}"]`);
+        menu.classList.remove('hidden');
+        positionFloatingActionMenu(menu, trigger, 208, 96);
+    }
+
+    function addMonthsToVnDate(ddmmyyyy, monthsToAdd) {
+        const parts = String(ddmmyyyy || '').split('/');
+        if (parts.length !== 3) return ddmmyyyy || '—';
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) return ddmmyyyy;
+        const dt = new Date(year, month + Number(monthsToAdd || 0), day);
+        const targetMonth = (month + Number(monthsToAdd || 0)) % 12;
+        if (dt.getMonth() !== (targetMonth < 0 ? targetMonth + 12 : targetMonth)) {
+            dt.setDate(0);
+        }
+        return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+    }
+
+    async function findContractForAction(contractNumber) {
+        let c = (state.contracts || []).find(item => item.contractNumber === contractNumber || item.id === contractNumber);
+        if (!c) {
+            try {
+                const res = await fetch(`/api/hopdong/${encodeURIComponent(contractNumber)}`);
+                const json = await res.json().catch(() => null);
+                if (res.ok && json?.success && json.data) c = json.data;
+            } catch (_) {}
+        }
+        return c || null;
+    }
+
+    async function openRenewContractModal(contractNumber) {
+        const c = await findContractForAction(contractNumber);
+        if (!c) {
+            showToast('Không tìm thấy thông tin hợp đồng.', 'error');
+            return;
+        }
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+
+        const safeContractJs = escapeHtml(String(c.contractNumber || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        const safeEndJs = escapeHtml(String(c.endDate || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        const defaultMonths = 5;
+        const previewDate = addMonthsToVnDate(c.endDate, defaultMonths);
+
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
+                <div class="w-full max-w-md bg-white dark:bg-[#121826] rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B]" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">update</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Gia hạn hợp đồng</h3>
+                                <p class="text-[11px] font-mono text-slate-500 mt-0.5">Mã HĐ: ${escapeHtml(c.contractNumber)}</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="KtxApp.closeModal()" aria-label="Đóng" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+
+                    <form onsubmit="event.preventDefault(); KtxApp.submitRenewContract('${safeContractJs}');" class="py-4 space-y-4 text-xs">
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] space-y-1">
+                            <div class="font-bold text-slate-900 dark:text-white">${escapeHtml(c.studentName)} <span class="font-mono font-normal text-slate-500">(${escapeHtml(c.mssv)})</span></div>
+                            <div class="text-slate-600 dark:text-slate-300">Phòng <strong>${escapeHtml(c.roomNumber)}</strong> · Giường <strong>${escapeHtml(c.bedNumber)}</strong> (Tòa ${escapeHtml(c.buildingId)})</div>
+                            <div class="text-slate-500">Thời hạn hiện tại: <strong class="text-slate-800 dark:text-slate-200">${escapeHtml(c.startDate)} → ${escapeHtml(c.endDate)}</strong></div>
+                        </div>
+
+                        <div>
+                            <label for="renewMonthsSelect" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Thời gian gia hạn thêm</label>
+                            <select id="renewMonthsSelect" onchange="KtxApp.updateRenewEndPreview('${safeEndJs}', this.value)" class="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer">
+                                <option value="1">1 tháng</option>
+                                <option value="3">3 tháng</option>
+                                <option value="5" selected>5 tháng (1 học kỳ)</option>
+                                <option value="6">6 tháng</option>
+                                <option value="9">9 tháng</option>
+                                <option value="12">12 tháng</option>
+                            </select>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/50 flex items-center justify-between">
+                            <span class="text-slate-600 dark:text-slate-300 font-medium">Ngày kết thúc mới dự kiến:</span>
+                            <span id="renewEndDatePreview" class="font-mono font-bold text-sm text-[#0B2A5B] dark:text-blue-400">${escapeHtml(previewDate)}</span>
+                        </div>
+
+                        <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100">Hủy</button>
+                            <button type="submit" class="px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">check</span>
+                                <span>Xác nhận gia hạn</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    function updateRenewEndPreview(currentEndStr, months) {
+        const previewEl = document.getElementById('renewEndDatePreview');
+        if (!previewEl) return;
+        previewEl.textContent = addMonthsToVnDate(currentEndStr, months);
+    }
+
+    async function submitRenewContract(contractNumber) {
+        const monthsSelect = document.getElementById('renewMonthsSelect');
+        const months = parseInt(monthsSelect?.value || '5', 10) || 5;
         try {
-            const res = await fetch(`/api/hopdong/${contractNumber}/renew?months=5`, { method: 'POST' });
-            const json = await res.json();
-            if (json.success) {
-                showToast(`Gia hạn hợp đồng ${contractNumber} thêm 5 tháng thành công!`, 'success');
-                await loadContracts();
-                if (state.currentTab === 'hop-dong') renderActiveView();
+            const res = await fetch(`/api/hopdong/${encodeURIComponent(contractNumber)}/renew?months=${months}`, { method: 'POST' });
+            const json = await res.json().catch(() => ({}));
+            if (res.ok && json.success) {
+                showToast(json.message || `Gia hạn hợp đồng ${contractNumber} thêm ${months} tháng thành công!`, 'success');
+                closeModal();
+                await Promise.all([loadContracts(), loadRooms(), loadDashboard()]);
+                if (['hop-dong', 'dashboard', 'phong-va-giuong'].includes(state.currentTab)) renderActiveView();
+            } else {
+                showToast(json?.message || 'Không thể gia hạn hợp đồng này (có thể hợp đồng không ở trạng thái hiệu lực hoặc trùng lịch giường).', 'error');
             }
         } catch (e) {
-            showToast('Lỗi gia hạn', 'error');
+            showToast('Lỗi kết nối khi gia hạn hợp đồng.', 'error');
         }
+    }
+
+    async function renewContract(contractNumber) {
+        return openRenewContractModal(contractNumber);
     }
 
     async function checkInContract(contractNumber) {
         if (!confirm(`Xác nhận sinh viên đã đến nhận phòng thực tế cho hợp đồng ${contractNumber}?`)) return;
         try {
-            const res = await fetch(`/api/hopdong/${contractNumber}/check-in`, {
+            const res = await fetch(`/api/hopdong/${encodeURIComponent(contractNumber)}/check-in`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
             });
-            const json = await res.json();
-            if (json.success) {
+            const json = await res.json().catch(() => ({}));
+            if (res.ok && json.success) {
                 showToast(json.message || 'Ghi nhận nhận phòng thành công!', 'success');
                 await loadContracts();
                 if (state.currentTab === 'hop-dong') renderActiveView();
@@ -2673,23 +6055,111 @@ const KtxApp = (function () {
         }
     }
 
-    async function liquidateContract(contractNumber) {
-        if (!confirm(`Bạn có chắc chắn muốn thanh lý và hoàn cọc cho hợp đồng ${contractNumber}?`)) return;
+    async function openLiquidateContractModal(contractNumber) {
+        const c = await findContractForAction(contractNumber);
+        if (!c) {
+            showToast('Không tìm thấy thông tin hợp đồng.', 'error');
+            return;
+        }
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+
+        const safeContractJs = escapeHtml(String(c.contractNumber || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        const quickReasons = [
+            'Tất toán đúng hạn cuối kỳ và bàn giao phòng',
+            'Sinh viên xin ra ký túc xá trước thời hạn',
+            'Sinh viên tốt nghiệp / chuyển cơ sở học tập'
+        ];
+
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
+                <div class="w-full max-w-md bg-white dark:bg-[#121826] rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B]" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-red-600">assignment_turned_in</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Thanh lý hợp đồng</h3>
+                                <p class="text-[11px] font-mono text-slate-500 mt-0.5">Mã HĐ: ${escapeHtml(c.contractNumber)}</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="KtxApp.closeModal()" aria-label="Đóng" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+
+                    <form onsubmit="event.preventDefault(); KtxApp.submitLiquidateContract('${safeContractJs}');" class="py-4 space-y-4 text-xs">
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] space-y-1">
+                            <div class="font-bold text-slate-900 dark:text-white">${escapeHtml(c.studentName)} <span class="font-mono font-normal text-slate-500">(${escapeHtml(c.mssv)})</span></div>
+                            <div class="text-slate-600 dark:text-slate-300">Phòng <strong>${escapeHtml(c.roomNumber)}</strong> · Giường <strong>${escapeHtml(c.bedNumber)}</strong> (Tòa ${escapeHtml(c.buildingId)})</div>
+                            <div class="flex items-center justify-between pt-1.5 mt-1.5 border-t border-slate-200/70 dark:border-slate-800">
+                                <span class="text-slate-500">Tiền cọc hoàn trả:</span>
+                                <span class="font-mono font-bold text-emerald-700 dark:text-emerald-400">${formatVND(c.depositAmount)}</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="liquidateReasonInput" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Lý do thanh lý &amp; trả phòng <span class="text-red-500">*</span></label>
+                            <textarea id="liquidateReasonInput" rows="3" required placeholder="Nhập lý do thanh lý hợp đồng và hoàn trả tiền cọc..." class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500/30">Tất toán đúng hạn cuối kỳ và bàn giao phòng</textarea>
+                            <div class="flex flex-wrap gap-1.5 mt-2">
+                                ${quickReasons.map(r => `<button type="button" onclick="KtxApp.setLiquidateReasonPreset(this.dataset.reason)" data-reason="${escapeHtml(r)}" class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] text-slate-600 dark:text-slate-300 transition-colors">${escapeHtml(r)}</button>`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/60 text-[11px] text-amber-800 dark:text-amber-300">
+                            Sau khi thanh lý, giường sẽ được giải phóng về trạng thái trống và gửi thông báo tất toán đến sinh viên.
+                        </div>
+
+                        <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+                            <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100">Hủy</button>
+                            <button type="submit" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-xs flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">assignment_turned_in</span>
+                                <span>Xác nhận thanh lý</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    function setLiquidateReasonPreset(reasonText) {
+        const input = document.getElementById('liquidateReasonInput');
+        if (input) {
+            input.value = reasonText || '';
+            input.focus();
+        }
+    }
+
+    async function submitLiquidateContract(contractNumber) {
+        const reasonInput = document.getElementById('liquidateReasonInput');
+        const reason = (reasonInput?.value || '').trim();
+        if (!reason) {
+            showToast('Vui lòng nhập lý do thanh lý hợp đồng.', 'error');
+            reasonInput?.focus();
+            return;
+        }
         try {
-            const res = await fetch(`/api/hopdong/${contractNumber}/liquidate`, {
+            const res = await fetch(`/api/hopdong/${encodeURIComponent(contractNumber)}/liquidate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reason: 'Tất toán học kỳ và xuất túc xá' })
+                body: JSON.stringify({ reason })
             });
-            const json = await res.json();
-            if (json.success) {
-                showToast(json.message, 'success');
-                await loadContracts();
-                if (state.currentTab === 'hop-dong') renderActiveView();
+            const json = await res.json().catch(() => ({}));
+            if (res.ok && json.success) {
+                showToast(json.message || 'Đã thanh lý hợp đồng và hoàn trả tiền cọc!', 'success');
+                closeModal();
+                await Promise.all([loadContracts(), loadRooms(), loadStudents(), loadDashboard()]);
+                if (['hop-dong', 'dashboard', 'phong-va-giuong', 'sinh-vien'].includes(state.currentTab)) renderActiveView();
+            } else {
+                showToast(json?.message || 'Không thể thanh lý hợp đồng này.', 'error');
             }
         } catch (e) {
-            showToast('Lỗi thanh lý', 'error');
+            showToast('Lỗi kết nối khi thanh lý hợp đồng.', 'error');
         }
+    }
+
+    async function liquidateContract(contractNumber) {
+        return openLiquidateContractModal(contractNumber);
     }
 
     async function actionTask(taskId, taskType) {
@@ -2704,6 +6174,7 @@ const KtxApp = (function () {
     }
 
     function closeModal() {
+        document.body.classList.remove('ktx-printing-contract');
         const container = document.getElementById('modalsContainer');
         if (container) container.innerHTML = '';
     }
@@ -2729,45 +6200,40 @@ const KtxApp = (function () {
     }
 
     async function openCreateRoundModal() {
-        if (!state.selectedAcademicYear) {
-            showToast('Vui lòng chọn năm học trước khi tạo đợt đăng ký.', 'error');
-            return;
-        }
         const container = document.getElementById('modalsContainer');
         if (!container) return;
-        let sems = [];
+        let yearsList = [];
         try {
-            const res = await fetch('/api/namhoc');
-            const years = await res.json();
-            (years || []).filter(y => (y.maNamHoc || y.MaNamHoc) === state.selectedAcademicYear).forEach(y => {
-                (y.kyHocs || y.KyHocs || []).forEach(k => {
-                    sems.push({ code: k.maKyHoc || k.MaKyHoc, name: k.tenKyHoc || k.TenKyHoc });
-                });
-            });
+            yearsList = await fetchAcademicYears();
         } catch (e) {
-            sems = [];
+            yearsList = state.academicYears || [];
         }
         container.innerHTML = `
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
                 <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
                     <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Tạo Đợt Đăng Ký Mới</h3>
-                        <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
+                        <button type="button" onclick="KtxApp.closeModal()" aria-label="Đóng hộp thoại" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
                     </div>
                     <form onsubmit="event.preventDefault(); KtxApp.submitCreateRound();" class="space-y-3.5 pt-4 text-xs">
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mã Đợt *</label>
-                            <input id="roundCode" required type="text" placeholder="VD: DOT_K66_2027" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
+                            <input id="roundCode" required type="text" maxlength="20" placeholder="VD: DOT_K66_2027" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-xs focus:outline-none" />
                         </div>
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tên Đợt *</label>
-                            <input id="roundName" required type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
+                            <input id="roundName" required type="text" maxlength="93" placeholder="VD: Đợt đăng ký KTX năm học 2026-2027" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                         </div>
                         <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Kỳ Học *</label>
-                            <select id="roundSemester" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                <option value="">Chọn kỳ học</option>
-                                ${sems.map(s => `<option value="${s.code}">${s.name} (${s.code})</option>`).join('')}
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Năm Học *</label>
+                            <select id="roundAcademicYear" required class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
+                                <option value="">Chọn năm học</option>
+                                ${(yearsList || []).map(y => {
+                                    const code = getAcademicYearCode(y);
+                                    const clean = code.replace(/^NH/i, '');
+                                    const selected = code === state.selectedAcademicYear ? 'selected' : '';
+                                    return `<option value="${escapeHtml(code)}" ${selected}>Năm học ${escapeHtml(clean)} (${escapeHtml(code)})</option>`;
+                                }).join('')}
                             </select>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
@@ -2780,6 +6246,9 @@ const KtxApp = (function () {
                                 <input id="roundClose" required type="date" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none" />
                             </div>
                         </div>
+                        <div class="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/50 text-[11px] text-slate-600 dark:text-slate-300">
+                            Đợt mới tạo sẽ lưu ở trạng thái <strong>Chưa áp dụng</strong> trong mục <strong>Quản lý đợt đăng ký</strong>. Hãy bấm nút <strong>Áp dụng toàn hệ thống</strong> để công bố chính thức cho sinh viên.
+                        </div>
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                             <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
                             <button type="submit" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold shadow-xs">Tạo Đợt</button>
@@ -2791,20 +6260,178 @@ const KtxApp = (function () {
     }
 
     async function submitCreateRound() {
+        const selectedYear = document.getElementById('roundAcademicYear')?.value || state.selectedAcademicYear;
+        const ngayMo = document.getElementById('roundOpen').value;
+        const ngayDong = document.getElementById('roundClose').value;
+        if (!selectedYear) {
+            showToast('Vui lòng chọn năm học.', 'error');
+            return;
+        }
+        if (ngayDong < ngayMo) {
+            showToast('Ngày đóng phải sau hoặc bằng ngày mở.', 'error');
+            return;
+        }
         const body = {
             maDotDangKy: document.getElementById('roundCode').value.trim(),
             tenDot: document.getElementById('roundName').value.trim(),
-            maKyHoc: document.getElementById('roundSemester').value,
-            ngayMo: document.getElementById('roundOpen').value,
-            ngayDong: document.getElementById('roundClose').value
+            maNamHoc: selectedYear,
+            ngayMo,
+            ngayDong,
+            daPhatHanh: false
         };
-        const res = await fetch('/api/dotdangky-rounds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const res = await fetch(`/api/dotdangky-rounds?academicYear=${encodeURIComponent(selectedYear)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
         const json = await res.json().catch(() => ({}));
-        KtxApp.showToast(res.ok ? 'Đã tạo đợt đăng ký.' : (json?.message || json?.title || 'Tạo đợt thất bại.'), res.ok ? 'success' : 'error');
-        if (res.ok) {
-            KtxApp.closeModal();
-            await loadApplications();
-            if (state.currentTab === 'don-dang-ky') renderActiveView();
+        if (!res.ok) {
+            const msg = typeof json === 'string' ? json : (json?.message || json?.title || 'Tạo đợt thất bại.');
+            showToast(msg, 'error');
+            return;
+        }
+        showToast('Đã tạo đợt đăng ký mới. Vui lòng bấm "Áp dụng toàn hệ thống" để công bố.', 'success');
+        await loadApplications();
+        if (state.currentTab === 'don-dang-ky') renderActiveView();
+        await openManageRoundsModal();
+    }
+
+    async function openManageRoundsModal() {
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        const yearParam = state.selectedAcademicYear
+            ? `?academicYear=${encodeURIComponent(state.selectedAcademicYear)}`
+            : '';
+
+        container.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
+                <div class="w-full max-w-3xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Quản lý đợt đăng ký</h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Năm học: <span class="font-mono font-semibold text-slate-700 dark:text-slate-300">${escapeHtml(state.selectedAcademicYear || 'Tất cả')}</span></p>
+                        </div>
+                        <button type="button" onclick="KtxApp.closeModal()" aria-label="Đóng" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+                    <div id="manageRoundsBody" class="p-6 text-xs text-slate-500">Đang tải danh sách đợt đăng ký...</div>
+                </div>
+            </div>
+        `;
+
+        try {
+            const res = await fetch(`/api/dotdangky-rounds${yearParam}`);
+            const rounds = await res.json().catch(() => []);
+            const bodyEl = document.getElementById('manageRoundsBody');
+            if (!bodyEl) return;
+
+            if (!res.ok) {
+                bodyEl.innerHTML = `<div class="p-4 rounded-xl bg-red-50 text-red-700 text-xs">Không tải được danh sách đợt đăng ký.</div>`;
+                return;
+            }
+
+            if (!Array.isArray(rounds) || rounds.length === 0) {
+                bodyEl.innerHTML = `
+                    <div class="py-10 text-center space-y-2">
+                        <span class="material-symbols-outlined text-[36px] text-slate-300">event_busy</span>
+                        <p class="text-slate-500">Chưa có đợt đăng ký nào trong năm học này.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const fmtDate = (iso) => {
+                if (!iso) return '—';
+                const dt = new Date(iso);
+                if (Number.isNaN(dt.getTime())) return String(iso);
+                return dt.toLocaleDateString('vi-VN');
+            };
+
+            bodyEl.innerHTML = `
+                <div class="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-xl border border-slate-200/80 dark:border-[#232B3B]">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase text-[11px]">
+                                <th class="py-3 px-4 whitespace-nowrap">Mã đợt</th>
+                                <th class="py-3 px-4">Tên đợt & Năm học</th>
+                                <th class="py-3 px-4 whitespace-nowrap">Thời gian</th>
+                                <th class="py-3 px-4 whitespace-nowrap">Trạng thái</th>
+                                <th class="py-3 px-4 text-right whitespace-nowrap">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                            ${rounds.map(r => {
+                                const code = r.maDotDangKy ?? r.MaDotDangKy ?? '';
+                                const name = r.tenDot ?? r.TenDot ?? '';
+                                const namHoc = r.maNamHoc ?? r.MaNamHoc ?? state.selectedAcademicYear ?? '—';
+                                const openDate = fmtDate(r.ngayMo ?? r.NgayMo);
+                                const closeDate = fmtDate(r.ngayDong ?? r.NgayDong);
+                                const isPublished = (r.daPhatHanh ?? r.DaPhatHanh) !== false;
+                                const appCount = r.soDonDangKy ?? r.SoDonDangKy ?? 0;
+                                const safeCode = escapeHtml(String(code).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+
+                                return `
+                                    <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                                        <td class="py-3 px-4 font-mono font-bold text-[#0B2A5B] dark:text-blue-400 whitespace-nowrap">${escapeHtml(code)}</td>
+                                        <td class="py-3 px-4">
+                                            <div class="font-semibold text-slate-900 dark:text-white">${escapeHtml(name)}</div>
+                                            <div class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(namHoc)} · ${appCount} hồ sơ</div>
+                                        </td>
+                                        <td class="py-3 px-4 font-mono text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtml(openDate)} → ${escapeHtml(closeDate)}</td>
+                                        <td class="py-3 px-4 whitespace-nowrap">
+                                            ${isPublished ? `
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60">
+                                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                    <span>Đã áp dụng toàn hệ thống</span>
+                                                </span>
+                                            ` : `
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60">
+                                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                    <span>Chưa áp dụng (Nháp)</span>
+                                                </span>
+                                            `}
+                                        </td>
+                                        <td class="py-3 px-4 text-right whitespace-nowrap">
+                                            ${!isPublished ? `
+                                                <button type="button" onclick="KtxApp.publishRound('${safeCode}')" class="px-3.5 py-1.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-[11px] shadow-2xs inline-flex items-center gap-1 transition-colors">
+                                                    <span class="material-symbols-outlined text-[15px]">campaign</span>
+                                                    <span>Áp dụng toàn hệ thống</span>
+                                                </button>
+                                            ` : `
+                                                <span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                                    <span class="material-symbols-outlined text-[15px]">verified</span>
+                                                    <span>Đang hiệu lực</span>
+                                                </span>
+                                            `}
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } catch (e) {
+            const bodyEl = document.getElementById('manageRoundsBody');
+            if (bodyEl) bodyEl.innerHTML = `<div class="p-4 rounded-xl bg-red-50 text-red-700 text-xs">Lỗi kết nối khi tải danh sách đợt đăng ký.</div>`;
+        }
+    }
+
+    async function publishRound(roundCode) {
+        try {
+            const res = await fetch(`/api/dotdangky-rounds/${encodeURIComponent(roundCode)}/publish`, { method: 'POST' });
+            const json = await res.json().catch(() => ({}));
+            if (res.ok && json.success) {
+                showToast(json.message || 'Đã áp dụng và gửi đợt đăng ký ra toàn hệ thống.', 'success');
+                await openManageRoundsModal();
+                await loadApplications();
+                if (state.currentTab === 'don-dang-ky') renderActiveView();
+            } else {
+                showToast(json?.message || 'Không thể áp dụng đợt đăng ký.', 'error');
+            }
+        } catch (e) {
+            showToast('Lỗi khi gửi đợt đăng ký ra toàn hệ thống.', 'error');
         }
     }
 
@@ -3472,11 +7099,11 @@ const KtxApp = (function () {
             (apps || []).slice(0, 5).forEach(a => items.push({ text: `Đơn đăng ký chờ duyệt: ${a.studentName || a.mssv || a.applicationCode}`, tab: 'don-dang-ky' }));
         } catch (e) {}
         try {
-            const tickets = await fetchApiData('/api/suachua?status=choXuLy');
+            const tickets = await fetchApiData('/api/suachua?status=PENDING');
             (tickets?.data || tickets || []).slice(0, 5).forEach(t => items.push({ text: `Phiếu sửa chữa chờ xử lý: ${t.code || t.id}`, tab: 'suachua' }));
         } catch (e) {}
         try {
-            const invs = await fetchApiData('/api/hoadon?status=chuaThu');
+            const invs = await fetchApiData('/api/hoadon?status=pending');
             (invs?.data || invs || []).slice(0, 5).forEach(i => items.push({ text: `Hóa đơn chưa thu: ${i.code || i.id}`, tab: 'hoadon' }));
         } catch (e) {}
 
@@ -3522,6 +7149,7 @@ const KtxApp = (function () {
         let years = [];
         try {
             years = await fetchAcademicYears();
+            renderAcademicYearOptions();
         } catch (error) {
             showToast(error.message || 'Không tải được danh sách năm học.', 'error');
         }
@@ -3576,7 +7204,10 @@ const KtxApp = (function () {
             const years = await fetchAcademicYears();
             const codes = years.map(getAcademicYearCode);
             let selectedCode = preferredCode || state.selectedAcademicYear;
-            if (!codes.includes(selectedCode)) selectedCode = '';
+            if (!selectedCode || !codes.includes(selectedCode)) {
+                const defaultYear = years.find(y => y.laDangHoat ?? y.LaDangHoat) || years[0];
+                selectedCode = defaultYear ? getAcademicYearCode(defaultYear) : '';
+            }
 
             state.selectedAcademicYear = selectedCode;
             if (selectedCode) localStorage.setItem('ktx_user_selected_academic_year', selectedCode);
@@ -3655,62 +7286,68 @@ const KtxApp = (function () {
         const palette = document.getElementById('commandPaletteContainer');
         if (!palette) return;
 
+        // Preload data in background if not yet loaded so global search has full records
+        if (canAccessMenu('sinh-vien') && (!state.students || !state.students.length)) loadStudents();
+        if (canAccessMenu('hop-dong') && (!state.contracts || !state.contracts.length)) loadContracts();
+        if (canAccessMenu('phong-va-giuong') && (!state.rooms || !state.rooms.length)) loadRooms();
+        if (canAccessMenu('don-dang-ky') && (!state.applications || !state.applications.length)) loadApplications();
+
         palette.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/60 backdrop-blur-xs" onclick="KtxApp.closeSearch()">
                 <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden animate-fade-in" onclick="event.stopPropagation()">
                     <div class="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200 dark:border-[#232B3B]">
                         <span class="material-symbols-outlined text-[20px] text-slate-400">search</span>
-                        <input id="paletteInput" autoFocus type="text" placeholder="Tìm sinh viên, hợp đồng, phòng ốc hoặc gõ lệnh..." class="w-full bg-transparent text-sm text-slate-800 dark:text-white focus:outline-none" oninput="KtxApp.handlePaletteInput(this.value)" />
+                        <input id="paletteInput" autoFocus type="text" placeholder="Tìm sinh viên, hợp đồng, phòng ốc hoặc gõ lệnh... (Nhấn Enter)" class="w-full bg-transparent text-sm text-slate-800 dark:text-white focus:outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.handlePaletteInput(this.value);}" />
                         <kbd onclick="KtxApp.closeSearch()" class="cursor-pointer text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">ESC</kbd>
                     </div>
                     <div id="paletteResults" class="max-h-96 overflow-y-auto p-2 space-y-3">
                         <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lối tắt thao tác nhanh</div>
                         <div class="grid grid-cols-2 gap-1.5">
-                            <button onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="dashboard" onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">dashboard</span>
                                 <span>Về Dashboard Tổng quan</span>
                             </button>
-                            <button onclick="KtxApp.navigate('don-dang-ky'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="don-dang-ky" onclick="KtxApp.navigate('don-dang-ky'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">how_to_reg</span>
                                 <span>Xét duyệt đơn đăng ký</span>
                             </button>
-                            <button onclick="KtxApp.navigate('hop-dong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="hop-dong" onclick="KtxApp.navigate('hop-dong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">edit_document</span>
                                 <span>Quản lý Hợp đồng cư xá</span>
                             </button>
-                            <button onclick="KtxApp.navigate('sinh-vien'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="sinh-vien" onclick="KtxApp.navigate('sinh-vien'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">badge</span>
                                 <span>Hồ sơ Sinh viên</span>
                             </button>
-                            <button onclick="KtxApp.navigate('lop-khoa'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="lop-khoa" onclick="KtxApp.navigate('lop-khoa'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">school</span>
                                 <span>Lớp & Khoa viện</span>
                             </button>
-                            <button onclick="KtxApp.navigate('phong-va-giuong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="phong-va-giuong" onclick="KtxApp.navigate('phong-va-giuong'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">domain</span>
                                 <span>Sơ đồ buồng phòng</span>
                             </button>
-                            <button onclick="KtxApp.navigate('dien-nuoc-dich-vu'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="dien-nuoc-dich-vu" onclick="KtxApp.navigate('dien-nuoc-dich-vu'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">bolt</span>
                                 <span>Điện nước & Dịch vụ</span>
                             </button>
-                            <button onclick="KtxApp.navigate('hoa-don'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="hoa-don" onclick="KtxApp.navigate('hoa-don'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">receipt_long</span>
                                 <span>Hóa đơn & Thu phí</span>
                             </button>
-                            <button onclick="KtxApp.navigate('sua-chua'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="sua-chua" onclick="KtxApp.navigate('sua-chua'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">build</span>
                                 <span>Yêu cầu sửa chữa</span>
                             </button>
-                            <button onclick="KtxApp.navigate('vi-pham'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="vi-pham" onclick="KtxApp.navigate('vi-pham'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">gavel</span>
                                 <span>Vi phạm & Kỷ luật</span>
                             </button>
-                            <button onclick="KtxApp.navigate('nhan-vien-tai-khoan'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="nhan-vien-tai-khoan" onclick="KtxApp.navigate('nhan-vien-tai-khoan'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">manage_accounts</span>
                                 <span>Nhân viên & Tài khoản</span>
                             </button>
-                            <button onclick="KtxApp.navigate('bao-cao'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                            <button data-menu="bao-cao" onclick="KtxApp.navigate('bao-cao'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">bar_chart</span>
                                 <span>Báo cáo thống kê</span>
                             </button>
@@ -3719,6 +7356,11 @@ const KtxApp = (function () {
                 </div>
             </div>
         `;
+
+        // Ẩn lối tắt mà vai trò hiện tại không được phép dùng.
+        palette.querySelectorAll('[data-menu]').forEach(element => {
+            if (!canAccessMenu(element.dataset.menu)) element.remove();
+        });
     }
 
     function closeSearch() {
@@ -3733,30 +7375,43 @@ const KtxApp = (function () {
             results.innerHTML = `
                 <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lối tắt thao tác nhanh</div>
                 <div class="grid grid-cols-2 gap-1.5">
-                    <button onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    <button data-menu="dashboard" onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
                         <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">dashboard</span>
                         <span>Về Dashboard Tổng quan</span>
                     </button>
-                    <button onclick="KtxApp.navigate('sinh-vien'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    <button data-menu="sinh-vien" onclick="KtxApp.navigate('sinh-vien'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
                         <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">badge</span>
                         <span>Tra cứu hồ sơ sinh viên</span>
                     </button>
                 </div>
             `;
+            results.querySelectorAll('[data-menu]').forEach(element => {
+                if (!canAccessMenu(element.dataset.menu)) element.remove();
+            });
             return;
         }
 
-        const q = query.trim().toLowerCase();
-        const matchStudents = (state.students || []).filter(s => s.name.toLowerCase().includes(q) || s.mssv.includes(q)).slice(0, 3);
-        const matchContracts = (state.contracts || []).filter(c => c.contractNumber.toLowerCase().includes(q) || c.studentName.toLowerCase().includes(q)).slice(0, 3);
+        const q = query.trim();
+        const matchStudents = !canAccessMenu('sinh-vien') ? [] : (state.students || [])
+            .filter(s => fuzzyMatch(q, s.name, s.mssv, s.roomNumber, s.className, s.major, s.phone))
+            .slice(0, 4);
+        const matchContracts = !canAccessMenu('hop-dong') ? [] : (state.contracts || [])
+            .filter(c => fuzzyMatch(q, c.contractNumber, c.studentName, c.mssv, c.roomNumber, c.buildingId))
+            .slice(0, 4);
+        const matchApps = !canAccessMenu('don-dang-ky') ? [] : (state.applications || [])
+            .filter(a => fuzzyMatch(q, a.applicationCode, a.studentName, a.mssv, a.priorityCategory, a.roomPreference))
+            .slice(0, 3);
+        const matchRooms = !canAccessMenu('phong-va-giuong') ? [] : (state.rooms || [])
+            .filter(r => fuzzyMatch(q, r.roomNumber, r.buildingId, r.buildingName, `P.${r.roomNumber}`))
+            .slice(0, 3);
 
         results.innerHTML = `
             ${matchStudents.length > 0 ? `
                 <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Sinh viên</div>
                 <div class="space-y-1">
                     ${matchStudents.map(s => `
-                        <div onclick="KtxApp.openStudentModal('${s.mssv}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 flex items-center justify-between cursor-pointer">
-                            <span class="font-semibold text-xs">${s.name} (${s.mssv})</span>
+                        <div onclick="KtxApp.openStudentModal('${s.mssv}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${s.name} (${s.mssv})</span>
                             <span class="text-xs text-slate-400">Phòng ${s.roomNumber}</span>
                         </div>
                     `).join('')}
@@ -3767,55 +7422,144 @@ const KtxApp = (function () {
                 <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-2">Hợp đồng</div>
                 <div class="space-y-1">
                     ${matchContracts.map(c => `
-                        <div onclick="KtxApp.openPrintModal('${c.contractNumber}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 flex items-center justify-between cursor-pointer">
-                            <span class="font-semibold text-xs">${c.contractNumber} - ${c.studentName}</span>
+                        <div onclick="KtxApp.openPrintModal('${c.contractNumber}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${c.contractNumber} - ${c.studentName}</span>
                             <span class="text-xs text-blue-600 font-mono">${c.status}</span>
                         </div>
                     `).join('')}
                 </div>
             ` : ''}
 
-            ${matchStudents.length === 0 && matchContracts.length === 0 ? `
-                <div class="p-6 text-center text-xs text-slate-400">Không tìm thấy kết quả phù hợp với "${query}"</div>
+            ${matchApps.length > 0 ? `
+                <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-2">Đơn đăng ký</div>
+                <div class="space-y-1">
+                    ${matchApps.map(a => `
+                        <div onclick="KtxApp.inspectCandidate('${a.id}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${a.applicationCode} - ${a.studentName}</span>
+                            <span class="text-xs text-slate-500">${a.status}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+
+            ${matchRooms.length > 0 ? `
+                <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-2">Buồng phòng</div>
+                <div class="space-y-1">
+                    ${matchRooms.map(r => `
+                        <div onclick="KtxApp.inspectRoom('${r.id}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">Phòng ${r.roomNumber} (${r.buildingName || r.buildingId})</span>
+                            <span class="text-xs text-emerald-600 font-semibold">${r.occupied}/${r.capacity} chỗ</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+
+            ${matchStudents.length === 0 && matchContracts.length === 0 && matchApps.length === 0 && matchRooms.length === 0 ? `
+                <div class="p-6 text-center text-xs text-slate-400">Không tìm thấy kết quả phù hợp với "${escapeHtml(query)}"</div>
             ` : ''}
         `;
     }
 
-    // Filter updates
-    function setAdmissionsTab(t) { state.admissionsTab = t; renderActiveView(); }
-    function setAdmissionsPriority(p) { state.admissionsPriority = p; renderActiveView(); }
-    function setAdmissionsSearch(s) { state.admissionsSearch = s; renderActiveView(); }
+    // Filter updates (skipFetch = true để phản hồi tức thì và giữ nguyên con trỏ đang gõ)
+    function setAdmissionsTab(t) { state.admissionsTab = t; renderActiveView(false, true); }
+    function setAdmissionsPriority(p) { state.admissionsPriority = p; renderActiveView(false, true); }
+    function setAdmissionsRoomType(rt) { state.admissionsRoomType = rt; renderActiveView(false, true); }
+    function setAdmissionsSearch(s) { state.admissionsSearch = s; renderActiveView(false, true); }
+    function resetAdmissionsFilters() {
+        state.admissionsSearch = '';
+        state.admissionsPriority = '';
+        state.admissionsRoomType = '';
+        state.admissionsTab = 'all';
+        showToast('Đã hủy toàn bộ bộ lọc', 'info');
+        renderActiveView(false, true);
+    }
 
-    function setContractsTab(t) { state.contractsTab = t; renderActiveView(); }
-    function setContractsBuilding(b) { state.contractsBuilding = b; renderActiveView(); }
-    function setContractsSearch(s) { state.contractsSearch = s; renderActiveView(); }
+    function setContractsTab(t) { state.contractsTab = t; renderActiveView(false, true); }
+    function setContractsBuilding(b) {
+        state.contractsBuilding = b;
+        state.contractsRoom = 'all';
+        renderActiveView(false, true);
+    }
+    function setContractsRoom(r) {
+        state.contractsRoom = r;
+        renderActiveView(false, true);
+    }
+    function setContractsSearch(s) { state.contractsSearch = s; renderActiveView(false, true); }
+    function resetContractsFilters() {
+        state.contractsSearch = '';
+        state.contractsBuilding = 'all';
+        state.contractsRoom = 'all';
+        state.contractsTab = 'all';
+        showToast('Đã hủy toàn bộ bộ lọc hợp đồng', 'info');
+        renderActiveView(false, true);
+    }
 
-    function setStudentsCohort(c) { state.studentsCohort = c; renderActiveView(); }
-    function setStudentsMajor(m) { state.studentsMajor = m; renderActiveView(); }
-    function setStudentsSearch(s) { state.studentsSearch = s; renderActiveView(); }
+    function setStudentsTab(t) { state.studentsTab = t; renderActiveView(false, true); }
+    function setStudentsPayment(p) { state.studentsPayment = p; renderActiveView(false, true); }
+    function setStudentsCohort(c) { state.studentsCohort = c; renderActiveView(false, true); }
+    function setStudentsMajor(m) { state.studentsMajor = m; renderActiveView(false, true); }
+    function setStudentsSearch(s) { state.studentsSearch = s; renderActiveView(false, true); }
     function resetStudentsFilters() {
         state.studentsCohort = '';
         state.studentsMajor = '';
+        state.studentsPayment = 'all';
+        state.studentsTab = 'all';
         state.studentsSearch = '';
-        showToast('Đã đặt lại bộ lọc sinh viên', 'info');
-        renderActiveView();
+        showToast('Đã hủy toàn bộ bộ lọc sinh viên', 'info');
+        renderActiveView(false, true);
     }
 
-    function setRoomsViewMode(mode) { state.roomsViewMode = mode; renderActiveView(); }
+    function setRoomsViewMode(mode) { state.roomsViewMode = mode; renderActiveView(false, true); }
     function setRoomsBuilding(building) {
         state.roomsBuilding = building;
-        state.roomsFloor = 'all';
         state.roomsRoomNumber = 'all';
-        renderActiveView();
+        state.roomsRoomDropdownOpen = false;
+        renderActiveView(false, true);
+    }
+    function setRoomsGender(gender) {
+        state.roomsGender = gender;
+        state.roomsRoomNumber = 'all';
+        renderActiveView(false, true);
     }
     function setRoomsFloor(floor) {
         state.roomsFloor = floor;
         state.roomsRoomNumber = 'all';
-        renderActiveView();
+        renderActiveView(false, true);
+    }
+    function toggleRoomsRoomDropdown(e) {
+        if (e) e.stopPropagation();
+        state.roomsRoomDropdownOpen = !state.roomsRoomDropdownOpen;
+        const menu = document.getElementById('roomsRoomDropdownMenu');
+        if (menu) {
+            menu.classList.toggle('hidden', !state.roomsRoomDropdownOpen);
+        }
+    }
+    function selectRoomsRoomNumber(roomNumber) {
+        state.roomsRoomNumber = roomNumber;
+        state.roomsRoomDropdownOpen = false;
+        renderActiveView(false, true);
     }
     function setRoomsRoomNumber(roomNumber) {
         state.roomsRoomNumber = roomNumber;
-        renderActiveView();
+        renderActiveView(false, true);
+    }
+    function setRoomsBedStatus(status) {
+        state.roomsBedStatus = status;
+        renderActiveView(false, true);
+    }
+    function setRoomsSearch(s) {
+        state.roomsSearch = s;
+        renderActiveView(false, true);
+    }
+    function resetRoomsFilters() {
+        state.roomsBuilding = 'all';
+        state.roomsGender = 'all';
+        state.roomsFloor = 'all';
+        state.roomsRoomNumber = 'all';
+        state.roomsBedStatus = 'all';
+        state.roomsSearch = '';
+        showToast('Đã hủy toàn bộ bộ lọc phòng', 'info');
+        renderActiveView(false, true);
     }
 
     async function exportReport(title = 'Báo cáo') {
@@ -3884,7 +7628,32 @@ const KtxApp = (function () {
         } else if (e.key === 'Escape') {
             closeSearch();
             closeModal();
+            closeAdmissionsActionMenus();
+            closeContractsActionMenus();
+            closeStudentsActionMenus();
         }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target?.closest?.('[data-admissions-menu="true"]')) {
+            closeAdmissionsActionMenus();
+        }
+        if (!e.target?.closest?.('[data-contracts-menu="true"]')) {
+            closeContractsActionMenus();
+        }
+        if (!e.target?.closest?.('[data-students-menu="true"]')) {
+            closeStudentsActionMenus();
+        }
+    });
+    window.addEventListener('scroll', () => {
+        closeAdmissionsActionMenus();
+        closeContractsActionMenus();
+        closeStudentsActionMenus();
+    }, true);
+    window.addEventListener('resize', () => {
+        closeAdmissionsActionMenus();
+        closeContractsActionMenus();
+        closeStudentsActionMenus();
     });
 
     // Public API
@@ -3892,9 +7661,10 @@ const KtxApp = (function () {
         init: async function () {
             initTheme();
             await initUser();
-            await loadAcademicYearOptions();
+            if (state.currentUser && state.currentUser.roleCode !== 'sinhVien') {
+                await loadAcademicYearOptions();
+            }
             renderApp(Boolean(state.currentUser));
-            await loadAcademicYearOptions();
         },
         navigate,
         toggleDarkMode,
@@ -3916,6 +7686,8 @@ const KtxApp = (function () {
         submitCreateStudent,
         openCreateRoundModal,
         submitCreateRound,
+        openManageRoundsModal,
+        publishRound,
         changeAcademicYear,
         createAcademicYear,
         showNotificationToast,
@@ -3939,28 +7711,57 @@ const KtxApp = (function () {
         actionTask,
         setAdmissionsTab,
         setAdmissionsPriority,
+        setAdmissionsRoomType,
         setAdmissionsSearch,
+        resetAdmissionsFilters,
+        toggleAdmissionsActionMenu,
+        closeAdmissionsActionMenus,
         inspectCandidate,
         approveApp,
         rejectApp,
+        submitRejectApp,
         setContractsTab,
         setContractsBuilding,
+        setContractsRoom,
         setContractsSearch,
+        resetContractsFilters,
+        toggleContractsActionMenu,
+        closeContractsActionMenus,
         openNewContractModal,
+        onNewContractBedChange,
+        onNewContractSelectionCheck,
         submitNewContract,
         openPrintModal,
+        printContractDocument,
+        openRenewContractModal,
+        updateRenewEndPreview,
+        submitRenewContract,
         renewContract,
+        openLiquidateContractModal,
+        setLiquidateReasonPreset,
+        submitLiquidateContract,
         liquidateContract,
         checkInContract,
+        setStudentsTab,
+        setStudentsPayment,
         setStudentsCohort,
         setStudentsMajor,
         setStudentsSearch,
         resetStudentsFilters,
         openStudentModal,
+        toggleStudentsActionMenu,
+        closeStudentsActionMenus,
         setRoomsViewMode,
         setRoomsBuilding,
+        setRoomsGender,
         setRoomsFloor,
         setRoomsRoomNumber,
+        toggleRoomsRoomDropdown,
+        selectRoomsRoomNumber,
+        setRoomsBedStatus,
+        setRoomsSearch,
+        resetRoomsFilters,
+        setRoomsBedStatus,
         inspectRoom,
         toggleBedMaintenance,
         closeModal,
@@ -3970,12 +7771,41 @@ const KtxApp = (function () {
         getState: () => state,
         escapeHtml,
         formatVND,
+        fuzzyMatch,
+        preserveSearchFocusAndUpdate,
         exportReport,
-        updateStudentBadge
+        updateStudentBadge,
+        onCashFlowPointerMove,
+        onCashFlowPointerLeave,
+        onStudentGroupHover,
+        onStudentGroupLeave,
+        onStudentGroupClick,
+        toggleStudentSeries,
+        onRevenueOverviewPointerMove,
+        onRevenueOverviewPointerLeave,
+        setExpensesPeriod,
+        onExpensesRowHover,
+        onExpensesRowClick,
+        onExpensesRingPointerMove,
+        onExpensesRingPointerLeave,
+        onExpensesRingClick
     };
 })();
+
+// Các file view khác (ktx-extended-views, ktx-student-views) check window.KtxApp
+// để bật toast, escapeHtml, nút duyệt đơn... phải gán vào window thì mới hoạt động.
+window.KtxApp = KtxApp;
 
 // Auto boot on DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
     KtxApp.init();
 });
+// --- XSS/CSV hardening helpers ---
+window.escapeHtml = function (value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+};
+window.escapeCsv = function (value) {
+  const s = String(value ?? '');
+  if (/[",\n\r;]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+};

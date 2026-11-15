@@ -25,6 +25,7 @@ namespace Dormitory.Web.Data
         // 1. Accounts & Staff
         public DbSet<VaiTro> VaiTros => Set<VaiTro>();
         public DbSet<TaiKhoan> TaiKhoans => Set<TaiKhoan>();
+        public DbSet<MaDatLaiMatKhau> MaDatLaiMatKhaus => Set<MaDatLaiMatKhau>();
         public DbSet<NhanVien> NhanViens => Set<NhanVien>();
 
         // 2. Academic & Students

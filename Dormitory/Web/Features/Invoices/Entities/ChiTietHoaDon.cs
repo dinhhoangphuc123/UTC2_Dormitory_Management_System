@@ -36,7 +36,6 @@ namespace Dormitory.Web.Features.Invoices.Entities
         public decimal DonGia { get; set; }
 
         [Column("thanhTien", TypeName = "decimal(14,2)")]
-        [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         public decimal? ThanhTien { get; set; }
 
         [ForeignKey(nameof(MaHoaDon))]

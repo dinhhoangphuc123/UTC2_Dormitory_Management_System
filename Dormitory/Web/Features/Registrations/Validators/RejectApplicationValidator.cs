@@ -8,6 +8,8 @@ namespace Dormitory.Web.Features.Registrations.Validators
         {
             if (string.IsNullOrWhiteSpace(dto.ApplicationId))
                 return (false, "Mã đơn đăng ký không được để trống.");
+            if (string.IsNullOrWhiteSpace(dto.Reason))
+                return (false, "Vui lòng nhập lý do từ chối đơn đăng ký.");
             return (true, null);
         }
     }

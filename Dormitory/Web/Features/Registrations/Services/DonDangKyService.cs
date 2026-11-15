@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Contracts.Entities;
+using Dormitory.Web.Features.Contracts.Services;
 using Dormitory.Web.Features.Invoices.Entities;
 using Dormitory.Web.Features.Registrations.DTOs;
 using Dormitory.Web.Features.Registrations.Entities;
@@ -44,12 +45,17 @@ namespace Dormitory.Web.Features.Registrations.Services
             }
 
             var query = _context.DonDangKys
+                .AsNoTracking()
                 .Where(d => d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)
+                .Include(d => d.DotDangKy)
                 .Include(d => d.SinhVien)
                     .ThenInclude(s => s!.LopHoc)
                 .Include(d => d.LoaiPhong)
                 .Include(d => d.Phong)
                     .ThenInclude(p => p!.LoaiPhong)
+                .Include(d => d.Phong)
+                    .ThenInclude(p => p!.ToaNha)
+                .AsSplitQuery()
                 .AsQueryable();
 
             var entities = await query.ToListAsync();
@@ -119,6 +125,25 @@ namespace Dormitory.Web.Features.Registrations.Services
                 return ApproveApplicationResult.Conflict("Phòng hoặc tòa nhà hiện không hoạt động.");
             }
 
+            // 2b. Giới tính sinh viên phải phù hợp với tòa nhà.
+            var studentGender = app.SinhVien?.GioiTinh ?? "nam";
+            if (!ContractRules.IsGenderCompatible(studentGender, room.ToaNha?.GioiTinhQuyDinh ?? "nam"))
+            {
+                return ApproveApplicationResult.Conflict(
+                    $"Sinh viên {studentGender} không phù hợp với tòa nhà chỉ dành cho {room.ToaNha?.GioiTinhQuyDinh}.");
+            }
+
+            // 2c. Sinh viên không được có hợp đồng còn hiệu lực trong cùng năm học.
+            string academicYearForCheck = app.DotDangKy?.KyHoc?.MaNamHoc ?? academicYear ?? string.Empty;
+            bool hasActiveContract = await _context.HopDongs.AnyAsync(h =>
+                h.MaSinhVien == app.MaSinhVien &&
+                h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy" &&
+                (string.IsNullOrEmpty(academicYearForCheck) || (h.KyHoc != null && h.KyHoc.MaNamHoc == academicYearForCheck)));
+            if (hasActiveContract)
+            {
+                return ApproveApplicationResult.Conflict("Sinh viên này đã có hợp đồng nội trú còn hiệu lực trong năm học.");
+            }
+
             // 3. Tìm giường trống laDangHoat có soThuTu nhỏ nhất
             string maKyHoc = app.DotDangKy?.MaKyHoc ?? string.Empty;
             var beds = await _context.Giuongs
@@ -137,26 +162,52 @@ namespace Dormitory.Web.Features.Registrations.Services
                 return ApproveApplicationResult.Conflict("Phòng đã hết giường, hãy từ chối hoặc đề nghị sinh viên chọn phòng khác.");
             }
 
-            // 4. Đảm bảo có staffId hợp lệ cho FK nhanVien
-            if (string.IsNullOrEmpty(staffId))
+            // 4. Bắt buộc có nhân viên duyệt thật, không dùng mã hardcode.
+            if (string.IsNullOrWhiteSpace(staffId))
             {
-                staffId = await _context.NhanViens.Select(n => n.MaNhanVien).FirstOrDefaultAsync() ?? "NV01";
+                return ApproveApplicationResult.Conflict("Không xác định được nhân viên duyệt. Vui lòng đăng nhập lại.");
+            }
+            var staffExists = await _context.NhanViens.AnyAsync(n => n.MaNhanVien == staffId);
+            if (!staffExists)
+            {
+                return ApproveApplicationResult.Conflict("Nhân viên duyệt không tồn tại trong hệ thống.");
             }
 
             // 5. Thực hiện trong một Transaction với ExecutionStrategy của EF Core
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                using var tx = await _context.Database.BeginTransactionAsync();
+                // Khóa Serializable để hai lượt duyệt đồng thời không lấy trùng một giường.
+                using var tx = _context.Database.IsRelational()
+                    ? await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable)
+                    : await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    // Đọc lại trạng thái đơn và giường ngay trong transaction để chặn race condition.
+                    await _context.Entry(app).ReloadAsync();
+                    if (app.TrangThai != "choDuyet")
+                    {
+                        await tx.RollbackAsync();
+                        return ApproveApplicationResult.Conflict("Hồ sơ đã được xử lý bởi người khác.");
+                    }
+
+                    bool bedTaken = await _context.HopDongs.AnyAsync(h =>
+                        h.MaGiuong == availableBed.MaGiuong &&
+                        h.MaKyHoc == maKyHoc &&
+                        h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy");
+                    if (bedTaken)
+                    {
+                        await tx.RollbackAsync();
+                        return ApproveApplicationResult.Conflict("Giường vừa được người khác giữ chỗ. Vui lòng duyệt lại.");
+                    }
+
                     var now = DateTime.Now;
                     var options = _registrationOptions.Value;
                     var hanGiuCho = RegistrationRules.CalculateHoldExpiration(now, options.HoldHours);
                     var term = app.DotDangKy?.KyHoc;
                     decimal rent = room.LoaiPhong?.GiaThueThang ?? 500000m;
 
-                    string maHopDong = $"HD-{DateTime.Today:yyMMdd}-{Guid.NewGuid().ToString("N")[..8]}";
+                    string maHopDong = Shared.Helpers.IdGenerator.Next("HD", DateTime.Today);
                     var hopDong = new HopDong
                     {
                         MaHopDong = maHopDong,
@@ -176,7 +227,7 @@ namespace Dormitory.Web.Features.Registrations.Services
                     };
                     await _context.HopDongs.AddAsync(hopDong);
 
-                    string maHoaDon = $"HD-{DateTime.Today:yyMM}-{Guid.NewGuid().ToString("N")[..8]}";
+                    string maHoaDon = Shared.Helpers.IdGenerator.Next("HD", DateTime.Today);
                     var hoaDon = new HoaDon
                     {
                         MaHoaDon = maHoaDon,
@@ -256,10 +307,26 @@ namespace Dormitory.Web.Features.Registrations.Services
                 return false;
             }
 
+            var now = DateTime.Now;
             app.TrangThai = "tuChoi";
-            app.MaNhanVienDuyet = staffId;
-            app.NgayDuyet = DateTime.Now;
+            app.MaNhanVienDuyet = string.IsNullOrWhiteSpace(staffId) ? null : staffId;
+            app.NgayDuyet = now;
             app.GhiChu = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+            // Bắt buộc thông báo cho sinh viên biết lý do bị từ chối.
+            _context.ThongBaos.Add(new ThongBao
+            {
+                MaSinhVien = app.MaSinhVien,
+                TieuDe = "Hồ sơ đăng ký nội trú bị từ chối",
+                NoiDung = string.IsNullOrWhiteSpace(reason)
+                    ? $"Đơn đăng ký {app.MaDonDangKy} của bạn đã bị từ chối. Vui lòng liên hệ Ban quản lý KTX để biết thêm chi tiết."
+                    : $"Đơn đăng ký {app.MaDonDangKy} của bạn đã bị từ chối. Lý do: {reason.Trim()}",
+                Loai = "donDangKy",
+                LienKet = "/student/registration",
+                DaDoc = false,
+                NgayTao = now
+            });
+
             await _context.SaveChangesAsync();
             return true;
         }

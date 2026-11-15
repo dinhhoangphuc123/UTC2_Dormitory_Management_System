@@ -34,6 +34,18 @@ namespace Dormitory.Web.Features.Invoices.Entities
         [Column("ngayLap")]
         public DateTime NgayLap { get; set; } = DateTime.Now;
 
+        // Ngày BQL gửi hóa đơn cho sinh viên; null là chưa gửi.
+        [Column("ngayGui", TypeName = "datetime")]
+        public DateTime? NgayGui { get; set; }
+
+        // Tên tệp minh chứng thanh toán do sinh viên nộp (lưu trong App_Data/payment-proof).
+        [MaxLength(255)]
+        [Column("anhMinhChung")]
+        public string? AnhMinhChung { get; set; }
+
+        [Column("ngayNopMinhChung", TypeName = "datetime")]
+        public DateTime? NgayNopMinhChung { get; set; }
+
         [ForeignKey(nameof(MaHopDong))]
         public virtual HopDong? HopDong { get; set; }
 

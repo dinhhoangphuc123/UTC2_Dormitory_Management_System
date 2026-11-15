@@ -32,12 +32,29 @@ namespace Dormitory.Web.Shared.Middleware
 
         private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
-            context.Response.ContentType = "application/problem+json";
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            // API luôn trả JSON để frontend hiển thị đúng nguyên nhân, không trả HTML/text.
+            if (context.Response.HasStarted)
+            {
+                return;
+            }
 
+            bool isApi = context.Request.Path.StartsWithSegments("/api");
             var detail = _env.IsDevelopment()
                 ? exception.Message
                 : "Đã xảy ra lỗi hệ thống. Vui lòng liên hệ quản trị viên.";
+
+            if (isApi)
+            {
+                context.Response.ContentType = "application/json; charset=utf-8";
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                var payload = new { success = false, message = detail };
+                var json = JsonSerializer.Serialize(payload);
+                await context.Response.WriteAsync(json);
+                return;
+            }
+
+            context.Response.ContentType = "application/problem+json";
+            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
             var problem = new ProblemDetails
             {
@@ -47,12 +64,12 @@ namespace Dormitory.Web.Shared.Middleware
                 Instance = context.Request.Path
             };
 
-            var json = JsonSerializer.Serialize(problem, new JsonSerializerOptions
+            var problemJson = JsonSerializer.Serialize(problem, new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
 
-            await context.Response.WriteAsync(json);
+            await context.Response.WriteAsync(problemJson);
         }
     }
 }

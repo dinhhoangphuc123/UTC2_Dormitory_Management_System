@@ -4,8 +4,9 @@ namespace Dormitory.Web.Features.Payments.DTOs
     {
         public const string SectionName = "Payment";
 
-        public string BankId { get; set; } = "VietinBank";
-        public string AccountNo { get; set; } = "102800000001";
-        public string AccountName { get; set; } = "KTX TRUONG DH GTVT PHAN HIEU TAI TP.HCM";
+        // Bắt buộc cấu hình trong appsettings; không dùng tài khoản mặc định trong code.
+        public string BankId { get; set; } = string.Empty;
+        public string AccountNo { get; set; } = string.Empty;
+        public string AccountName { get; set; } = string.Empty;
     }
 }

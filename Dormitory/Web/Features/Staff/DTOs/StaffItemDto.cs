@@ -16,5 +16,10 @@ namespace Dormitory.Web.Features.Staff.DTOs
         public string Role { get; set; } = "Chưa phân quyền";
         public string RoleKey { get; set; } = "other";
         public string Status { get; set; } = "active"; // active, locked
+
+        // Chỉ trả về một lần khi tạo tài khoản để quản trị viên bàn giao cho nhân viên.
+        public string? InitialPassword { get; set; }
+
+        public string? Username { get; set; }
     }
 }

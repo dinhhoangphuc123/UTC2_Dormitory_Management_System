@@ -19,7 +19,9 @@ namespace Dormitory.Web.Features.Students.Services
             string? major = null,
             string? status = null,
             string? search = null,
-            string? academicYear = null)
+            string? academicYear = null,
+            int page = 1,
+            int pageSize = 50)
         {
             var year = string.IsNullOrWhiteSpace(academicYear)
                 ? null
@@ -69,7 +71,26 @@ namespace Dormitory.Web.Features.Students.Services
             }
 
             var entities = await query.ToListAsync();
-            return entities.Select(s => s.ToSinhVienListItemDto()).ToList();
+            var list = entities.Select(s => s.ToSinhVienListItemDto()).ToList();
+
+            if (!string.IsNullOrWhiteSpace(status) && status != "ALL" && status != "all")
+            {
+                var normalized = status.Trim().ToLowerInvariant();
+                list = normalized switch
+                {
+                    "resident" or "dango" or "đang ở" =>
+                        list.Where(s => s.ResidenceStatus == "Đang ở").ToList(),
+                    "nonresident" or "chuanotru" or "chưa nội trú" or "chưa ở" =>
+                        list.Where(s => s.ResidenceStatus != "Đang ở").ToList(),
+                    _ => list.Where(s => s.ResidenceStatus.Equals(status.Trim(), StringComparison.OrdinalIgnoreCase)).ToList()
+                };
+            }
+
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 50;
+            if (pageSize > 500) pageSize = 500;
+            list = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            return list;
         }
 
         public async Task<SinhVienListItemDto?> GetStudentByIdAsync(string id, string? academicYear = null)

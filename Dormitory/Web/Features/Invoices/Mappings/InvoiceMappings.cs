@@ -67,7 +67,11 @@ namespace Dormitory.Web.Features.Invoices.Mappings
                 Method = method,
                 MethodIcon = methodIcon,
                 Status = stCode,
-                StatusLabel = stLabel
+                StatusLabel = stLabel,
+                IsSent = h.NgayGui.HasValue,
+                DateSent = h.NgayGui?.ToString("dd/MM/yyyy HH:mm"),
+                HasStudentProof = !string.IsNullOrEmpty(h.AnhMinhChung),
+                ProofSubmittedAt = h.NgayNopMinhChung?.ToString("dd/MM/yyyy HH:mm")
             };
         }
     }

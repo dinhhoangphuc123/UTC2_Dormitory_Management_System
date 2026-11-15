@@ -9,5 +9,9 @@ namespace Dormitory.Web.Features.Invoices.DTOs
         public string Category { get; set; } = "tonghop";
         public decimal Amount { get; set; }
         public string DueDate { get; set; } = string.Empty;
+
+        // Cho phép lập hóa đơn cho tháng/năm cụ thể; bỏ trống thì dùng tháng hiện tại.
+        public int? Month { get; set; }
+        public int? Year { get; set; }
     }
 }

@@ -81,6 +81,8 @@ var app = builder.Build();
 // Global exception handling
 app.UseMiddleware<ApiRequestLoggingMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<SecurityHeadersMiddleware>();
+app.UseMiddleware<LoginRateLimitMiddleware>();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -90,6 +92,31 @@ if (!app.Environment.IsDevelopment())
 }
 else
 {
+    // Developer page chỉ cho trang HTML; request /api vẫn đi qua ExceptionHandlingMiddleware
+    // để luôn trả JSON (tránh trang lỗi HTML làm hỏng response.json() của frontend).
+    app.Use(async (context, next) =>
+    {
+        if (!context.Request.Path.StartsWithSegments("/api"))
+        {
+            await next(context);
+            return;
+        }
+        try
+        {
+            await next(context);
+        }
+        catch (Exception ex)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "API error: {Message}", ex.Message);
+            if (!context.Response.HasStarted)
+            {
+                context.Response.ContentType = "application/json; charset=utf-8";
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                await context.Response.WriteAsJsonAsync(new { success = false, message = ex.Message });
+            }
+        }
+    });
     app.UseDeveloperExceptionPage();
 }
 
@@ -97,11 +124,10 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+app.UseDormitorySwagger();
 app.UseAuthentication();
 app.UseMiddleware<AcademicYearScopeMiddleware>();
 app.UseAuthorization();
-
-app.UseDormitorySwagger();
 
 app.MapControllerRoute(
     name: "default",

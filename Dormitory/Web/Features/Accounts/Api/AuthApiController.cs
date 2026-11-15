@@ -8,24 +8,29 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Accounts.DTOs;
+using Dormitory.Web.Features.Accounts.Entities;
 using Dormitory.Web.Features.Accounts.Services;
 using Dormitory.Web.Features.Accounts.Validators;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Middleware;
 using Dormitory.Web.Shared.Models;
 using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Accounts.Api
 {
+    [SkipAcademicYearScope]
     [ApiController]
     [Route("api/auth")]
     public class AuthApiController : ControllerBase
     {
-        private class OtpEntry
-        {
-            public string Code { get; set; } = string.Empty;
-            public DateTime ExpiresAt { get; set; }
-            public int FailedAttempts { get; set; }
-        }
+        private const int ResetCodeLifetimeMinutes = 10;
+        private const int MaxResetRequestsPerWindow = 5;
+        private const int MaxResetCodeFailures = 5;
+        private static readonly TimeSpan ResetRequestWindow = TimeSpan.FromMinutes(15);
+        private static readonly TimeSpan ResetRequestCooldown = TimeSpan.FromSeconds(60);
+
+        private const string GenericForgotMessage =
+            "Nếu thông tin tài khoản hợp lệ và có email, mã xác nhận đã được gửi.";
 
         private readonly IAuthService _authService;
         private readonly ApplicationDbContext _context;
@@ -33,10 +38,6 @@ namespace Dormitory.Web.Features.Accounts.Api
         private readonly IConfiguration _config;
         private readonly ILogger<AuthApiController> _logger;
         private readonly ICurrentUser? _currentUser;
-
-        private static readonly object _resetCodesLock = new();
-        private static readonly Dictionary<string, OtpEntry> _resetOtps = new(StringComparer.OrdinalIgnoreCase);
-        private static readonly HashSet<string> _verifiedResetIdentifiers = new(StringComparer.OrdinalIgnoreCase);
 
         public AuthApiController(
             IAuthService authService,
@@ -89,7 +90,7 @@ namespace Dormitory.Web.Features.Accounts.Api
             var authProperties = new AuthenticationProperties
             {
                 IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(2)
             };
 
             if (HttpContext?.RequestServices?.GetService<Microsoft.AspNetCore.Authentication.IAuthenticationService>() != null)
@@ -145,36 +146,191 @@ namespace Dormitory.Web.Features.Accounts.Api
             if (string.IsNullOrWhiteSpace(req.Username))
                 return BadRequest(ApiResponse.Fail("Vui lòng nhập tên đăng nhập."));
 
-            var identifier = req.Username.Trim();
-            var account = await _context.TaiKhoans
-                .Include(t => t.SinhVien)
-                .Include(t => t.NhanVien)
-                .FirstOrDefaultAsync(t =>
-                    t.TenDangNhap == identifier
-                    || (t.SinhVien != null && t.SinhVien.Email == identifier)
-                    || (t.NhanVien != null && t.NhanVien.Email == identifier));
+            var identifier = NormalizeIdentifier(req.Username);
+
+            // Giới hạn tần suất gửi mã theo từng định danh để chống spam / brute force.
+            var now = DateTime.UtcNow;
+            var windowStart = now.Subtract(ResetRequestWindow);
+            int requestsInWindow = await _context.MaDatLaiMatKhaus
+                .CountAsync(x => x.DinhDanh == identifier && x.NgayTao >= windowStart);
+            if (requestsInWindow >= MaxResetRequestsPerWindow)
+            {
+                return StatusCode(StatusCodes.Status429TooManyRequests, ApiResponse.Fail(
+                    "Bạn đã yêu cầu mã xác nhận quá nhiều lần. Vui lòng thử lại sau ít phút."));
+            }
+
+            var lastRequestAt = await _context.MaDatLaiMatKhaus
+                .Where(x => x.DinhDanh == identifier)
+                .OrderByDescending(x => x.NgayTao)
+                .Select(x => (DateTime?)x.NgayTao)
+                .FirstOrDefaultAsync();
+            if (lastRequestAt.HasValue && lastRequestAt.Value > now.Subtract(ResetRequestCooldown))
+            {
+                return StatusCode(StatusCodes.Status429TooManyRequests, ApiResponse.Fail(
+                    "Vui lòng chờ ít nhất 60 giây trước khi yêu cầu lại mã xác nhận."));
+            }
+
+            // Kiểm tra cấu hình SMTP trước khi tra tài khoản để không tiết lộ tài khoản có tồn tại hay không.
+            var smtp = ReadSmtpSettings();
+            if (smtp.MissingSettings.Count > 0)
+            {
+                _logger.LogWarning("SMTP configuration is missing required settings: {MissingSettings}",
+                    string.Join(", ", smtp.MissingSettings));
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, ApiResponse.Fail(
+                    "Hiện chưa thể gửi email xác nhận. Vui lòng liên hệ Ban quản lý để được hỗ trợ."));
+            }
+
+            var account = await FindAccountAsync(identifier);
 
             var studentEmail = account?.SinhVien?.Email;
             var recipient = string.IsNullOrWhiteSpace(studentEmail) ? account?.NhanVien?.Email : studentEmail;
             if (string.IsNullOrWhiteSpace(recipient)
                 && account != null
-                && string.Equals(account.TenDangNhap, identifier, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(account.TenDangNhap, req.Username.Trim(), StringComparison.OrdinalIgnoreCase)
                 && MailAddress.TryCreate(identifier, out _))
             {
-                recipient = identifier;
+                recipient = req.Username.Trim();
             }
 
-            // Trả về thông báo chung để không tiết lộ tài khoản có tồn tại hay không
+            // Trả về thông báo chung để không tiết lộ tài khoản có tồn tại hay không.
             if (string.IsNullOrWhiteSpace(recipient))
             {
-                return Ok(ApiResponse.Ok("Nếu thông tin tài khoản hợp lệ và có email, mã xác nhận đã được gửi."));
+                return Ok(ApiResponse.Ok(GenericForgotMessage));
             }
 
+            var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+            try
+            {
+                using var client = new SmtpClient(smtp.Host!, smtp.Port)
+                {
+                    Credentials = new NetworkCredential(smtp.Username, smtp.Password),
+                    EnableSsl = smtp.EnableSsl
+                };
+                using var mail = new MailMessage(smtp.From!, recipient, "Mã xác nhận đặt lại mật khẩu KTX", $"Mã xác nhận của bạn là: {code}")
+                {
+                    IsBodyHtml = false
+                };
+                await client.SendMailAsync(mail);
+
+                _context.MaDatLaiMatKhaus.Add(new MaDatLaiMatKhau
+                {
+                    DinhDanh = identifier,
+                    MaHash = _passwordHasher.HashPassword(code),
+                    HetHan = now.AddMinutes(ResetCodeLifetimeMinutes),
+                    SoLanSai = 0,
+                    DaXacMinh = false,
+                    NgayTao = now
+                });
+                await _context.SaveChangesAsync();
+
+                return Ok(ApiResponse.Ok(GenericForgotMessage));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset email for account {Identifier}", identifier);
+                return StatusCode(StatusCodes.Status502BadGateway, ApiResponse.Fail(
+                    "Không gửi được email xác nhận. Vui lòng thử lại sau hoặc liên hệ Ban quản lý."));
+            }
+        }
+
+        [HttpPost("verify")]
+        public async Task<IActionResult> Verify([FromBody] VerifyRequestDto req)
+        {
+            var identifier = NormalizeIdentifier(req.Username ?? string.Empty);
+            var now = DateTime.UtcNow;
+
+            var entry = await _context.MaDatLaiMatKhaus
+                .Where(x => x.DinhDanh == identifier && !x.DaXacMinh && x.HetHan >= now)
+                .OrderByDescending(x => x.NgayTao)
+                .FirstOrDefaultAsync();
+
+            if (entry == null)
+            {
+                return BadRequest(ApiResponse.Fail("Mã xác nhận không tồn tại hoặc đã hết hạn."));
+            }
+
+            if (!_passwordHasher.VerifyPassword(req.Code ?? string.Empty, entry.MaHash))
+            {
+                entry.SoLanSai++;
+                if (entry.SoLanSai >= MaxResetCodeFailures)
+                {
+                    _context.MaDatLaiMatKhaus.Remove(entry);
+                    await _context.SaveChangesAsync();
+                    return BadRequest(ApiResponse.Fail("Bạn đã nhập sai mã xác nhận quá 5 lần. Mã đã bị hủy."));
+                }
+
+                await _context.SaveChangesAsync();
+                return BadRequest(ApiResponse.Fail(
+                    $"Mã xác nhận không đúng. Còn {MaxResetCodeFailures - entry.SoLanSai} lần thử."));
+            }
+
+            entry.DaXacMinh = true;
+            await _context.SaveChangesAsync();
+            return Ok(ApiResponse.Ok("Mã xác nhận đúng."));
+        }
+
+        [HttpPost("reset")]
+        public async Task<IActionResult> Reset([FromBody] ResetRequestDto req)
+        {
+            if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.NewPassword))
+                return BadRequest(ApiResponse.Fail("Vui lòng nhập đầy đủ thông tin."));
+
+            var (isValidPassword, passwordError) = PasswordPolicy.Validate(req.NewPassword);
+            if (!isValidPassword)
+                return BadRequest(ApiResponse.Fail(passwordError ?? "Mật khẩu mới không hợp lệ."));
+
+            var identifier = NormalizeIdentifier(req.Username);
+            var now = DateTime.UtcNow;
+
+            var entry = await _context.MaDatLaiMatKhaus
+                .Where(x => x.DinhDanh == identifier && x.DaXacMinh && x.HetHan >= now)
+                .OrderByDescending(x => x.NgayTao)
+                .FirstOrDefaultAsync();
+
+            if (entry == null || !_passwordHasher.VerifyPassword(req.Code ?? string.Empty, entry.MaHash))
+            {
+                return BadRequest(ApiResponse.Fail(
+                    "Vui lòng xác minh đúng mã OTP còn hiệu lực trước khi đổi mật khẩu."));
+            }
+
+            var account = await FindAccountAsync(identifier);
+            if (account == null)
+                return NotFound(ApiResponse.Fail("Không tìm thấy tài khoản."));
+
+            account.MatKhauHash = _passwordHasher.HashPassword(req.NewPassword);
+
+            // Mã chỉ dùng được một lần; xóa toàn bộ mã cũ của định danh này.
+            var oldCodes = await _context.MaDatLaiMatKhaus
+                .Where(x => x.DinhDanh == identifier)
+                .ToListAsync();
+            _context.MaDatLaiMatKhaus.RemoveRange(oldCodes);
+
+            await _context.SaveChangesAsync();
+
+            return Ok(ApiResponse.Ok("Đặt lại mật khẩu thành công."));
+        }
+
+        private Task<TaiKhoan?> FindAccountAsync(string normalizedIdentifier)
+        {
+            var raw = normalizedIdentifier.Trim();
+            return _context.TaiKhoans
+                .Include(t => t.SinhVien)
+                .Include(t => t.NhanVien)
+                .FirstOrDefaultAsync(t =>
+                    t.TenDangNhap.ToLower() == raw
+                    || (t.SinhVien != null && t.SinhVien.Email != null && t.SinhVien.Email.ToLower() == raw)
+                    || (t.NhanVien != null && t.NhanVien.Email != null && t.NhanVien.Email.ToLower() == raw));
+        }
+
+        private static string NormalizeIdentifier(string value) => value.Trim().ToLowerInvariant();
+
+        private SmtpSettings ReadSmtpSettings()
+        {
             var gmailSmtp = _config.GetSection("GmailSMTP");
             var legacySmtp = _config.GetSection("Smtp");
             var host = FirstConfiguredValue(gmailSmtp["Host"], legacySmtp["Host"]);
             var from = FirstConfiguredValue(gmailSmtp["From"], legacySmtp["From"]);
-            var smtpUsername = FirstConfiguredValue(
+            var username = FirstConfiguredValue(
                 gmailSmtp["Username"],
                 gmailSmtp["From"],
                 legacySmtp["Username"],
@@ -193,126 +349,28 @@ namespace Dormitory.Web.Features.Accounts.Api
                 ? parsedEnableSsl
                 : true;
 
-            var missingSettings = new List<string>();
-            if (string.IsNullOrWhiteSpace(host)) missingSettings.Add("Host");
-            if (string.IsNullOrWhiteSpace(from)) missingSettings.Add("From");
-            if (string.IsNullOrWhiteSpace(smtpUsername)) missingSettings.Add("Username");
-            if (string.IsNullOrWhiteSpace(password)) missingSettings.Add("AppPassword/Password");
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(host)) missing.Add("Host");
+            if (string.IsNullOrWhiteSpace(from)) missing.Add("From");
+            if (string.IsNullOrWhiteSpace(username)) missing.Add("Username");
+            if (string.IsNullOrWhiteSpace(password)) missing.Add("AppPassword/Password");
 
-            if (missingSettings.Count > 0)
-            {
-                _logger.LogWarning("SMTP configuration is missing required keys: {MissingSettings}", string.Join(", ", missingSettings));
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, ApiResponse.Fail(
-                    $"Thiếu cấu hình SMTP: {string.Join(", ", missingSettings)}. Kiểm tra mục GmailSMTP hoặc Smtp trong cấu hình ứng dụng."));
-            }
-
-            var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-            try
-            {
-                using var client = new SmtpClient(host, port)
-                {
-                    Credentials = new NetworkCredential(smtpUsername, password),
-                    EnableSsl = enableSsl
-                };
-                using var mail = new MailMessage(from!, recipient, "Mã xác nhận đặt lại mật khẩu KTX", $"Mã xác nhận của bạn là: {code}")
-                {
-                    IsBodyHtml = false
-                };
-                await client.SendMailAsync(mail);
-                lock (_resetCodesLock)
-                {
-                    _resetOtps[identifier] = new OtpEntry
-                    {
-                        Code = code,
-                        ExpiresAt = DateTime.UtcNow.AddMinutes(10),
-                        FailedAttempts = 0
-                    };
-                    _verifiedResetIdentifiers.Remove(identifier);
-                }
-                return Ok(ApiResponse.Ok("Nếu thông tin tài khoản hợp lệ và có email, mã xác nhận đã được gửi."));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send password reset email for account {Identifier}", identifier);
-                return StatusCode(StatusCodes.Status502BadGateway, ApiResponse.Fail(
-                    "Không gửi được email xác nhận. Vui lòng kiểm tra cấu hình SMTP hoặc liên hệ Ban quản lý."));
-            }
-        }
-
-        [HttpPost("verify")]
-        public IActionResult Verify([FromBody] VerifyRequestDto req)
-        {
-            var identifier = req.Username?.Trim() ?? string.Empty;
-            lock (_resetCodesLock)
-            {
-                if (!_resetOtps.TryGetValue(identifier, out var entry))
-                {
-                    return BadRequest(ApiResponse.Fail("Mã xác nhận không tồn tại hoặc đã hết hạn."));
-                }
-
-                if (DateTime.UtcNow > entry.ExpiresAt)
-                {
-                    _resetOtps.Remove(identifier);
-                    return BadRequest(ApiResponse.Fail("Mã xác nhận đã hết hạn. Vui lòng yêu cầu mã mới."));
-                }
-
-                if (entry.Code != req.Code)
-                {
-                    entry.FailedAttempts++;
-                    if (entry.FailedAttempts >= 5)
-                    {
-                        _resetOtps.Remove(identifier);
-                        return BadRequest(ApiResponse.Fail("Bạn đã nhập sai mã xác nhận quá 5 lần. Mã đã bị hủy."));
-                    }
-                    return BadRequest(ApiResponse.Fail($"Mã xác nhận không đúng. Còn {5 - entry.FailedAttempts} lần thử."));
-                }
-
-                _verifiedResetIdentifiers.Add(identifier);
-                return Ok(ApiResponse.Ok("Mã xác nhận đúng."));
-            }
-        }
-
-        [HttpPost("reset")]
-        public async Task<IActionResult> Reset([FromBody] ResetRequestDto req)
-        {
-            if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.NewPassword))
-                return BadRequest(ApiResponse.Fail("Vui lòng nhập đầy đủ thông tin."));
-
-            var identifier = req.Username.Trim();
-            lock (_resetCodesLock)
-            {
-                var isVerified = _verifiedResetIdentifiers.Contains(identifier)
-                    && _resetOtps.TryGetValue(identifier, out var entry)
-                    && entry.Code == req.Code
-                    && DateTime.UtcNow <= entry.ExpiresAt;
-
-                if (!isVerified)
-                    return BadRequest(ApiResponse.Fail("Vui lòng xác minh đúng mã OTP còn hiệu lực trước khi đổi mật khẩu."));
-            }
-
-            var account = await _context.TaiKhoans.FirstOrDefaultAsync(t =>
-                t.TenDangNhap == identifier
-                || (t.SinhVien != null && t.SinhVien.Email == identifier)
-                || (t.NhanVien != null && t.NhanVien.Email == identifier));
-            if (account == null)
-                return NotFound(ApiResponse.Fail("Không tìm thấy tài khoản."));
-
-            account.MatKhauHash = _passwordHasher.HashPassword(req.NewPassword);
-            await _context.SaveChangesAsync();
-
-            lock (_resetCodesLock)
-            {
-                _resetOtps.Remove(identifier);
-                _verifiedResetIdentifiers.Remove(identifier);
-            }
-
-            return Ok(ApiResponse.Ok("Đặt lại mật khẩu thành công."));
+            return new SmtpSettings(host, from, username, password, port, enableSsl, missing);
         }
 
         private static string? FirstConfiguredValue(params string?[] values)
         {
             return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
         }
+
+        private sealed record SmtpSettings(
+            string? Host,
+            string? From,
+            string? Username,
+            string? Password,
+            int Port,
+            bool EnableSsl,
+            List<string> MissingSettings);
     }
 
     public class ForgotRequestDto { public string Username { get; set; } = string.Empty; }

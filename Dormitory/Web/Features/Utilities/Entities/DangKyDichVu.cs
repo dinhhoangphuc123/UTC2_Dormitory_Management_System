@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Utilities.Entities
 {
@@ -30,6 +31,23 @@ namespace Dormitory.Web.Features.Utilities.Entities
 
         [Column("ngayKetThuc", TypeName = "date")]
         public DateTime? NgayKetThuc { get; set; }
+
+        // Workflow duyệt: choDuyet -> dangDung (BQL duyệt) hoặc daTuChoi; sinh viên/BQL hủy thì daHuy.
+        [Required]
+        [MaxLength(20)]
+        [Column("trangThai")]
+        public string TrangThai { get; set; } = AppDefaults.ServicePending;
+
+        [MaxLength(20)]
+        [Column("maNhanVienDuyet")]
+        public string? MaNhanVienDuyet { get; set; }
+
+        [Column("ngayDuyet", TypeName = "datetime")]
+        public DateTime? NgayDuyet { get; set; }
+
+        [MaxLength(200)]
+        [Column("lyDoTuChoi")]
+        public string? LyDoTuChoi { get; set; }
 
         [ForeignKey(nameof(MaHopDong))]
         public virtual HopDong? HopDong { get; set; }

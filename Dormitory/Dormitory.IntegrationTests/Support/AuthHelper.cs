@@ -14,8 +14,14 @@ namespace Dormitory.IntegrationTests.Support
                 Password = password
             });
 
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"Đăng nhập thử nghiệm thất bại ({(int)response.StatusCode}): {body}");
+            }
+
             return client;
         }
     }
 }
-

@@ -30,11 +30,13 @@ namespace Dormitory.Web.Features.Maintenance.Services
 
             var endExclusive = year.NgayKetThuc.Date.AddDays(1);
             var tickets = await _context.YeuCauSuaChuas
+                .AsNoTracking()
                 .Where(y => y.NgayGui >= year.NgayBatDau && y.NgayGui < endExclusive)
                 .Include(y => y.Phong)
                 .Include(y => y.SinhVienGui)
                 .Include(y => y.NhanVienXuLy)
                 .OrderByDescending(y => y.NgayGui)
+                .AsSplitQuery()
                 .ToListAsync();
 
             var result = tickets.Select(t => t.ToMaintenanceTicketDto()).ToList();

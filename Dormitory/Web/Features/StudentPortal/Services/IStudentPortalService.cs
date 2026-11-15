@@ -9,7 +9,7 @@ namespace Dormitory.Web.Features.StudentPortal.Services
 
         // 2. Profile & Guardians & Request
         Task<StudentProfileDto?> GetProfileAsync(string studentId);
-        Task<bool> UpdateProfileAsync(string studentId, UpdateProfileDto dto);
+        Task<(bool Success, string? ErrorMessage, int StatusCode)> UpdateProfileAsync(string studentId, UpdateProfileDto dto);
         Task<List<GuardianDto>> GetGuardiansAsync(string studentId);
         Task<(bool Success, string? ErrorMessage)> AddGuardianAsync(string studentId, CreateGuardianDto dto);
         Task<bool> UpdateGuardianAsync(string studentId, string guardianId, CreateGuardianDto dto);
@@ -36,6 +36,7 @@ namespace Dormitory.Web.Features.StudentPortal.Services
         // 6. Invoices & Utilities
         Task<List<StudentInvoiceListItemDto>> GetInvoicesAsync(string studentId, string? status = null, string? type = null);
         Task<StudentInvoiceDetailDto?> GetInvoiceByIdAsync(string studentId, string invoiceId);
+        Task<VietQrDto?> GetInvoiceQrAsync(string studentId, string invoiceId);
         Task<StudentUtilityDto?> GetUtilitiesAsync(string studentId);
 
         // 7. Maintenance

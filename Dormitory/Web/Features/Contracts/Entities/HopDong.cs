@@ -57,6 +57,10 @@ namespace Dormitory.Web.Features.Contracts.Entities
         [Column("tienCoc", TypeName = "decimal(12,2)")]
         public decimal TienCoc { get; set; } = 0;
 
+        // Số tiền cọc thực tế đã hoàn cho sinh viên khi thanh lý hợp đồng.
+        [Column("tienHoanCoc", TypeName = "decimal(12,2)")]
+        public decimal TienHoanCoc { get; set; } = 0;
+
         [Column("phanTramMienGiam", TypeName = "decimal(5,2)")]
         public decimal PhanTramMienGiam { get; set; } = 0;
 

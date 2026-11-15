@@ -18,7 +18,7 @@ namespace Dormitory.IntegrationTests.Features.Contracts
             using var context = _fixture.CreateDbContext();
             var service = new HopDongService(context);
 
-            var contracts = await service.GetAllContractsAsync();
+            var contracts = await service.GetAllContractsAsync(academicYear: SqlServerFixture.AcademicYear);
             Assert.NotEmpty(contracts);
         }
     }

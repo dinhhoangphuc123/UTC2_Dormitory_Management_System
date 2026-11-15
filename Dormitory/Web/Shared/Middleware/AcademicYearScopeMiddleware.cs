@@ -6,7 +6,8 @@ namespace Dormitory.Web.Shared.Middleware;
 
 /// <summary>
 /// Makes the academic year a required scope for all business API calls.
-/// The academic-year list and authentication APIs are intentionally unscoped.
+/// Controllers that must work without a year are annotated with
+/// <see cref="SkipAcademicYearScopeAttribute"/> instead of hardcoding paths here.
 /// </summary>
 public sealed class AcademicYearScopeMiddleware
 {
@@ -22,13 +23,8 @@ public sealed class AcademicYearScopeMiddleware
     {
         var path = httpContext.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
         if (!path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ||
-            path.Equals("/api/auth", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("/api/auth/", StringComparison.OrdinalIgnoreCase) ||
-            path.Equals("/api/namhoc", StringComparison.OrdinalIgnoreCase) ||
-            path.Equals("/api/me", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("/api/me/", StringComparison.OrdinalIgnoreCase) ||
-            path.Equals("/api/thongbao", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("/api/thongbao/", StringComparison.OrdinalIgnoreCase))
+            httpContext.GetEndpoint()?.Metadata.GetMetadata<SkipAcademicYearScopeAttribute>() != null ||
+            httpContext.User?.Identity?.IsAuthenticated != true)
         {
             await _next(httpContext);
             return;
@@ -47,11 +43,12 @@ public sealed class AcademicYearScopeMiddleware
         httpContext.Response.ContentType = "application/json; charset=utf-8";
         if (HttpMethods.IsGet(httpContext.Request.Method) || HttpMethods.IsHead(httpContext.Request.Method))
         {
-            // The UI's list APIs use the standard { success, data } response shape.
-            httpContext.Response.StatusCode = StatusCodes.Status200OK;
+            // Không trả dữ liệu rỗng giả lập: thiếu năm học là lỗi đầu vào,
+            // client phải biết để chọn năm học thay vì tưởng hệ thống không có dữ liệu.
+            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
             await JsonSerializer.SerializeAsync(
                 httpContext.Response.Body,
-                new { success = true, data = Array.Empty<object>() },
+                new { success = false, message = "Vui lòng chọn một năm học hợp lệ trước khi xem dữ liệu." },
                 JsonOptions,
                 httpContext.RequestAborted);
             return;

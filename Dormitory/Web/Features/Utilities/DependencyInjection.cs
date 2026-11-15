@@ -8,6 +8,7 @@ namespace Dormitory.Web.Features.Utilities
         public static IServiceCollection AddUtilitiesServices(this IServiceCollection services)
         {
             services.AddScoped<IDienNuocDichVuService, DienNuocDichVuService>();
+            services.AddScoped<IDichVuService, DichVuService>();
             return services;
         }
     }

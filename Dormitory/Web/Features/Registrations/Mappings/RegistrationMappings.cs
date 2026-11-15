@@ -44,8 +44,26 @@ namespace Dormitory.Web.Features.Registrations.Mappings
                 EntranceScore = "—",
                 Hometown = d.SinhVien?.DiaChiThuongTru ?? "—",
                 ProofDocument = "—",
-                SubmittedAt = d.NgayDangKy.ToString("HH:mm, dd/MM"),
-                Status = status
+                SubmittedAt = d.NgayDangKy.ToString("HH:mm, dd/MM/yyyy"),
+                Status = status,
+                ClassName = d.SinhVien?.MaLop ?? "—",
+                IntakeYear = d.SinhVien?.NamNhapHoc,
+                DateOfBirth = d.SinhVien != null ? d.SinhVien.NgaySinh.ToString("dd/MM/yyyy") : "—",
+                Cccd = d.SinhVien?.Cccd ?? "—",
+                Phone = d.SinhVien?.DienThoai ?? "—",
+                Email = d.SinhVien?.Email ?? "—",
+                RoundCode = d.MaDotDangKy,
+                RoundName = d.DotDangKy?.TenDotHienThi ?? d.MaDotDangKy,
+                BuildingName = d.Phong?.ToaNha?.TenToaNha ?? "—",
+                RoomCode = d.Phong?.MaPhong ?? d.MaPhong ?? "—",
+                RoomTypeName = d.Phong?.LoaiPhong?.TenLoaiPhong ?? d.LoaiPhong?.TenLoaiPhong ?? "—",
+                MonthlyFee = d.Phong?.LoaiPhong?.GiaThueThang ?? d.LoaiPhong?.GiaThueThang,
+                RejectionReason = d.TrangThai == "tuChoi"
+                    ? (string.IsNullOrWhiteSpace(d.GhiChu) ? "Không đạt điều kiện xét duyệt" : d.GhiChu)
+                    : null,
+                Note = d.GhiChu,
+                ApprovedBy = d.MaNhanVienDuyet,
+                ApprovedAt = d.NgayDuyet?.ToString("HH:mm, dd/MM/yyyy")
             };
         }
     }

@@ -46,6 +46,9 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
         public string? DienThoai { get; set; }
         public string? Email { get; set; }
         public string? DiaChiThuongTru { get; set; }
+
+        // Bắt buộc khi đổi email: email là kênh đặt lại mật khẩu nên phải xác minh lại người dùng.
+        public string? CurrentPassword { get; set; }
     }
 
     public class GuardianDto
@@ -98,9 +101,11 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
         public string Id { get; set; } = string.Empty;
         public string TenDot { get; set; } = string.Empty;
         public string MaKyHoc { get; set; } = string.Empty;
+        public string MaNamHoc { get; set; } = string.Empty;
         public string NgayMo { get; set; } = string.Empty;
         public string NgayDong { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty; // sapMo, dangMo, daDong
+        public string TrangThai => Status;
         public bool Eligible { get; set; }
         public List<string> Reasons { get; set; } = new();
     }
@@ -181,7 +186,10 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
     public class VietQrDto
     {
         public string ImageUrl { get; set; } = string.Empty;
+        // Payload EMV chuẩn VietQR để tự vẽ mã QR phía client mà không cần dịch vụ ngoài.
+        public string Payload { get; set; } = string.Empty;
         public string BankId { get; set; } = string.Empty;
+        public string BankBin { get; set; } = string.Empty;
         public string AccountNo { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;
         public decimal Amount { get; set; }
@@ -221,6 +229,8 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
         public decimal DaThanhToan { get; set; }
         public decimal ConLai { get; set; }
         public bool IsRegistration { get; set; }
+        public bool HasPaymentProof { get; set; }
+        public string? NgayNopMinhChung { get; set; }
     }
 
     public class StudentInvoiceDetailDto : StudentInvoiceListItemDto
@@ -259,11 +269,15 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
 
     public class StudentRegisteredServiceDto
     {
+        public int Id { get; set; }
+        public string ServiceId { get; set; } = string.Empty;
         public string TenDichVu { get; set; } = string.Empty;
         public decimal DonGia { get; set; }
         public int SoLuong { get; set; }
         public string NgayBatDau { get; set; } = string.Empty;
         public string? NgayKetThuc { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? RejectReason { get; set; }
     }
 
     // 7. Maintenance

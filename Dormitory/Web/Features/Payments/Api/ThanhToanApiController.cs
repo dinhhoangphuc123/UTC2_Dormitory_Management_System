@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Payments.DTOs;
 using Dormitory.Web.Features.Payments.Services;
@@ -14,16 +16,19 @@ namespace Dormitory.Web.Features.Payments.Api
     {
         private readonly IThanhToanService _thanhToanService;
         private readonly ICurrentUser? _currentUser;
+        private readonly IWebHostEnvironment? _env;
 
-        public ThanhToanApiController(IThanhToanService thanhToanService, ICurrentUser? currentUser = null)
+        public ThanhToanApiController(IThanhToanService thanhToanService, ICurrentUser? currentUser = null, IWebHostEnvironment? env = null)
         {
             _thanhToanService = thanhToanService;
             _currentUser = currentUser;
+            _env = env;
         }
 
         [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
         [HttpPost("confirm")]
-        public async Task<IActionResult> Confirm([FromBody] ConfirmPaymentDto req, [FromQuery] string? academicYear)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Confirm([FromForm] ConfirmPaymentDto req, IFormFile? proof, [FromQuery] string? academicYear)
         {
             var (isValid, errorMessage) = ConfirmPaymentValidator.Validate(req);
             if (!isValid)
@@ -31,7 +36,9 @@ namespace Dormitory.Web.Features.Payments.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            bool success = await _thanhToanService.ProcessPaymentAsync(req, academicYear, _currentUser?.StaffId);
+            bool success = await _thanhToanService.ProcessPaymentAsync(
+                req, academicYear, _currentUser?.StaffId, proof,
+                _env != null ? Path.Combine(_env.ContentRootPath, "App_Data") : null);
             if (success)
             {
                 return Ok(ApiResponse.Ok($"Đã ghi nhận thanh toán cho hóa đơn {req.InvoiceId}!"));

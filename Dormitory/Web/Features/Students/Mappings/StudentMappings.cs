@@ -54,7 +54,7 @@ namespace Dormitory.Web.Features.Students.Mappings
                 Hometown = s.DiaChiThuongTru ?? "—",
                 PaymentStatus = invoices.Count == 0 ? "Chưa có hóa đơn" : debtAmount > 0 ? "Nợ" : "Đủ",
                 DebtAmount = debtAmount,
-                ResidenceStatus = activeContract != null ? "Đang ở" : selectedYearContract != null ? "Đã nội trú" : "Chưa nội trú",
+                ResidenceStatus = activeContract != null ? "Đang ở" : "Chưa ở",
                 AdmissionDate = displayedContract?.NgayBatDau.ToString("dd/MM/yyyy") ?? "—",
                 BirthDate = s.NgaySinh.ToString("dd/MM/yyyy"),
                 PriorityCategory = s.DoiTuongUuTien

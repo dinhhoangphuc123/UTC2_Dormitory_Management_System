@@ -33,5 +33,15 @@ namespace Dormitory.Web.Features.Registrations.Entities
         public virtual KyHoc? KyHoc { get; set; }
 
         public virtual ICollection<DonDangKy> DanhSachDonDangKy { get; set; } = new List<DonDangKy>();
+
+        public const string DraftPrefix = "[NHAP] ";
+
+        [NotMapped]
+        public bool DaPhatHanh => !TenDot.StartsWith(DraftPrefix, StringComparison.Ordinal);
+
+        [NotMapped]
+        public string TenDotHienThi => TenDot.StartsWith(DraftPrefix, StringComparison.Ordinal)
+            ? TenDot[DraftPrefix.Length..]
+            : TenDot;
     }
 }

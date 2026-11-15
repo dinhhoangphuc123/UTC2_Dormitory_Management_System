@@ -38,6 +38,11 @@ namespace Dormitory.Web.Features.Payments.Entities
         [Column("ghiChu")]
         public string? GhiChu { get; set; }
 
+        // Tên tệp chứng từ do BQL đính kèm khi ghi nhận thanh toán (App_Data/payment-proof).
+        [MaxLength(255)]
+        [Column("anhMinhChung")]
+        public string? AnhMinhChung { get; set; }
+
         [ForeignKey(nameof(MaHoaDon))]
         public virtual HoaDon? HoaDon { get; set; }
 

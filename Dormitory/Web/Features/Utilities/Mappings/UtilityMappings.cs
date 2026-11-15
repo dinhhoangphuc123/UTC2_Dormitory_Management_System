@@ -5,7 +5,7 @@ namespace Dormitory.Web.Features.Utilities.Mappings
 {
     public static class UtilityMappings
     {
-        public static UtilityItemDto ToUtilityItemDto(this Phong r, List<string>? services = null)
+        public static UtilityItemDto ToUtilityItemDto(this Phong r, List<string>? services = null, List<string>? serviceCodes = null)
         {
             string roomNum = r.MaPhong.Split('_').Last();
             var latestElectric = r.DanhSachChiSoDienNuoc
@@ -31,11 +31,18 @@ namespace Dormitory.Web.Features.Utilities.Mappings
             string st = "PENDING";
             if (newElec.HasValue && newWat.HasValue)
             {
-                if (usageElec > 250 || usageWat > 20) st = "EXCEEDED";
+                if (usageElec > Shared.Constants.AppDefaults.ElectricUsageWarningKwh || usageWat > Shared.Constants.AppDefaults.WaterUsageWarningM3) st = "EXCEEDED";
                 else st = "RECORDED";
             }
 
             string roomLabel = $"{r.MaToaNha}-{roomNum}";
+
+            // Ưu tiên hiện kỳ còn chờ chốt để BQL nhìn thấy ngay phòng cần làm.
+            var bill = r.DanhSachHoaDonPhong?
+                .OrderByDescending(b => b.TrangThai == "chuaChot" ? 1 : 0)
+                .ThenByDescending(b => b.Nam).ThenByDescending(b => b.Thang)
+                .FirstOrDefault();
+
             return new UtilityItemDto
             {
                 Id = r.MaPhong,
@@ -50,8 +57,14 @@ namespace Dormitory.Web.Features.Utilities.Mappings
                 NewWater = newWat,
                 UsageWater = usageWat,
                 Services = services ?? new List<string>(),
+                ServiceCodes = serviceCodes ?? new List<string>(),
                 Status = st,
-                UpdatedAt = latestElectric != null ? latestElectric.NgayGhi.ToString("dd/MM/yyyy") : null
+                UpdatedAt = latestElectric != null ? latestElectric.NgayGhi.ToString("dd/MM/yyyy") : null,
+                BillStatus = bill?.TrangThai,
+                BillThang = bill?.Thang,
+                BillNam = bill?.Nam,
+                SoNguoiChia = bill?.SoNguoiChia,
+                TienMoiNguoi = bill?.TienMoiNguoi
             };
         }
     }

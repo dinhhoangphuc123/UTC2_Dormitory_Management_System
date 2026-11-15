@@ -63,11 +63,17 @@ namespace Dormitory.Web.Features.Reports.Services
 
             foreach (var b in buildings)
             {
-                int rCount = b.DanhSachPhong.Count;
-                int bCount = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count);
-                int occCount = b.DanhSachPhong.Sum(p => p.DanhSachGiuong.Count(g => g.DanhSachHopDong.Any(hd =>
-                    hd.KyHoc?.MaNamHoc == yearCode &&
-                    hd.NgayBatDau <= year.NgayKetThuc && (hd.NgayTraPhongThucTe ?? hd.NgayKetThuc) >= year.NgayBatDau)));
+                if (b.TrangThai != "hoatDong") continue;
+
+                var activeRooms = b.DanhSachPhong.Where(p => p.TrangThai == "hoatDong").ToList();
+                int rCount = activeRooms.Count;
+                int bCount = activeRooms.Sum(p => p.DanhSachGiuong.Count(g => g.LaDangHoat));
+                int occCount = activeRooms.Sum(p => p.DanhSachGiuong.Count(g =>
+                    g.LaDangHoat &&
+                    g.DanhSachHopDong.Any(hd =>
+                        hd.TrangThai != "daHuy" && hd.TrangThai != "daKetThuc" &&
+                        hd.KyHoc?.MaNamHoc == yearCode &&
+                        hd.NgayBatDau <= year.NgayKetThuc && (hd.NgayTraPhongThucTe ?? hd.NgayKetThuc) >= year.NgayBatDau)));
 
                 int vacant = Math.Max(0, bCount - occCount);
                 double rate = bCount > 0 ? Math.Round((double)occCount / bCount * 100, 1) : 0;

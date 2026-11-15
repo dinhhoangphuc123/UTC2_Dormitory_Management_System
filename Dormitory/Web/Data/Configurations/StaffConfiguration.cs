@@ -8,7 +8,8 @@ namespace Dormitory.Web.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<NhanVien> builder)
         {
-            builder.HasIndex(n => n.Email);
+            builder.HasIndex(n => n.Email).IsUnique()
+                .HasFilter("[email] IS NOT NULL");
             builder.HasIndex(n => n.DienThoai);
         }
     }

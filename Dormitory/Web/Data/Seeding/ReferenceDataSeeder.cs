@@ -143,16 +143,22 @@ namespace Dormitory.Web.Data.Seeding
             }
 
             // 6. Dịch vụ
-            if (!await context.DichVus.AnyAsync())
             {
+                // Thêm từng bản ghi theo mã: DB đã seed trước đây vẫn nhận được dịch vụ mới (DV_TRASH).
                 var dichVus = new List<DichVu>
                 {
                     new() { MaDichVu = "DV_INTERNET", TenDichVu = "Wifi Tốc độ cao", DonViTinh = "thang", DonGia = 50000, LaDangHoat = true },
+                    new() { MaDichVu = "DV_TRASH", TenDichVu = "Vệ sinh & Rác", DonViTinh = "thang", DonGia = 30000, LaDangHoat = true },
                     new() { MaDichVu = "DV_GUIXE", TenDichVu = "Gửi xe máy nội trú", DonViTinh = "thang", DonGia = 70000, LaDangHoat = true },
                     new() { MaDichVu = "DV_GIATLA", TenDichVu = "Gói giặt sấy tự động", DonViTinh = "thang", DonGia = 80000, LaDangHoat = true }
                 };
-                await context.DichVus.AddRangeAsync(dichVus);
-                await context.SaveChangesAsync();
+                var existingServiceCodes = await context.DichVus.Select(d => d.MaDichVu).ToHashSetAsync();
+                var missingServices = dichVus.Where(d => !existingServiceCodes.Contains(d.MaDichVu)).ToList();
+                if (missingServices.Count > 0)
+                {
+                    await context.DichVus.AddRangeAsync(missingServices);
+                    await context.SaveChangesAsync();
+                }
             }
 
             // 7. Loại vi phạm

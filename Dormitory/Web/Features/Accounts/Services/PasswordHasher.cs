@@ -42,13 +42,8 @@ namespace Dormitory.Web.Features.Accounts.Services
                 }
             }
 
-            // Fallback: hỗ trợ mật khẩu seed cũ dạng plain text
-            return string.Equals(password, hashedPassword, StringComparison.Ordinal);
-        }
-
-        public static bool IsLegacyPlaintext(string hashedPassword)
-        {
-            return !string.IsNullOrEmpty(hashedPassword) && !hashedPassword.StartsWith("PBKDF2$", StringComparison.Ordinal);
+            // Không chấp nhận mật khẩu lưu dạng plaintext.
+            return false;
         }
     }
 }

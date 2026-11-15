@@ -1,10 +1,19 @@
-* text=auto eol=crlf
-*.cs text diff=csharp
-*.sql text
-*.json text
-*.md text
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.ico binary
+# Set default file encoding expectations for this repo.
+* text=auto eol=lf
 
+*.cs        text eol=lf
+*.cshtml    text eol=lf
+*.csproj    text eol=lf
+*.slnx      text eol=lf
+*.json      text eol=lf
+*.js        text eol=lf
+*.css       text eol=lf
+*.yml       text eol=lf
+*.md        text eol=lf
+
+# Binary assets keep as-is.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.ico       binary
+*.pdf       binary

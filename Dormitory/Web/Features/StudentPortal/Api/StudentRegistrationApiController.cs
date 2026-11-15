@@ -4,11 +4,13 @@ using Dormitory.Web.Features.StudentPortal.DTOs;
 using Dormitory.Web.Features.StudentPortal.Services;
 using Dormitory.Web.Features.StudentPortal.Validators;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Middleware;
 using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.StudentPortal.Api
 {
     [Authorize(Policy = RoleNames.StudentOnlyPolicy)]
+    [SkipAcademicYearScope]
     [ApiController]
     [Route("api/me")]
     public class StudentRegistrationApiController : ControllerBase

@@ -47,10 +47,26 @@ namespace Dormitory.Web.Features.Utilities.Api
             var updated = await _dienNuocService.RecordUtilityAsync(req, academicYear, _currentUser?.StaffId);
             if (updated == null)
             {
-                return NotFound(ApiResponse.Fail("Không tìm thấy thông tin phòng tương ứng!"));
+                return BadRequest(ApiResponse.Fail("Không thể ghi nhận chỉ số: phòng không tồn tại, chỉ số mới nhỏ hơn chỉ số cũ, giá trị ngoài phạm vi hoặc kỳ ghi không hợp lệ."));
             }
 
             return Ok(ApiResponse<UtilityItemDto>.Ok(updated, $"Đã cập nhật chỉ số điện nước phòng {updated.Room} thành công!"));
+        }
+
+        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [HttpPost("finalize")]
+        public async Task<IActionResult> Finalize([FromBody] FinalizeUtilityDto req, [FromQuery] string? academicYear)
+        {
+            var (success, errorMessage, data) = await _dienNuocService.FinalizeUtilityBillsAsync(req, academicYear, _currentUser?.StaffId);
+            if (!success || data == null)
+            {
+                return BadRequest(ApiResponse.Fail(errorMessage ?? "Không thể chốt hóa đơn điện nước."));
+            }
+
+            string message = $"Đã chốt hóa đơn điện nước T{data.Thang:D2}/{data.Nam} phòng {data.Room}: " +
+                $"{data.InvoicesCreated} hóa đơn sinh viên mới, {data.SoNguoiChia} người chia (điện {data.TienDienMoiNguoi:n0} đ + nước {data.TienNuocMoiNguoi:n0} đ/người" +
+                (data.TienDichVu > 0 ? $", phí dịch vụ {data.TienDichVu:n0} đ" : "") + ").";
+            return Ok(ApiResponse<FinalizeUtilityResultDto>.Ok(data, message));
         }
     }
 }

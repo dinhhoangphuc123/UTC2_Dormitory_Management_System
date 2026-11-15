@@ -12,12 +12,36 @@ namespace Dormitory.Web.Shared.Constants
         public const string StudentOnlyPolicy = "StudentOnly";
     }
 
+    public static class ServiceCodes
+    {
+        // Hai dịch vụ gắn với checkbox trong form ghi chỉ số điện nước.
+        public const string Internet = "DV_INTERNET";
+        public const string Trash = "DV_TRASH";
+    }
+
     public static class AppDefaults
     {
         public const string DefaultAcademicYear = "NH2026-2027";
         public const string DefaultSemester = "HK1_2026_2027";
         public const decimal ElectricityUnitPrice = 2800m;
         public const decimal WaterUnitPrice = 14500m;
+
+        // Ngưỡng cảnh báo vượt định mức điện nước hàng tháng.
+        public const decimal ElectricUsageWarningKwh = 250m;
+        public const decimal WaterUsageWarningM3 = 20m;
+
+        // Mã trạng thái dùng chung, tránh rải chuỗi ở nhiều service.
+        public const string StatusActive = "hoatDong";
+        public const string StatusMaintenance = "baoTri";
+        public const string ContractActive = "hieuLuc";
+        public const string ContractEnded = "daKetThuc";
+        public const string ContractCancelled = "daHuy";
+        public const string InvoicePaid = "daThanhToan";
+        public const string InvoiceUnpaid = "chuaThanhToan";
+        public const string InvoiceLinePenalty = "phatTreHan";
+        public const string ServicePending = "choDuyet";
+        public const string ServiceActive = "dangDung";
+        public const string ServiceRejected = "daTuChoi";
+        public const string ServiceCancelled = "daHuy";
     }
 }
-

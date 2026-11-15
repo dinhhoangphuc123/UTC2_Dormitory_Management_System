@@ -40,8 +40,17 @@ namespace Dormitory.Web.Features.Staff.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var staff = await _nhanVienService.CreateStaffAsync(req);
-            return Ok(ApiResponse<StaffItemDto>.Ok(staff, $"Đã thêm thành công nhân viên {staff.Name} ({staff.Code})!"));
+            try
+            {
+                var staff = await _nhanVienService.CreateStaffAsync(req);
+                var message = $"Đã thêm thành công nhân viên {staff.Name} ({staff.Code})! " +
+                              $"Tên đăng nhập: {staff.Username}. Mật khẩu tạm: {staff.InitialPassword} (hãy đổi sau lần đăng nhập đầu tiên).";
+                return Ok(ApiResponse<StaffItemDto>.Ok(staff, message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(ex.Message));
+            }
         }
 
         [Authorize(Roles = RoleNames.Admin)]

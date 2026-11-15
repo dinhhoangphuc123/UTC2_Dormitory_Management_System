@@ -4,10 +4,12 @@ using Dormitory.Web.Features.StudentPortal.DTOs;
 using Dormitory.Web.Features.StudentPortal.Services;
 using Dormitory.Web.Features.StudentPortal.Validators;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Middleware;
 
 namespace Dormitory.Web.Features.StudentPortal.Api
 {
     [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+    [SkipAcademicYearScope]
     [ApiController]
     [Route("api/thongbao")]
     public class ThongBaoApiController : ControllerBase

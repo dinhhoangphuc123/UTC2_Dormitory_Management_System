@@ -19,5 +19,13 @@ namespace Dormitory.Web.Features.Invoices.DTOs
         public string MethodIcon { get; set; } = string.Empty;
         public string Status { get; set; } = "pending"; // paid, pending, overdue
         public string StatusLabel { get; set; } = "Chờ nộp";
+
+        // Trạng thái gửi hóa đơn cho sinh viên
+        public bool IsSent { get; set; }
+        public string? DateSent { get; set; }
+
+        // Minh chứng do sinh viên nộp, chờ BQL đối soát
+        public bool HasStudentProof { get; set; }
+        public string? ProofSubmittedAt { get; set; }
     }
 }

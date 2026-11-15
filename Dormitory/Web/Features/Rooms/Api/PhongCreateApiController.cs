@@ -34,8 +34,11 @@ namespace Dormitory.Web.Features.Rooms.Api
                 return BadRequest("Mã phòng đã tồn tại.");
             if (!await _context.ToaNhas.AnyAsync(t => t.MaToaNha == req.MaToaNha))
                 return BadRequest("Tòa nhà không tồn tại.");
-            if (!await _context.LoaiPhongs.AnyAsync(l => l.MaLoaiPhong == req.MaLoaiPhong))
+            var roomType = await _context.LoaiPhongs.FirstOrDefaultAsync(l => l.MaLoaiPhong == req.MaLoaiPhong);
+            if (roomType == null)
                 return BadRequest("Loại phòng không tồn tại.");
+            if (roomType.SoNguoiToiDa > 0 && req.SoGiuong > roomType.SoNguoiToiDa)
+                return BadRequest($"Số giường ({req.SoGiuong}) vượt quá sức chứa tối đa của loại phòng ({roomType.SoNguoiToiDa}).");
 
             var room = new Phong
             {
@@ -59,7 +62,7 @@ namespace Dormitory.Web.Features.Rooms.Api
             }
 
             await _context.SaveChangesAsync();
-            return Ok(room);
+            return Ok(new { maPhong = room.MaPhong, maToaNha = room.MaToaNha, maLoaiPhong = room.MaLoaiPhong, soTang = room.SoTang, soGiuong = req.SoGiuong, trangThai = room.TrangThai });
         }
     }
 

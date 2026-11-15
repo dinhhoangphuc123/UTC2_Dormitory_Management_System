@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
+using Dormitory.Web.Data.Seeding;
 
 namespace Dormitory.Web.Shared.Extensions
 {
@@ -38,16 +39,31 @@ namespace Dormitory.Web.Shared.Extensions
             try
             {
                 var context = services.GetRequiredService<ApplicationDbContext>();
-                if (!await context.Database.CanConnectAsync())
+
+                if (context.Database.IsRelational())
                 {
-                    throw new InvalidOperationException(
-                        "Không thể kết nối cơ sở dữ liệu. Hãy kiểm tra SQL Server và ConnectionStrings:DefaultConnection.");
+                    try
+                    {
+                        await context.Database.MigrateAsync();
+                    }
+                    catch (Exception migEx)
+                    {
+                        var migLogger = services.GetRequiredService<ILogger<Program>>();
+                        migLogger.LogError(migEx, "Migration thất bại: {Message}. Vui lòng kiểm tra schema DB.", migEx.Message);
+                    }
                 }
+                else
+                {
+                    // Provider InMemory (dùng trong test) không hỗ trợ migration.
+                    await context.Database.EnsureCreatedAsync();
+                }
+
+                await DbSeeder.SeedAsync(context, app.Environment);
             }
             catch (Exception ex)
             {
                 var logger = services.GetRequiredService<ILogger<Program>>();
-                logger.LogError(ex, "Không thể khởi tạo kết nối cơ sở dữ liệu SQL Server.");
+                logger.LogError(ex, "Không thể khởi tạo cơ sở dữ liệu.");
                 throw;
             }
         }

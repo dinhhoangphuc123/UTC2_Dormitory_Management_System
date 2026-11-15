@@ -145,17 +145,34 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             return student?.ToStudentProfileDto();
         }
 
-        public async Task<bool> UpdateProfileAsync(string studentId, UpdateProfileDto dto)
+        public async Task<(bool Success, string? ErrorMessage, int StatusCode)> UpdateProfileAsync(string studentId, UpdateProfileDto dto)
         {
             var student = await _context.SinhViens.FirstOrDefaultAsync(s => s.MaSinhVien == studentId);
-            if (student == null) return false;
+            if (student == null) return (false, "Không tìm thấy sinh viên.", 404);
+
+            var newEmail = dto.Email?.Trim();
+            if (newEmail != null && !string.Equals(newEmail, student.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                // Đổi email phải xác minh lại mật khẩu hiện tại vì email dùng để đặt lại mật khẩu.
+                if (string.IsNullOrWhiteSpace(dto.CurrentPassword))
+                {
+                    return (false, "Vui lòng nhập mật khẩu hiện tại để thay đổi email.", 400);
+                }
+
+                var account = await _context.TaiKhoans.FirstOrDefaultAsync(t => t.MaSinhVien == studentId);
+                if (account == null || !_passwordHasher.VerifyPassword(dto.CurrentPassword, account.MatKhauHash))
+                {
+                    return (false, "Mật khẩu hiện tại không chính xác.", 400);
+                }
+
+                student.Email = newEmail;
+            }
 
             if (dto.DienThoai != null) student.DienThoai = dto.DienThoai.Trim();
-            if (dto.Email != null) student.Email = dto.Email.Trim();
             if (dto.DiaChiThuongTru != null) student.DiaChiThuongTru = dto.DiaChiThuongTru.Trim();
 
             await _context.SaveChangesAsync();
-            return true;
+            return (true, null, 200);
         }
 
         public async Task<List<GuardianDto>> GetGuardiansAsync(string studentId)
@@ -274,6 +291,8 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 .AnyAsync(h => h.MaSinhVien == studentId && h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy");
 
             var rounds = await _context.DotDangKys
+                .Include(d => d.KyHoc)
+                .Where(d => !d.TenDot.StartsWith(DotDangKy.DraftPrefix))
                 .OrderByDescending(d => d.NgayMo)
                 .ToListAsync();
 
@@ -303,7 +322,7 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             if (student == null) return new();
 
             var round = await _context.DotDangKys.FirstOrDefaultAsync(d => d.MaDotDangKy == roundId);
-            if (round == null) return new();
+            if (round == null || !round.DaPhatHanh) return new();
 
             var buildings = await _context.ToaNhas
                 .Where(t => t.TrangThai == "hoatDong" && (t.GioiTinhQuyDinh == "honHop" || t.GioiTinhQuyDinh == student.GioiTinh))
@@ -336,7 +355,7 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             if (student == null) return new();
 
             var round = await _context.DotDangKys.FirstOrDefaultAsync(d => d.MaDotDangKy == roundId);
-            if (round == null) return new();
+            if (round == null || !round.DaPhatHanh) return new();
 
             var query = _context.Phongs
                 .Include(p => p.ToaNha)
@@ -385,9 +404,9 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             }
 
             var round = await _context.DotDangKys.FirstOrDefaultAsync(d => d.MaDotDangKy == req.MaDotDangKy);
-            if (round == null)
+            if (round == null || !round.DaPhatHanh)
             {
-                return (false, "Không tìm thấy đợt đăng ký.", null, 400);
+                return (false, round == null ? "Không tìm thấy đợt đăng ký." : "Đợt đăng ký chưa được phát hành trên hệ thống.", null, 400);
             }
 
             var now = DateTime.Now;
@@ -431,7 +450,7 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 return (false, "Phòng đã chọn hiện đã hết giường trống.", null, 400);
             }
 
-            string appId = $"DK-{DateTime.Today:yyMMdd}-{Guid.NewGuid().ToString("N")[..8]}";
+            string appId = Shared.Helpers.IdGenerator.Next("DK", DateTime.Today);
             var don = new DonDangKy
             {
                 MaDonDangKy = appId,
@@ -547,13 +566,15 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 };
 
                 var pOpt = _paymentOptions.Value;
-                if (!string.IsNullOrWhiteSpace(pOpt.AccountNo))
+                if (Payments.Services.VietQrPayload.IsConfigured(pOpt.AccountNo, pOpt.BankId))
                 {
-                    string qrUrl = $"https://img.vietqr.io/image/{pOpt.BankId}-{pOpt.AccountNo}-compact2.png?amount={total}&addInfo={invoice.MaHoaDon}&accountName={Uri.EscapeDataString(pOpt.AccountName)}";
+                    var bin = Payments.Services.VietQrPayload.NormalizeBankBin(pOpt.BankId);
                     qrDto = new VietQrDto
                     {
-                        ImageUrl = qrUrl,
+                        ImageUrl = Payments.Services.VietQrPayload.BuildImageUrl(pOpt.BankId, pOpt.AccountNo, pOpt.AccountName, total, invoice.MaHoaDon),
+                        Payload = Payments.Services.VietQrPayload.BuildPayload(pOpt.BankId, pOpt.AccountNo, pOpt.AccountName, total, invoice.MaHoaDon),
                         BankId = pOpt.BankId,
+                        BankBin = bin,
                         AccountNo = pOpt.AccountNo,
                         AccountName = pOpt.AccountName,
                         Amount = total,
@@ -661,6 +682,34 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             return invoice.ToStudentInvoiceDetailDto(isReg);
         }
 
+        public async Task<VietQrDto?> GetInvoiceQrAsync(string studentId, string invoiceId)
+        {
+            var invoice = await _context.HoaDons
+                .Where(h => h.MaHoaDon == invoiceId && h.HopDong != null && h.HopDong.MaSinhVien == studentId)
+                .Include(h => h.DanhSachChiTietHoaDon)
+                .Include(h => h.DanhSachThanhToan)
+                .FirstOrDefaultAsync();
+            if (invoice == null) return null;
+
+            var total = invoice.DanhSachChiTietHoaDon.Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia);
+            var outstanding = Math.Max(0, total - invoice.DanhSachThanhToan.Sum(t => t.SoTien));
+            var pOpt = _paymentOptions.Value;
+            if (!Payments.Services.VietQrPayload.IsConfigured(pOpt.AccountNo, pOpt.BankId))
+                return null;
+
+            return new VietQrDto
+            {
+                ImageUrl = Payments.Services.VietQrPayload.BuildImageUrl(pOpt.BankId, pOpt.AccountNo, pOpt.AccountName, outstanding, invoice.MaHoaDon),
+                Payload = Payments.Services.VietQrPayload.BuildPayload(pOpt.BankId, pOpt.AccountNo, pOpt.AccountName, outstanding, invoice.MaHoaDon),
+                BankId = pOpt.BankId,
+                BankBin = Payments.Services.VietQrPayload.NormalizeBankBin(pOpt.BankId),
+                AccountNo = pOpt.AccountNo,
+                AccountName = pOpt.AccountName,
+                Amount = outstanding,
+                Content = invoice.MaHoaDon
+            };
+        }
+
         public async Task<StudentUtilityDto?> GetUtilitiesAsync(string studentId)
         {
             var activeContract = await _context.HopDongs
@@ -754,14 +803,28 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             string? savedFileName = null;
             if (req.Image != null)
             {
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+                var ext = Path.GetExtension(req.Image.FileName).ToLowerInvariant();
+                if (!allowedExtensions.Contains(ext))
+                {
+                    return (false, "Chỉ chấp nhận ảnh minh họa định dạng JPG, PNG hoặc WebP.", 415);
+                }
+                if (req.Image.Length <= 0 || req.Image.Length > 5 * 1024 * 1024)
+                {
+                    return (false, "Tệp ảnh minh họa phải nhỏ hơn 5 MB.", 413);
+                }
+
                 try
                 {
-                    string dir = Path.Combine(appDataPath, "maintenance");
+                    string dir = Path.GetFullPath(Path.Combine(appDataPath, "maintenance"));
                     Directory.CreateDirectory(dir);
 
-                    string ext = Path.GetExtension(req.Image.FileName).ToLowerInvariant();
                     savedFileName = $"{Guid.NewGuid():N}{ext}";
-                    string fullPath = Path.Combine(dir, savedFileName);
+                    string fullPath = Path.GetFullPath(Path.Combine(dir, savedFileName));
+                    if (!fullPath.StartsWith(dir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return (false, "Đường dẫn tệp không hợp lệ.", 400);
+                    }
 
                     using var stream = new FileStream(fullPath, FileMode.Create);
                     await req.Image.CopyToAsync(stream);
@@ -801,15 +864,23 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 return (null, null);
             }
 
-            string filePath = Path.Combine(appDataPath, "maintenance", ticket.AnhMinhHoa);
-            if (!File.Exists(filePath))
+            string dir = Path.GetFullPath(Path.Combine(appDataPath, "maintenance"));
+            string filePath = Path.GetFullPath(Path.Combine(dir, Path.GetFileName(ticket.AnhMinhHoa)));
+            if (!filePath.StartsWith(dir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                !File.Exists(filePath))
             {
                 return (null, null);
             }
 
             byte[] bytes = await File.ReadAllBytesAsync(filePath);
             string ext = Path.GetExtension(ticket.AnhMinhHoa).ToLowerInvariant();
-            string contentType = ext == ".png" ? "image/png" : "image/jpeg";
+            string contentType = ext switch
+            {
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                _ => "application/octet-stream"
+            };
 
             return (bytes, contentType);
         }

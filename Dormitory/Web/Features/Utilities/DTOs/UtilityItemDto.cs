@@ -16,7 +16,15 @@ namespace Dormitory.Web.Features.Utilities.DTOs
         public decimal? ElectricityRate { get; set; }
         public decimal? WaterRate { get; set; }
         public List<string> Services { get; set; } = new();
+        public List<string> ServiceCodes { get; set; } = new();
         public string Status { get; set; } = "RECORDED"; // RECORDED, PENDING, EXCEEDED
         public string? UpdatedAt { get; set; }
+
+        // Trạng thái chốt hóa đơn điện nước của kỳ gần nhất đã ghi chỉ số
+        public string? BillStatus { get; set; } // chuaChot, daChot, null = chưa từng ghi
+        public int? BillThang { get; set; }
+        public int? BillNam { get; set; }
+        public int? SoNguoiChia { get; set; }
+        public decimal? TienMoiNguoi { get; set; }
     }
 }

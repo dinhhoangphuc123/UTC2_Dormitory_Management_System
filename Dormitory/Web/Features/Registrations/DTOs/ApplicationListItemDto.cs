@@ -18,6 +18,22 @@ namespace Dormitory.Web.Features.Registrations.DTOs
         public string ProofDocument { get; set; } = string.Empty;
         public string SubmittedAt { get; set; } = string.Empty;
         public string Status { get; set; } = "Chờ duyệt"; // Chờ duyệt, Đã duyệt, Bị từ chối
+        public string ClassName { get; set; } = string.Empty;
+        public int? IntakeYear { get; set; }
+        public string DateOfBirth { get; set; } = string.Empty;
+        public string Cccd { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string RoundCode { get; set; } = string.Empty;
+        public string RoundName { get; set; } = string.Empty;
+        public string BuildingName { get; set; } = string.Empty;
+        public string RoomCode { get; set; } = string.Empty;
+        public string RoomTypeName { get; set; } = string.Empty;
+        public decimal? MonthlyFee { get; set; }
+        public string? RejectionReason { get; set; }
+        public string? Note { get; set; }
+        public string? ApprovedBy { get; set; }
+        public string? ApprovedAt { get; set; }
     }
 
     public class RejectApplicationDto

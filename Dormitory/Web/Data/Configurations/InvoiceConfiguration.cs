@@ -8,7 +8,8 @@ namespace Dormitory.Web.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<HoaDon> builder)
         {
-            builder.HasIndex(h => new { h.MaHopDong, h.Thang, h.Nam }).IsUnique();
+            // Một hợp đồng có thể có nhiều hóa đơn trong cùng tháng (tiền phòng, điện, nước, dịch vụ...).
+            builder.HasIndex(h => new { h.MaHopDong, h.Thang, h.Nam });
         }
     }
 }

@@ -4,9 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Academic.Entities;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Middleware;
 
 namespace Dormitory.Web.Features.Academic.Api
 {
+    [SkipAcademicYearScope]
     [ApiController]
     [Route("api/namhoc")]
     public class NamHocApiController : ControllerBase

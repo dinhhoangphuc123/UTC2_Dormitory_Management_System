@@ -64,6 +64,7 @@ window.KtxStudentViews = (function () {
         invoices: [],
         invoiceTab: 'UNPAID',
         utilities: null,
+        serviceOptions: [],
         // 09. Maintenance
         maintenanceTickets: [],
         // 10. Violations
@@ -130,13 +131,24 @@ window.KtxStudentViews = (function () {
         return str.substring(0, 3) + '******' + str.substring(str.length - 3);
     }
 
+    async function parseJsonResponse(res, fallbackMessage) {
+        const text = await res.text();
+        let json = null;
+        try {
+            json = text ? JSON.parse(text) : null;
+        } catch (e) {
+            throw new Error(`Máy chủ trả nội dung không phải JSON (HTTP ${res.status}). Vui lòng kiểm tra SQL Server/lại sau.`);
+        }
+        if (!res.ok || !json || !json.success) {
+            throw new Error((json && json.message) || (json && json.detail) || fallbackMessage);
+        }
+        return json;
+    }
+
     // Helper: Fetch json wrapper with error handling
     async function apiGet(url) {
         const res = await fetch(url);
-        const json = await res.json();
-        if (!res.ok || !json.success) {
-            throw new Error(json.message || `Lỗi tải dữ liệu (${res.status})`);
-        }
+        const json = await parseJsonResponse(res, `Lỗi tải dữ liệu (${res.status})`);
         return json.data;
     }
 
@@ -146,10 +158,7 @@ window.KtxStudentViews = (function () {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        const json = await res.json();
-        if (!res.ok || !json.success) {
-            throw new Error(json.message || `Thao tác thất bại (${res.status})`);
-        }
+        const json = await parseJsonResponse(res, `Thao tác thất bại (${res.status})`);
         return json;
     }
 
@@ -159,32 +168,41 @@ window.KtxStudentViews = (function () {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        const json = await res.json();
-        if (!res.ok || !json.success) {
-            throw new Error(json.message || `Thao tác thất bại (${res.status})`);
-        }
+        const json = await parseJsonResponse(res, `Thao tác thất bại (${res.status})`);
         return json;
     }
 
     async function apiDelete(url) {
         const res = await fetch(url, { method: 'DELETE' });
-        const json = await res.json();
-        if (!res.ok || !json.success) {
-            throw new Error(json.message || `Xóa thất bại (${res.status})`);
-        }
+        const json = await parseJsonResponse(res, `Xóa thất bại (${res.status})`);
         return json;
     }
 
-    // Metric card proxy
+    // High-end balanced metric card
     function renderMetricCard(opts) {
-        if (window.KtxExtendedViews && typeof window.KtxExtendedViews.renderMetricCard === 'function') {
-            return window.KtxExtendedViews.renderMetricCard(opts);
-        }
+        const tone = opts.tone || opts.color || 'blue';
+        const toneStyles = {
+            blue: 'text-[#0B2A5B] dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 border-blue-200/60 dark:border-blue-900/40',
+            green: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-900/40',
+            amber: 'text-amber-700 dark:text-amber-400 bg-amber-50/80 dark:bg-amber-950/40 border-amber-200/60 dark:border-amber-900/40',
+            red: 'text-rose-700 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 border-rose-200/60 dark:border-rose-900/40',
+            slate: 'text-slate-700 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800'
+        }[tone] || 'text-[#0B2A5B] dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 border-blue-200/60 dark:border-blue-900/40';
+
         return `
-            <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">${esc(opts.label)}</div>
-                <div class="text-2xl font-bold mt-2 text-[#0b2a5b] dark:text-blue-300">${esc(opts.value)}</div>
-                ${opts.footer ? `<div class="text-xs text-slate-500 mt-2">${esc(opts.footer)}</div>` : ''}
+            <div class="group relative rounded-2xl bg-white dark:bg-[#111827] p-5 border border-slate-200/80 dark:border-[#232B3B] shadow-xs hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between min-h-[115px]">
+                <div class="flex items-center justify-between gap-3">
+                    <span class="text-[11px] font-bold tracking-wider uppercase text-slate-400 dark:text-slate-500 truncate">${esc(opts.label)}</span>
+                    ${opts.icon ? `
+                        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${toneStyles}">
+                            <span class="material-symbols-outlined text-[19px]">${opts.icon}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="mt-3 flex items-baseline justify-between gap-2">
+                    <span class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">${esc(opts.value)}</span>
+                    ${opts.footer ? `<span class="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate max-w-[130px] text-right">${esc(opts.footer)}</span>` : ''}
+                </div>
             </div>
         `;
     }
@@ -204,26 +222,22 @@ window.KtxStudentViews = (function () {
                 text = 'Đang ở KTX';
                 break;
             case 'hieuluc':
+                bg = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60';
+                text = 'Hiệu lực';
+                break;
+            case 'chothanhtoan':
+            case 'cho_thanh_toan':
+            case 'duocduyetchothanhtoan':
+            case 'daduyetchothanhtoan':
             case 'da_duyet':
             case 'daduyet':
-                bg = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60';
-                text = 'Đã duyệt / Hiệu lực';
-                break;
-            case 'dathanhtoan':
-            case 'dathanhtoanchonhanphong':
-                bg = 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800/60';
-                text = 'Đã thanh toán (Chờ nhận phòng)';
+                bg = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/60';
+                text = 'Được duyệt - Chờ thanh toán';
                 break;
             case 'choduyet':
             case 'cho_duyet':
                 bg = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/60';
                 text = 'Chờ BQL duyệt';
-                break;
-            case 'chothanhtoan':
-            case 'cho_thanh_toan':
-            case 'duocduyetchothanhtoan':
-                bg = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/60';
-                text = 'Được duyệt - Chờ thanh toán';
                 break;
             case 'hethan':
             case 'het_han':
@@ -239,14 +253,15 @@ window.KtxStudentViews = (function () {
                 break;
             case 'dathanhtoan':
             case 'dathanhtoanchonhanphong':
-                bg = 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/60';
-                text = 'Đã thanh toán - Chờ nhận phòng';
+            case 'dathanhtoanchuanhanphong':
+                bg = 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800/60';
+                text = 'Đã thanh toán (Chờ nhận phòng)';
                 break;
             case 'hoantat':
             case 'hoanthanh':
             case 'completed':
                 bg = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60';
-                text = 'Hoàn tất đăng ký';
+                text = 'Đã duyệt / Hoàn tất';
                 break;
             case 'chuadangky':
                 bg = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/60';
@@ -286,10 +301,10 @@ window.KtxStudentViews = (function () {
      */
     function renderViewHeader(title, subtitle, actionsHtml = '') {
         return `
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/60 dark:border-[#232B3B]/80 mb-6">
-                <div>
-                    <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">${esc(title)}</h1>
-                    <p class="text-xs sm:text-[13px] text-slate-500 dark:text-slate-400 mt-1">${esc(subtitle)}</p>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 mb-6 border-b border-slate-200/70 dark:border-slate-800/80">
+                <div class="min-w-0">
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white truncate">${esc(title)}</h1>
+                    ${subtitle ? `<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">${esc(subtitle)}</p>` : ''}
                 </div>
                 ${actionsHtml ? `<div class="flex items-center gap-2 shrink-0">${actionsHtml}</div>` : ''}
             </div>
@@ -311,6 +326,41 @@ window.KtxStudentViews = (function () {
                     <div class="h-28 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
                 </div>
                 <div class="h-64 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
+            </div>
+        `;
+    }
+
+    function renderSkeleton() {
+        return `
+            <div class="space-y-6 animate-pulse page-content-enter">
+                <div class="h-10 w-48 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                <div class="h-32 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="h-28 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
+                    <div class="h-28 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
+                    <div class="h-28 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
+                    <div class="h-28 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
+                </div>
+                <div class="h-64 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
+            </div>
+        `;
+    }
+
+    function renderErrorAlert(title, message, retryHandler) {
+        const onClickAttr = retryHandler ? `onclick="${retryHandler}"` : '';
+        return `
+            <div class="bg-white dark:bg-[#121826] rounded-2xl p-8 shadow-xs border border-red-200 dark:border-red-900/50 text-center space-y-4 page-content-enter">
+                <div class="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[30px]">error</span>
+                </div>
+                <h3 class="text-base font-bold text-slate-900 dark:text-white">${esc(title)}</h3>
+                <p class="text-xs text-red-600 dark:text-red-400 max-w-md mx-auto">${esc(message)}</p>
+                ${retryHandler ? `
+                <div class="pt-2">
+                    <button type="button" ${onClickAttr} class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all">
+                        Thử lại
+                    </button>
+                </div>` : ''}
             </div>
         `;
     }
@@ -411,26 +461,23 @@ window.KtxStudentViews = (function () {
         switch (state) {
             case 'choThanhToan':
                 return `
-                    <div class="p-6 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/60 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex items-start gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
-                                <span class="material-symbols-outlined text-[28px]">timer</span>
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/40 dark:via-amber-900/10 border border-amber-300/80 dark:border-amber-700/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                <span class="material-symbols-outlined text-[24px]">timer</span>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300">CẦN THANH TOÁN GIỮ CHỖ</span>
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 tracking-wide">GIỮ CHỖ 24H</span>
+                                    ${d.holdDeadline ? `<span id="dashCountdownHero" class="font-mono font-bold text-xs text-amber-700 dark:text-amber-400">Đang tính...</span>` : ''}
                                 </div>
-                                <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-1">Đơn đăng ký đã duyệt — Hoàn tất nộp phí trong 24 giờ</h2>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                                    Số tiền giữ chỗ: <strong class="text-amber-700 dark:text-amber-400 font-bold text-sm">${fmtVND(d.amountDue)}</strong>
-                                    ${d.holdDeadline ? `• Thời gian còn lại: <span id="dashCountdownHero" class="font-mono font-bold text-amber-700 dark:text-amber-400 px-1.5 py-0.5 bg-amber-200/60 dark:bg-amber-900/60 rounded">Đang tính...</span>` : ''}
-                                </p>
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white mt-1">Cần thanh toán: ${fmtVND(d.amountDue)}</h2>
                             </div>
                         </div>
-                        <div class="shrink-0 flex items-center gap-2">
+                        <div class="shrink-0">
                             <button type="button" onclick="KtxApp.navigate('sv-thanh-toan')" class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-sm transition-all inline-flex items-center gap-1.5">
-                                <span class="material-symbols-outlined text-[18px]">qr_code_2</span>
-                                <span>Thanh toán VietQR ngay</span>
+                                <span class="material-symbols-outlined text-[17px]">qr_code_2</span>
+                                <span>Thanh toán ngay</span>
                             </button>
                         </div>
                     </div>
@@ -438,19 +485,18 @@ window.KtxStudentViews = (function () {
 
             case 'choDuyet':
                 return `
-                    <div class="p-6 rounded-2xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-300/70 dark:border-amber-800/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex items-start gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
-                                <span class="material-symbols-outlined text-[28px]">pending_actions</span>
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-transparent dark:from-blue-950/40 dark:via-blue-900/10 border border-blue-200/80 dark:border-blue-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="w-12 h-12 rounded-2xl bg-[#0B2A5B] text-white flex items-center justify-center shrink-0 shadow-sm">
+                                <span class="material-symbols-outlined text-[24px]">pending_actions</span>
                             </div>
-                            <div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300">CHỜ DUYỆT HỒ SƠ</span>
-                                <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-1">Đơn đăng ký đang được Ban Quản lý xét duyệt</h2>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">Hồ sơ của bạn đã được ghi nhận. Ngay khi được duyệt, hệ thống sẽ cấp giường và gửi thông báo thanh toán giữ chỗ 24h.</p>
+                            <div class="min-w-0">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-900/40 text-[#0B2A5B] dark:text-blue-300 tracking-wide">HỒ SƠ ĐANG XÉT</span>
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white mt-1">Đơn đăng ký đang được BQL thẩm định</h2>
                             </div>
                         </div>
                         <div class="shrink-0">
-                            <button type="button" onclick="KtxApp.navigate('sv-don-cua-toi')" class="px-4 py-2 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] hover:bg-slate-50 text-slate-800 dark:text-white font-semibold text-xs transition-all shadow-2xs">
+                            <button type="button" onclick="KtxApp.navigate('sv-don-cua-toi')" class="px-4 py-2.5 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 font-semibold text-xs hover:bg-slate-50 transition-all shadow-2xs">
                                 Xem đơn của tôi
                             </button>
                         </div>
@@ -460,23 +506,18 @@ window.KtxStudentViews = (function () {
             case 'hetHan':
             case 'biTuChoi':
                 return `
-                    <div class="p-6 rounded-2xl bg-red-500/10 dark:bg-red-950/20 border border-red-300/70 dark:border-red-800/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex items-start gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
-                                <span class="material-symbols-outlined text-[28px]">${state === 'hetHan' ? 'event_busy' : 'cancel'}</span>
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-transparent dark:from-rose-950/40 dark:via-rose-900/10 border border-rose-300/80 dark:border-rose-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                <span class="material-symbols-outlined text-[24px]">${state === 'hetHan' ? 'event_busy' : 'cancel'}</span>
                             </div>
-                            <div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/20 text-red-700 dark:text-red-400">
+                            <div class="min-w-0">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-400 tracking-wide">
                                     ${state === 'hetHan' ? 'HẾT HẠN GIỮ CHỖ' : 'KHÔNG ĐƯỢC DUYỆT'}
                                 </span>
-                                <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                                    ${state === 'hetHan' ? 'Hồ sơ đã hết thời hạn thanh toán giữ chỗ 24 giờ' : 'Đơn đăng ký của bạn không được xét duyệt'}
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white mt-1">
+                                    ${state === 'hetHan' ? 'Hết hạn thanh toán giữ chỗ 24h' : 'Đơn đăng ký chưa đạt tiêu chuẩn'}
                                 </h2>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                                    ${state === 'hetHan'
-                                        ? 'Giường đã được tự động giải phóng cho các sinh viên khác. Bạn có thể nộp đơn mới nếu đợt đăng ký vẫn đang mở.'
-                                        : 'Vui lòng kiểm tra chi tiết lý do từ chối của BQL trong mục Đơn của tôi.'}
-                                </p>
                             </div>
                         </div>
                         <div class="shrink-0 flex items-center gap-2">
@@ -485,7 +526,7 @@ window.KtxStudentViews = (function () {
                                     Đăng ký lại
                                 </button>
                             ` : ''}
-                            <button type="button" onclick="KtxApp.navigate('sv-don-cua-toi')" class="px-4 py-2.5 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 font-semibold text-xs shadow-2xs">
+                            <button type="button" onclick="KtxApp.navigate('sv-don-cua-toi')" class="px-4 py-2.5 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 font-semibold text-xs shadow-2xs">
                                 Chi tiết đơn
                             </button>
                         </div>
@@ -494,22 +535,19 @@ window.KtxStudentViews = (function () {
 
             case 'daThanhToanChoNhanPhong':
                 return `
-                    <div class="p-6 rounded-2xl bg-blue-500/10 dark:bg-blue-950/30 border border-blue-300/70 dark:border-blue-800/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex items-start gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-blue-500/20 text-[#0B2A5B] dark:text-blue-400 flex items-center justify-center shrink-0">
-                                <span class="material-symbols-outlined text-[28px]">verified</span>
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-500/10 via-teal-500/5 to-transparent dark:from-teal-950/40 dark:via-teal-900/10 border border-teal-300/80 dark:border-teal-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="w-12 h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                <span class="material-symbols-outlined text-[24px]">verified</span>
                             </div>
-                            <div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-[#0B2A5B] dark:text-blue-300">ĐÃ THANH TOÁN THÀNH CÔNG</span>
-                                <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-1">Đã giữ chỗ thành công — Chờ nhận phòng thực tế</h2>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                                    Vui lòng mang theo CCCD và Thẻ sinh viên đến văn phòng Ban Quản lý KTX UTC2 vào ngày nhận phòng để nhận chìa khóa và kiểm kê tài sản.
-                                </p>
+                            <div class="min-w-0">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-800 dark:text-teal-300 tracking-wide">ĐÃ GIỮ CHỖ</span>
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white mt-1">Thanh toán hoàn tất — Chờ nhận phòng</h2>
                             </div>
                         </div>
                         <div class="shrink-0">
-                            <button type="button" onclick="KtxApp.navigate('sv-hop-dong')" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all">
-                                Xem thông tin chỗ ở
+                            <button type="button" onclick="KtxApp.navigate('sv-hop-dong')" class="px-4 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all">
+                                Thông tin chỗ ở
                             </button>
                         </div>
                     </div>
@@ -517,26 +555,25 @@ window.KtxStudentViews = (function () {
 
             case 'dangO':
                 return `
-                    <div class="p-6 rounded-2xl bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-300/70 dark:border-emerald-800/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex items-start gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                                <span class="material-symbols-outlined text-[28px]">domain_verification</span>
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-950/40 dark:via-emerald-900/10 border border-emerald-300/80 dark:border-emerald-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                <span class="material-symbols-outlined text-[24px]">domain_verification</span>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-800 dark:text-emerald-300">ĐANG Ở KTX</span>
-                                    <span class="text-xs text-slate-500 dark:text-slate-400">Nhận phòng: ${esc(room?.ngayNhanPhong || 'Đã bàn giao')}</span>
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 tracking-wide">ĐANG NỘI TRÚ</span>
+                                    <span class="text-xs text-slate-400">Từ ${esc(room?.ngayNhanPhong || 'kỳ này')}</span>
                                 </div>
-                                <h2 class="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                                    ${esc(room?.toa || 'Tòa nhà')} • Phòng ${esc(room?.phong || '—')} • Giường ${esc(room?.giuong || '—')}
+                                <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-1">
+                                    ${esc(room?.toa || 'Tòa KTX')} • Phòng ${esc(room?.phong || '—')} • Giường ${esc(room?.giuong || '—')}
                                 </h2>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">Hợp đồng nội trú đang có hiệu lực. Bạn có thể gửi yêu cầu sửa chữa hoặc tra cứu hóa đơn định kỳ.</p>
                             </div>
                         </div>
                         <div class="shrink-0 flex items-center gap-2">
                             <button type="button" onclick="KtxApp.navigate('sv-hop-dong')" class="px-4 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all inline-flex items-center gap-1.5">
-                                <span class="material-symbols-outlined text-[17px]">home</span>
-                                <span>Chỗ ở của tôi</span>
+                                <span class="material-symbols-outlined text-[16px]">home</span>
+                                <span>Chỗ ở</span>
                             </button>
                         </div>
                     </div>
@@ -545,31 +582,26 @@ window.KtxStudentViews = (function () {
             case 'chuaDangKy':
             default:
                 return `
-                    <div class="p-6 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-[#232B3B] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex items-start gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-400 flex items-center justify-center shrink-0">
-                                <span class="material-symbols-outlined text-[28px]">apartment</span>
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-100 via-white to-transparent dark:from-[#111827] dark:via-[#111827]/60 border border-slate-200/80 dark:border-[#232B3B] p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="w-12 h-12 rounded-2xl bg-[#0B2A5B] text-white flex items-center justify-center shrink-0 shadow-sm">
+                                <span class="material-symbols-outlined text-[24px]">apartment</span>
                             </div>
-                            <div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/60 text-[#0B2A5B] dark:text-blue-300">CHƯA ĐĂNG KÝ NỘI TRÚ</span>
-                                <h2 class="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                                    ${studentState.hasOpenRound ? 'Ký túc xá đang mở đợt đăng ký phòng mới' : 'Hiện chưa có đợt đăng ký nội trú mở'}
+                            <div class="min-w-0">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-900/40 text-[#0B2A5B] dark:text-blue-300 tracking-wide">CHƯA ĐĂNG KÝ NỘI TRÚ</span>
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white mt-1">
+                                    ${studentState.hasOpenRound ? 'Đang mở đợt xét tuyển nội trú mới' : 'Chưa có đợt đăng ký mới'}
                                 </h2>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                                    ${studentState.hasOpenRound
-                                        ? 'Đăng ký phòng sớm để chọn tòa nhà, số giường phù hợp và hưởng mức giá nội trú ưu đãi của UTC2.'
-                                        : 'Vui lòng theo dõi bảng tin thông báo để cập nhật lịch mở đợt đăng ký tiếp theo.'}
-                                </p>
                             </div>
                         </div>
                         <div class="shrink-0">
                             ${studentState.hasOpenRound ? `
                                 <button type="button" onclick="KtxApp.navigate('sv-dot-dang-ky')" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all inline-flex items-center gap-1.5">
-                                    <span class="material-symbols-outlined text-[18px]">how_to_reg</span>
-                                    <span>Đăng ký ngay</span>
+                                    <span class="material-symbols-outlined text-[17px]">how_to_reg</span>
+                                    <span>Đăng ký phòng</span>
                                 </button>
                             ` : `
-                                <button type="button" onclick="KtxApp.navigate('sv-dot-dang-ky')" class="px-4 py-2 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-300 font-semibold text-xs">
+                                <button type="button" onclick="KtxApp.navigate('sv-dot-dang-ky')" class="px-4 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-300 font-semibold text-xs shadow-2xs">
                                     Xem lịch đợt
                                 </button>
                             `}
@@ -663,73 +695,79 @@ window.KtxStudentViews = (function () {
                     ${metricCards}
                 </div>
 
-                <!-- Bottom Two Column Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Bottom Symmetrical Two-Column Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
                     <!-- Left: Latest Notifications -->
-                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
-                        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                            <div class="flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">notifications</span>
-                                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Thông báo mới nhất</h3>
+                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/70 dark:border-[#232B3B] flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between pb-3.5 mb-3 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="size-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-[#0B2A5B] dark:text-blue-400 flex items-center justify-center">
+                                        <span class="material-symbols-outlined text-[18px]">notifications</span>
+                                    </div>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Thông báo mới</h3>
+                                </div>
+                                <button type="button" onclick="KtxApp.navigate('sv-thong-bao')" class="text-xs font-semibold text-[#0B2A5B] dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 transition-colors">
+                                    <span>Tất cả</span>
+                                    <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                </button>
                             </div>
-                            <button type="button" onclick="KtxApp.navigate('sv-thong-bao')" class="text-xs font-semibold text-[#0B2A5B] dark:text-blue-400 hover:underline">
-                                Xem tất cả
-                            </button>
-                        </div>
-                        <div class="divide-y divide-slate-100 dark:divide-slate-800">
-                            ${notifs.length ? notifs.map(n => `
-                                <div class="py-3 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition-colors" onclick="KtxStudentViews.openNotificationModal(${n.id})">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <span class="text-xs font-semibold text-slate-900 dark:text-white truncate ${n.daDoc ? 'opacity-80' : 'font-bold'}">
-                                            ${esc(n.tieuDe)}
-                                        </span>
-                                        ${!n.daDoc ? '<span class="w-2 h-2 rounded-full bg-blue-600 shrink-0"></span>' : ''}
+                            <div class="divide-y divide-slate-100/80 dark:divide-slate-800/80">
+                                ${notifs.length ? notifs.slice(0, 4).map(n => `
+                                    <div class="py-2.5 px-2 -mx-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl transition-colors flex items-center justify-between gap-3 group" onclick="KtxStudentViews.openNotificationModal(${n.id})">
+                                        <div class="min-w-0 flex items-center gap-2">
+                                            ${!n.daDoc ? '<span class="size-1.5 rounded-full bg-blue-600 shrink-0"></span>' : '<span class="size-1.5 shrink-0"></span>'}
+                                            <span class="text-xs ${n.daDoc ? 'text-slate-600 dark:text-slate-400 font-medium' : 'text-slate-900 dark:text-white font-semibold'} truncate group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors">
+                                                ${esc(n.tieuDe)}
+                                            </span>
+                                        </div>
+                                        <span class="text-[11px] text-slate-400 shrink-0 font-medium font-mono">${esc(n.ngayTao ? n.ngayTao.split(' ')[0] : '')}</span>
                                     </div>
-                                    <div class="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                                        <span>${esc(n.loai || 'chung')}</span>
-                                        <span>${esc(n.ngayTao)}</span>
+                                `).join('') : `
+                                    <div class="py-10 text-center text-xs text-slate-400">
+                                        Không có thông báo mới
                                     </div>
-                                </div>
-                            `).join('') : `
-                                <div class="py-8 text-center text-xs text-slate-400">
-                                    Chưa có thông báo nào mới
-                                </div>
-                            `}
+                                `}
+                            </div>
                         </div>
                     </div>
 
                     <!-- Right: Recent Maintenance Tickets -->
-                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B]">
-                        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                            <div class="flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">build</span>
-                                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Phiếu báo hỏng gần đây</h3>
+                    <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/70 dark:border-[#232B3B] flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between pb-3.5 mb-3 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="size-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                                        <span class="material-symbols-outlined text-[18px]">build</span>
+                                    </div>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Sự cố phòng</h3>
+                                </div>
+                                <button type="button" onclick="KtxApp.navigate('sv-sua-chua')" class="text-xs font-semibold text-[#0B2A5B] dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 transition-colors">
+                                    <span>Tất cả</span>
+                                    <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                </button>
                             </div>
-                            <button type="button" onclick="KtxApp.navigate('sv-sua-chua')" class="text-xs font-semibold text-[#0B2A5B] dark:text-blue-400 hover:underline">
-                                Xem tất cả
-                            </button>
-                        </div>
-                        <div class="divide-y divide-slate-100 dark:divide-slate-800">
-                            ${tickets.length ? tickets.map(t => `
-                                <div class="py-3 flex items-center justify-between gap-3">
-                                    <div class="min-w-0">
-                                        <div class="text-xs font-bold text-slate-900 dark:text-white truncate">
-                                            SC-${String(t.id).padStart(6, '0')} • ${esc(t.loaiSuCo || t.moTa || 'Sửa chữa')}
+                            <div class="divide-y divide-slate-100/80 dark:divide-slate-800/80">
+                                ${tickets.length ? tickets.slice(0, 4).map(t => `
+                                    <div class="py-2.5 px-2 -mx-2 flex items-center justify-between gap-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                        <div class="min-w-0">
+                                            <div class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                                ${esc(t.loaiSuCo || t.moTa || 'Báo hỏng')}
+                                            </div>
+                                            <div class="text-[10px] text-slate-400 font-mono mt-0.5">
+                                                #SC-${String(t.id).padStart(4, '0')} • ${esc(t.ngayGui ? t.ngayGui.split(' ')[0] : '')}
+                                            </div>
                                         </div>
-                                        <div class="text-[11px] text-slate-400 mt-0.5 truncate">
-                                            ${esc(t.moTa)}
+                                        <div class="shrink-0">
+                                            ${statusBadge(t.trangThai)}
                                         </div>
                                     </div>
-                                    <div class="shrink-0 text-right">
-                                        ${statusBadge(t.trangThai)}
-                                        <div class="text-[10px] text-slate-400 mt-1">${esc(t.ngayGui)}</div>
+                                `).join('') : `
+                                    <div class="py-10 text-center text-xs text-slate-400">
+                                        Chưa có phiếu báo hỏng
                                     </div>
-                                </div>
-                            `).join('') : `
-                                <div class="py-8 text-center text-xs text-slate-400">
-                                    Không có phiếu sửa chữa nào gần đây
-                                </div>
-                            `}
+                                `}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -797,24 +835,28 @@ window.KtxStudentViews = (function () {
                 `)}
 
                 <!-- Top: Profile Header Card -->
-                <div class="p-6 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div class="flex items-center gap-4">
-                        <div class="w-16 h-16 rounded-full bg-[#0B2A5B] text-white flex items-center justify-center text-xl font-bold ring-4 ring-blue-100 dark:ring-blue-900/40 shrink-0">
+                <div class="p-6 sm:p-7 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                    <div class="flex items-center gap-5">
+                        <div class="size-16 sm:size-20 rounded-2xl bg-gradient-to-br from-[#0B2A5B] to-[#154689] text-white flex items-center justify-center text-2xl font-bold shadow-sm shrink-0">
                             ${esc(p.hoTen ? p.hoTen.charAt(0) : 'S')}
                         </div>
                         <div>
-                            <div class="flex items-center gap-2">
-                                <h2 class="text-lg font-bold text-slate-900 dark:text-white">${esc(p.hoTen)}</h2>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0B2A5B] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60">
-                                    ${esc(p.maSinhVien)}
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">${esc(p.hoTen)}</h2>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-blue-50 text-[#0B2A5B] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60">
+                                    MSSV: ${esc(p.maSinhVien)}
                                 </span>
                             </div>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                Lớp: <strong>${esc(p.maLop || '—')}</strong> • Khoa: <strong>${esc(p.tenKhoa || '—')}</strong> • Niên khóa: <strong>${esc(p.namNhapHoc || '—')}</strong>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
+                                <span>Lớp: <strong class="text-slate-800 dark:text-slate-200 font-semibold">${esc(p.maLop || '—')}</strong></span>
+                                <span class="text-slate-300 dark:text-slate-700">•</span>
+                                <span>Khoa: <strong class="text-slate-800 dark:text-slate-200 font-semibold">${esc(p.tenKhoa || '—')}</strong></span>
+                                <span class="text-slate-300 dark:text-slate-700">•</span>
+                                <span>Khóa: <strong class="text-slate-800 dark:text-slate-200 font-semibold">${esc(p.namNhapHoc || '—')}</strong></span>
                             </p>
                         </div>
                     </div>
-                    <div>
+                    <div class="shrink-0">
                         ${statusBadge(p.trangThai === 'dangHoc' ? 'Đang học' : p.trangThai)}
                     </div>
                 </div>
@@ -830,7 +872,7 @@ window.KtxStudentViews = (function () {
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
                             <div>
                                 <span class="text-slate-400 block text-[11px]">Họ và tên</span>
                                 <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.hoTen)}</span>
@@ -840,7 +882,7 @@ window.KtxStudentViews = (function () {
                             </button>
                         </div>
 
-                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
                             <div>
                                 <span class="text-slate-400 block text-[11px]">Ngày sinh</span>
                                 <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.ngaySinh)}</span>
@@ -850,7 +892,7 @@ window.KtxStudentViews = (function () {
                             </button>
                         </div>
 
-                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
                             <div>
                                 <span class="text-slate-400 block text-[11px]">Giới tính</span>
                                 <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${p.gioiTinh === 'nam' ? 'Nam' : 'Nữ'}</span>
@@ -860,7 +902,7 @@ window.KtxStudentViews = (function () {
                             </button>
                         </div>
 
-                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
                             <div>
                                 <span class="text-slate-400 block text-[11px]">Số CCCD / Mã định danh</span>
                                 <span class="font-mono font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(maskCccd(p.cccd))}</span>
@@ -870,7 +912,7 @@ window.KtxStudentViews = (function () {
                             </button>
                         </div>
 
-                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
                             <div>
                                 <span class="text-slate-400 block text-[11px]">Mã lớp sinh viên</span>
                                 <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.maLop)}</span>
@@ -880,7 +922,7 @@ window.KtxStudentViews = (function () {
                             </button>
                         </div>
 
-                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                             <span class="text-slate-400 block text-[11px]">Đối tượng ưu tiên</span>
                             <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.doiTuongUuTien || 'Không có')}</span>
                         </div>
@@ -935,15 +977,15 @@ window.KtxStudentViews = (function () {
 
                     ${!isEditing ? `
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                 <span class="text-slate-400 block text-[11px]">Số điện thoại</span>
                                 <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.dienThoai || 'Chưa cập nhật')}</span>
                             </div>
-                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                 <span class="text-slate-400 block text-[11px]">Email liên hệ</span>
                                 <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.email || 'Chưa cập nhật')}</span>
                             </div>
-                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                 <span class="text-slate-400 block text-[11px]">Địa chỉ thường trú</span>
                                 <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block truncate" title="${esc(p.diaChiThuongTru)}">${esc(p.diaChiThuongTru || 'Chưa cập nhật')}</span>
                             </div>
@@ -963,6 +1005,10 @@ window.KtxStudentViews = (function () {
                                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Địa chỉ thường trú</label>
                                     <input type="text" id="contactAddress" required value="${esc(studentState.contactFormData.diaChiThuongTru)}" class="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-[#232B3B] text-xs font-semibold" />
                                 </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Mật khẩu hiện tại (chỉ cần khi đổi email)</label>
+                                <input type="password" id="contactCurrentPassword" autocomplete="current-password" placeholder="Nhập mật khẩu nếu thay đổi email" class="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-[#232B3B] text-xs font-semibold" />
                             </div>
                             <div class="flex items-center gap-2 pt-2">
                                 <button type="submit" id="btnSaveContact" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm transition-all">
@@ -1161,14 +1207,14 @@ window.KtxStudentViews = (function () {
                                         <div class="flex items-start justify-between gap-3">
                                             <div>
                                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0B2A5B] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60">
-                                                    ${esc(r.maKyHoc || 'Kỳ học')}
+                                                    ${esc(r.maNamHoc || r.maKyHoc || 'Năm học')}
                                                 </span>
                                                 <h3 class="text-base font-bold text-slate-900 dark:text-white mt-1">${esc(r.tenDot)}</h3>
                                             </div>
                                             ${statusBadge(r.trangThai)}
                                         </div>
 
-                                        <div class="text-xs text-slate-500 space-y-1 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/60 dark:border-[#232B3B]">
+                                        <div class="text-xs text-slate-500 space-y-1 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/60 dark:border-[#232B3B]">
                                             <div class="flex items-center justify-between">
                                                 <span>Thời gian mở:</span>
                                                 <strong class="text-slate-800 dark:text-slate-200">${esc(r.ngayMo)}</strong>
@@ -1253,6 +1299,7 @@ window.KtxStudentViews = (function () {
         const phone = document.getElementById('contactPhone')?.value.trim();
         const email = document.getElementById('contactEmail')?.value.trim();
         const address = document.getElementById('contactAddress')?.value.trim();
+        const currentPassword = document.getElementById('contactCurrentPassword')?.value || '';
 
         if (!phone || !/^0\d{9,10}$/.test(phone)) {
             if (window.KtxApp) window.KtxApp.showToast('Số điện thoại không hợp lệ (10-11 số, bắt đầu số 0)', 'error');
@@ -1274,7 +1321,8 @@ window.KtxStudentViews = (function () {
             await apiPut('/api/me/profile', {
                 dienThoai: phone,
                 email: email,
-                diaChiThuongTru: address
+                diaChiThuongTru: address,
+                currentPassword: currentPassword
             });
 
             if (window.KtxApp) window.KtxApp.showToast('Cập nhật thông tin liên hệ thành công!', 'success');
@@ -1330,7 +1378,7 @@ window.KtxStudentViews = (function () {
 
                         <div>
                             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Lý do yêu cầu đính chính (*)</label>
-                            <textarea id="reqReason" required rows="3" placeholder="Ghi rõ lý do (ví dụ: sai sót theo CCCD mới cấp)..." class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-[#232B3B] text-xs font-semibold"></textarea>
+                            <textarea id="reqReason" required rows="3" placeholder="Ghi rõ lý do (ví dụ: sai sót theo CCCD mới cấp)..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-[#232B3B] text-xs font-semibold"></textarea>
                         </div>
 
                         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -1863,35 +1911,35 @@ window.KtxStudentViews = (function () {
                                 </div>
 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">Mã số sinh viên (MSSV)</span>
                                         <span class="font-mono font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.mssv)}</span>
                                     </div>
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">Họ và tên</span>
                                         <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.hoTen)}</span>
                                     </div>
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">Giới tính</span>
                                         <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${p.gioiTinh === 'nam' ? 'Nam' : 'Nữ'}</span>
                                     </div>
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">Ngày sinh</span>
                                         <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.ngaySinh)}</span>
                                     </div>
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">CCCD / CMND</span>
                                         <span class="font-mono font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(maskCccd(p.cccd))}</span>
                                     </div>
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">Mã lớp sinh viên</span>
                                         <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.maLop || 'Chưa cập nhật')}</span>
                                     </div>
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">Số điện thoại liên hệ</span>
                                         <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.dienThoai || 'Chưa cập nhật')}</span>
                                     </div>
-                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                         <span class="text-slate-400 block text-[11px]">Đối tượng ưu tiên</span>
                                         <span class="font-bold text-blue-700 dark:text-blue-400 text-sm mt-0.5 block">${esc(p.doiTuongUuTien || 'Không có')}</span>
                                     </div>
@@ -2151,7 +2199,7 @@ window.KtxStudentViews = (function () {
                                 </div>
                             </div>
 
-                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] text-[11px] text-slate-500 space-y-1.5">
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] text-[11px] text-slate-500 space-y-1.5">
                                 <div class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                                     <span class="material-symbols-outlined text-[15px] text-[#0B2A5B]">support_agent</span>
                                     <span>Hỗ trợ sinh viên UTC2</span>
@@ -2317,6 +2365,40 @@ window.KtxStudentViews = (function () {
         }
     }
 
+    function isAppPendingReview(a) {
+        if (!a) return false;
+        const s = String(a.state || '').toLowerCase();
+        return s === 'choduyet' || s === 'cho_duyet';
+    }
+
+    function isAppCompleted(a) {
+        if (!a) return false;
+        const s = String(a.state || '').toLowerCase();
+        return s === 'hoantat' || 
+               s === 'hoanthanh' || 
+               s === 'completed' || 
+               s === 'dathanhtoanchonhanphong' || 
+               s === 'dathanhtoanchuanhanphong' || 
+               s === 'dathanhtoan' || 
+               s === 'hieuluc' || 
+               s === 'dango' || 
+               s === 'dang_o';
+    }
+
+    function isAppAwaitingPayment(a) {
+        if (!a) return false;
+        if (isAppCompleted(a) || isAppPendingReview(a)) return false;
+        const s = String(a.state || '').toLowerCase();
+        if (s === 'bituchoi' || s === 'tuchoi' || s === 'dahuy' || s === 'hethan' || s === 'hethanthanhtoan') return false;
+        return a.canPay === true || 
+               s === 'daduyetchothanhtoan' || 
+               s === 'duocduyetchothanhtoan' || 
+               s === 'chothanhtoan' || 
+               s === 'cho_thanh_toan' || 
+               s === 'daduyet' || 
+               s === 'da_duyet';
+    }
+
     async function renderDonCuaToi(container) {
         if (!studentState.applications.length && !studentState.errors['sv-don-cua-toi']) {
             await loadApplicationsData();
@@ -2336,9 +2418,9 @@ window.KtxStudentViews = (function () {
         const filter = studentState.appFilter || 'ALL';
 
         let filtered = apps;
-        if (filter === 'CHO_DUYET') filtered = apps.filter(a => a.state === 'choDuyet');
-        else if (filter === 'CHO_THANH_TOAN') filtered = apps.filter(a => a.state === 'duocDuyetChoThanhToan' || a.canPay);
-        else if (filter === 'HOAN_TAT') filtered = apps.filter(a => a.state === 'hoanTat' || a.state === 'daThanhToanChoNhanPhong');
+        if (filter === 'CHO_DUYET') filtered = apps.filter(isAppPendingReview);
+        else if (filter === 'CHO_THANH_TOAN') filtered = apps.filter(isAppAwaitingPayment);
+        else if (filter === 'HOAN_TAT') filtered = apps.filter(isAppCompleted);
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
@@ -2358,21 +2440,21 @@ window.KtxStudentViews = (function () {
                             ? 'bg-[#0B2A5B] text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                     }">
-                        Chờ BQL duyệt (${apps.filter(a => a.state === 'choDuyet').length})
+                        Chờ BQL duyệt (${apps.filter(isAppPendingReview).length})
                     </button>
                     <button type="button" onclick="KtxStudentViews.setAppFilter('CHO_THANH_TOAN')" class="px-4 py-2 rounded-xl font-semibold transition-all ${
                         filter === 'CHO_THANH_TOAN'
                             ? 'bg-[#0B2A5B] text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                     }">
-                        Chờ thanh toán (${apps.filter(a => a.state === 'duocDuyetChoThanhToan' || a.canPay).length})
+                        Chờ thanh toán (${apps.filter(isAppAwaitingPayment).length})
                     </button>
                     <button type="button" onclick="KtxStudentViews.setAppFilter('HOAN_TAT')" class="px-4 py-2 rounded-xl font-semibold transition-all ${
                         filter === 'HOAN_TAT'
                             ? 'bg-[#0B2A5B] text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                     }">
-                        Đã duyệt / Hoàn tất (${apps.filter(a => a.state === 'hoanTat' || a.state === 'daThanhToanChoNhanPhong').length})
+                        Đã duyệt / Hoàn tất (${apps.filter(isAppCompleted).length})
                     </button>
                 </div>
 
@@ -2414,6 +2496,10 @@ window.KtxStudentViews = (function () {
                                             ? `${esc(app.tenToaNha || '')} - Phòng ${esc(app.maPhong)}${app.assignedBed ? ` (G.${esc(app.assignedBed)})` : ''}`
                                             : 'Chưa phân bổ';
 
+                                        const awaitingPay = isAppAwaitingPayment(app);
+                                        const completed = isAppCompleted(app);
+                                        const displayState = awaitingPay ? 'duocDuyetChoThanhToan' : (completed ? 'hoanTat' : app.state);
+
                                         return `
                                             <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                                                 <td class="p-3.5 font-mono font-bold text-[#0B2A5B] dark:text-blue-400">
@@ -2429,21 +2515,26 @@ window.KtxStudentViews = (function () {
                                                     ${esc(app.ngayDangKy)}
                                                 </td>
                                                 <td class="p-3.5">
-                                                    ${statusBadge(app.state)}
-                                                    ${app.hanGiuCho && app.state === 'duocDuyetChoThanhToan' ? `
+                                                    ${statusBadge(displayState)}
+                                                    ${app.hanGiuCho && awaitingPay ? `
                                                         <span class="block text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-semibold">
                                                             Hạn: ${esc(app.hanGiuCho)}
                                                         </span>
                                                     ` : ''}
+                                                    ${(displayState === 'tuChoi' || displayState === 'biTuChoi' || app.state === 'tuChoi' || app.state === 'biTuChoi') ? `
+                                                        <span class="block text-[11px] text-red-600 dark:text-red-400 mt-1 max-w-[260px] leading-snug">
+                                                            Lý do: ${esc(app.rejectionReason || 'Không đạt điều kiện xét duyệt')}
+                                                        </span>
+                                                    ` : ''}
                                                 </td>
                                                 <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
-                                                    ${app.state === 'duocDuyetChoThanhToan' || app.canPay ? `
+                                                    ${awaitingPay ? `
                                                         <button type="button" onclick="KtxApp.navigate('sv-thanh-toan?appId=${esc(app.id)}')" class="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-[11px] shadow-2xs inline-flex items-center gap-1 transition-all">
                                                             <span class="material-symbols-outlined text-[14px]">qr_code_2</span>
                                                             <span>Thanh toán ngay</span>
                                                         </button>
                                                     ` : ''}
-                                                    ${app.state === 'hoanTat' ? `
+                                                    ${completed ? `
                                                         <button type="button" onclick="KtxApp.navigate('sv-hop-dong')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] shadow-2xs inline-flex items-center gap-1 transition-all">
                                                             <span class="material-symbols-outlined text-[14px]">home</span>
                                                             <span>Xem chỗ ở</span>
@@ -2480,14 +2571,25 @@ window.KtxStudentViews = (function () {
         if (!modalsContainer) return;
 
         // Determine step index for timeline (1 to 4)
-        let stepIdx = 1;
-        if (app.state === 'choDuyet') stepIdx = 1;
-        else if (app.state === 'duocDuyetChoThanhToan') stepIdx = 2;
-        else if (app.state === 'daThanhToanChoNhanPhong') stepIdx = 3;
-        else if (app.state === 'hoanTat' || app.state === 'dangO') stepIdx = 4;
+        const s = String(app.state || '').toLowerCase();
+        const awaitingPay = isAppAwaitingPayment(app);
+        const completed = isAppCompleted(app);
+        const pendingReview = isAppPendingReview(app);
+        const displayState = awaitingPay ? 'duocDuyetChoThanhToan' : (completed ? 'hoanTat' : app.state);
 
-        const isRejected = app.state === 'biTuChoi';
-        const isExpired = app.state === 'hetHanThanhToan';
+        let stepIdx = 1;
+        if (pendingReview) {
+            stepIdx = 1;
+        } else if (awaitingPay) {
+            stepIdx = 2;
+        } else if (s === 'dathanhtoanchonhanphong' || s === 'dathanhtoanchuanhanphong' || s === 'dathanhtoan') {
+            stepIdx = 3;
+        } else if (completed || s === 'dango' || s === 'dang_o' || s === 'hieuluc') {
+            stepIdx = 4;
+        }
+
+        const isRejected = s === 'bituchoi' || s === 'tuchoi' || s === 'dahuy';
+        const isExpired = s === 'hethan' || s === 'hethanthanhtoan';
 
         modalsContainer.innerHTML = `
             <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-end backdrop-blur-xs animate-fade-in" onclick="if(event.target === this) KtxStudentViews.closeAppDrawer()">
@@ -2507,7 +2609,7 @@ window.KtxStudentViews = (function () {
                         <!-- Status Badge Block -->
                         <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
                             <span class="text-xs font-semibold text-slate-500">Trạng thái xét duyệt:</span>
-                            <div>${statusBadge(app.state)}</div>
+                            <div>${statusBadge(displayState)}</div>
                         </div>
 
                         ${isRejected ? `
@@ -2606,7 +2708,7 @@ window.KtxStudentViews = (function () {
                                     </span>
                                     <div class="font-bold text-slate-900 dark:text-white">3. Nộp tiền giữ chỗ (24h)</div>
                                     <div class="text-[11px] text-slate-400 mt-0.5">
-                                        ${stepIdx >= 3 ? 'Đã xác nhận thanh toán' : isExpired ? 'Đã quá hạn' : app.hanGiuCho ? `Hạn chót: ${esc(app.hanGiuCho)}` : 'Chờ hoàn tất bước 2'}
+                                        ${stepIdx >= 3 ? 'Đã xác nhận thanh toán' : isExpired ? 'Đã quá hạn' : (awaitingPay || stepIdx === 2) ? (app.hanGiuCho ? `Hạn chót: ${esc(app.hanGiuCho)}` : 'Đang chờ nộp tiền giữ chỗ') : 'Chờ hoàn tất bước 2'}
                                     </div>
                                 </div>
 
@@ -2630,10 +2732,16 @@ window.KtxStudentViews = (function () {
 
                     <!-- Drawer Footer Actions -->
                     <div class="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                        ${app.state === 'duocDuyetChoThanhToan' || app.canPay ? `
+                        ${awaitingPay ? `
                             <button type="button" onclick="KtxStudentViews.closeAppDrawer(); KtxApp.navigate('sv-thanh-toan?appId=${esc(app.id)}')" class="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all">
                                 <span class="material-symbols-outlined text-[18px]">qr_code_2</span>
                                 <span>Thanh toán giữ chỗ ngay</span>
+                            </button>
+                        ` : ''}
+                        ${completed ? `
+                            <button type="button" onclick="KtxStudentViews.closeAppDrawer(); KtxApp.navigate('sv-hop-dong')" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all">
+                                <span class="material-symbols-outlined text-[18px]">home</span>
+                                <span>Xem thông tin chỗ ở</span>
                             </button>
                         ` : ''}
                         ${app.state === 'hoanTat' ? `
@@ -2671,7 +2779,7 @@ window.KtxStudentViews = (function () {
                 if (!studentState.applications.length) {
                     studentState.applications = await apiGet('/api/me/applications');
                 }
-                const dueApp = studentState.applications.find(a => a.state === 'duocDuyetChoThanhToan' || a.canPay);
+                const dueApp = studentState.applications.find(a => isAppAwaitingPayment(a));
                 if (dueApp) targetAppId = dueApp.id;
             }
 
@@ -3101,9 +3209,9 @@ window.KtxStudentViews = (function () {
                         <div class="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
                             <span class="material-symbols-outlined text-[32px]">home</span>
                         </div>
-                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Chưa có hợp đồng nội trú nào</h3>
-                        <p class="text-xs text-slate-500 max-w-sm mx-auto">
-                            Hiện bạn chưa có hợp đồng nội trú nào tại KTX UTC2. Hãy tham gia đợt đăng ký nội trú mới để được phân bổ chỗ ở.
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Chưa có hợp đồng nội trú</h3>
+                        <p class="text-xs text-slate-400 max-w-xs mx-auto">
+                            Đăng ký đợt mới để nhận phân bổ phòng.
                         </p>
                         <div class="pt-2">
                             <button type="button" onclick="KtxApp.navigate('sv-dot-dang-ky')" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm inline-flex items-center gap-1.5 transition-all">
@@ -3252,8 +3360,12 @@ window.KtxStudentViews = (function () {
             <head>
                 <meta charset="utf-8" />
                 <title>Hợp đồng nội trú KTX UTC2 - ${esc(c.maHopDong)}</title>
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400;1,700&display=swap" rel="stylesheet" />
                 <style>
-                    body { font-family: "Times New Roman", Times, serif; font-size: 13pt; line-height: 1.5; padding: 40px; color: #000; }
+                    * { font-family: 'Roboto', sans-serif !important; }
+                    body { font-family: 'Roboto', sans-serif; font-size: 13pt; line-height: 1.5; padding: 40px; color: #000; }
                     .text-center { text-align: center; }
                     .font-bold { font-weight: bold; }
                     .uppercase { text-transform: uppercase; }
@@ -3336,12 +3448,14 @@ window.KtxStudentViews = (function () {
         delete studentState.errors['sv-hoa-don'];
 
         try {
-            const [invoices, utils] = await Promise.all([
+            const [invoices, utils, serviceOptions] = await Promise.all([
                 apiGet('/api/me/invoices'),
-                apiGet('/api/me/utilities')
+                apiGet('/api/me/utilities'),
+                apiGet('/api/me/services')
             ]);
             studentState.invoices = invoices || [];
             studentState.utilities = utils || { meterReadings: [], registeredServices: [] };
+            studentState.serviceOptions = serviceOptions || [];
         } catch (err) {
             console.error('Error loading invoices & utilities:', err);
             studentState.errors['sv-hoa-don'] = err.message || 'Không thể tải thông tin hóa đơn & điện nước.';
@@ -3373,7 +3487,7 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                ${renderViewHeader('Hóa đơn & Biên nhận', 'Quản lý các khoản thanh toán tiền phòng, điện nước định kỳ và dịch vụ tiện ích')}
+                ${renderViewHeader('Hóa đơn & Biên nhận', 'Tiền phòng, điện nước và dịch vụ tiện ích')}
 
                 <!-- 3 Navigation Tabs -->
                 <div class="flex items-center gap-2 border-b border-slate-200/80 dark:border-[#232B3B] pb-3 text-xs overflow-x-auto">
@@ -3424,12 +3538,19 @@ window.KtxStudentViews = (function () {
                                             <th class="p-3.5 text-right">Tổng tiền</th>
                                             <th class="p-3.5 text-right">Đã trả</th>
                                             <th class="p-3.5 text-right">Còn nợ</th>
+                                            <th class="p-3.5 text-center">Trạng thái chứng từ</th>
                                             <th class="p-3.5 text-right">Thao tác</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                                         ${unpaidInvoices.map(inv => {
                                             const remaining = inv.tongTien - inv.daThanhToan;
+                                            // Trạng thái minh chứng: phân biệt chưa nộp / đã nộp chờ BQL đối soát.
+                                            const proofBadge = remaining <= 0
+                                                ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"><span class="material-symbols-outlined text-[13px]">paid</span>Đã thanh toán</span>'
+                                                : (inv.hasPaymentProof
+                                                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300" title="Đã nộp ${inv.ngayNopMinhChung || ''}"><span class="material-symbols-outlined text-[13px]">hourglass_top</span>Đã nộp · chờ đối soát</span>`
+                                                    : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"><span class="material-symbols-outlined text-[13px]">upload_file</span>Chưa nộp</span>');
                                             return `
                                                 <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                                                     <td class="p-3.5 font-mono font-bold text-[#0B2A5B] dark:text-blue-400">${esc(inv.maHoaDon)}</td>
@@ -3438,6 +3559,7 @@ window.KtxStudentViews = (function () {
                                                     <td class="p-3.5 text-right font-semibold">${fmtVND(inv.tongTien)}</td>
                                                     <td class="p-3.5 text-right text-slate-500">${fmtVND(inv.daThanhToan)}</td>
                                                     <td class="p-3.5 text-right font-bold text-rose-600">${fmtVND(remaining)}</td>
+                                                    <td class="p-3.5 text-center whitespace-nowrap">${proofBadge}</td>
                                                     <td class="p-3.5 text-right">
                                                         <button type="button" onclick="KtxStudentViews.openInvoicePaymentModal('${esc(inv.id)}')" class="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs shadow-2xs inline-flex items-center gap-1 transition-all">
                                                             <span class="material-symbols-outlined text-[15px]">qr_code_2</span>
@@ -3544,36 +3666,62 @@ window.KtxStudentViews = (function () {
                             `}
                         </div>
 
-                        <!-- Registered Services -->
+                        <!-- Services: xem trạng thái, đăng ký và hủy -->
                         <div class="bg-white dark:bg-[#121826] rounded-2xl p-6 shadow-xs border border-slate-200/80 dark:border-[#232B3B] space-y-4">
                             <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                                 <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">room_service</span>
-                                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Dịch vụ phòng đã đăng ký sử dụng</h3>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Dịch vụ phòng</h3>
                             </div>
 
-                            ${utils.registeredServices.length === 0 ? `
-                                <p class="text-xs text-slate-400 text-center py-4">Hiện không có dịch vụ gia tăng nào đang đăng ký (gửi xe, internet,...).</p>
+                            ${(studentState.serviceOptions || []).length === 0 ? `
+                                <p class="text-xs text-slate-400 text-center py-4">Hiện khu nội trú chưa mở đăng ký dịch vụ gia tăng nào (gửi xe, internet,...).</p>
                             ` : `
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                    ${utils.registeredServices.map(s => `
-                                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] space-y-2 text-xs">
-                                            <div class="font-bold text-slate-900 dark:text-white text-sm">${esc(s.tenDichVu)}</div>
+                                    ${studentState.serviceOptions.map(s => {
+                                        const unitLabel = s.unit === 'lan' ? '/ lần' : '/ tháng';
+                                        let badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Chưa đăng ký</span>';
+                                        if (s.status === 'dangDung') badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">Đang sử dụng</span>';
+                                        else if (s.status === 'choDuyet') badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">Chờ BQL duyệt</span>';
+                                        else if (s.status === 'daTuChoi') badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Đã từ chối</span>';
+                                        const canCancel = (s.status === 'dangDung' || s.status === 'choDuyet') && s.registrationId;
+                                        return `
+                                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] space-y-2 text-xs flex flex-col">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <span class="font-bold text-slate-900 dark:text-white text-sm">${esc(s.name)}</span>
+                                                ${badge}
+                                            </div>
                                             <div class="flex justify-between text-slate-500">
                                                 <span>Đơn giá:</span>
-                                                <strong class="text-[#0B2A5B] dark:text-blue-400">${fmtVND(s.donGia)} / tháng</strong>
+                                                <strong class="text-[#0B2A5B] dark:text-blue-400">${fmtVND(s.price)} ${unitLabel}</strong>
                                             </div>
-                                            <div class="flex justify-between text-slate-500">
-                                                <span>Số lượng:</span>
-                                                <span>${s.soLuong}</span>
-                                            </div>
-                                            <div class="flex justify-between text-slate-500">
-                                                <span>Bắt đầu:</span>
-                                                <span>${esc(s.ngayBatDau)}</span>
+                                            ${s.ngayBatDau && (s.status === 'dangDung' || s.status === 'choDuyet') ? `
+                                                <div class="flex justify-between text-slate-500">
+                                                    <span>Số lượng:</span>
+                                                    <span>${s.soLuong || 1}</span>
+                                                </div>
+                                                <div class="flex justify-between text-slate-500">
+                                                    <span>Từ ngày:</span>
+                                                    <span>${esc(s.ngayBatDau)}</span>
+                                                </div>
+                                            ` : ''}
+                                            ${s.status === 'daTuChoi' && s.lyDoTuChoi ? `<p class="text-[10px] text-rose-500">Lý do từ chối: ${esc(s.lyDoTuChoi)}</p>` : ''}
+                                            <div class="pt-1 mt-auto">
+                                                ${canCancel ? `
+                                                    <button type="button" onclick="KtxStudentViews.cancelServiceRegistration(${s.registrationId})" class="w-full py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-semibold transition-colors">
+                                                        Hủy đăng ký
+                                                    </button>
+                                                ` : `
+                                                    <button type="button" onclick="KtxStudentViews.openRegisterServiceModal('${esc(s.serviceId)}')" class="w-full py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-2xs transition-colors">
+                                                        ${s.status === 'daTuChoi' ? 'Đăng ký lại' : 'Đăng ký'}
+                                                    </button>
+                                                `}
                                             </div>
                                         </div>
-                                    `).join('')}
+                                        `;
+                                    }).join('')}
                                 </div>
                             `}
+                            <p class="text-[11px] text-slate-400">Đơn đăng ký dịch vụ cần BQL duyệt; chi phí được tính vào hóa đơn điện nước hàng tháng của phòng bạn.</p>
                         </div>
                     </div>
                 ` : ''}
@@ -3587,6 +3735,95 @@ window.KtxStudentViews = (function () {
         if (container) renderHoaDon(container);
     }
 
+    // Đăng ký / hủy dịch vụ từ phía sinh viên (tab Dịch vụ của hóa đơn)
+    async function refreshServiceOptions() {
+        try {
+            studentState.serviceOptions = await apiGet('/api/me/services') || [];
+        } catch (e) { /* giữ nguyên danh sách cũ nếu tải lại lỗi */ }
+        const container = document.getElementById('mainContent');
+        if (container) renderHoaDon(container);
+    }
+
+    // Mở form đăng ký: sinh viên chọn số lượng và ngày bắt đầu trước khi gửi đơn.
+    function openRegisterServiceModal(serviceId) {
+        const s = (studentState.serviceOptions || []).find(x => x.serviceId === serviceId);
+        if (!s) return;
+        const modalsContainer = document.getElementById('modalsContainer');
+        if (!modalsContainer) return;
+        const esc = v => (window.KtxApp && KtxApp.escapeHtml) ? KtxApp.escapeHtml(v == null ? '' : String(v)) : (v == null ? '' : String(v));
+        const unitLabel = s.unit === 'lan' ? '/ lần' : '/ tháng';
+
+        modalsContainer.innerHTML = `
+            <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in" onclick="if(event.target === this) KtxApp.closeModal()">
+                <div class="bg-white dark:bg-[#121826] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B] space-y-4" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Đăng ký ${esc(s.name)}</h3>
+                        <button type="button" onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                    </div>
+                    <div class="flex justify-between text-xs text-slate-500">
+                        <span>Đơn giá</span>
+                        <strong class="text-[#0B2A5B] dark:text-blue-400">${fmtVND(s.price)} ${unitLabel}</strong>
+                    </div>
+                    <div>
+                        <label for="regSvcQty" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Số lượng (1–10)</label>
+                        <input id="regSvcQty" type="number" min="1" max="10" step="1" value="1" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-[#232B3B] text-xs focus:outline-none" />
+                    </div>
+                    <div>
+                        <label for="regSvcStart" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Ngày bắt đầu (dd/MM/yyyy, để trống là hôm nay)</label>
+                        <input id="regSvcStart" type="text" placeholder="ví dụ: 15/11/2026" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-[#232B3B] text-xs focus:outline-none" />
+                    </div>
+                    <p class="text-[11px] text-slate-400">Đơn sẽ được BQL duyệt trong 1–2 ngày làm việc; phí dịch vụ tính theo số lượng và ghi vào hóa đơn hàng tháng.</p>
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs">Hủy</button>
+                        <button type="button" onclick="KtxStudentViews.submitServiceRegistration('${esc(s.serviceId)}')" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm">Gửi đơn</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitServiceRegistration(serviceId) {
+        const qtyInput = document.getElementById('regSvcQty');
+        const soLuong = parseInt(qtyInput && qtyInput.value, 10);
+        if (!(soLuong >= 1 && soLuong <= 10)) {
+            KtxApp.showToast('Số lượng phải từ 1 đến 10.', 'error');
+            return;
+        }
+        const startInput = document.getElementById('regSvcStart');
+        const ngayBatDau = startInput ? startInput.value.trim() : '';
+        if (ngayBatDau && !/^\d{2}\/\d{2}\/\d{4}$/.test(ngayBatDau)) {
+            KtxApp.showToast('Ngày bắt đầu phải theo định dạng dd/MM/yyyy.', 'error');
+            return;
+        }
+        await registerService(serviceId, { soLuong, ngayBatDau: ngayBatDau || null });
+    }
+
+    async function registerService(serviceId, payload) {
+        try {
+            const json = await apiPost(`/api/me/services/${encodeURIComponent(serviceId)}/register`, payload || {});
+            KtxApp.showToast(json.message || (json.success ? 'Đã gửi đơn đăng ký dịch vụ!' : 'Không đăng ký được dịch vụ.'), json.success ? 'success' : 'error');
+            if (json.success) {
+                KtxApp.closeModal();
+                await refreshServiceOptions();
+            }
+        } catch (e) {
+            KtxApp.showToast(e.message || 'Lỗi kết nối máy chủ', 'error');
+        }
+    }
+
+    async function cancelServiceRegistration(registrationId) {
+        if (!confirm('Bạn chắc chắn muốn hủy đăng ký dịch vụ này?')) return;
+        try {
+            const json = await apiDelete(`/api/me/services/${registrationId}`);
+            KtxApp.showToast(json.message || (json.success ? 'Đã hủy đăng ký dịch vụ.' : 'Không hủy được đăng ký.'), json.success ? 'success' : 'error');
+            if (json.success) await refreshServiceOptions();
+        } catch (e) {
+            KtxApp.showToast(e.message || 'Lỗi kết nối máy chủ', 'error');
+        }
+    }
+
     async function openInvoicePaymentModal(invoiceId) {
         const inv = studentState.invoices.find(i => i.id === invoiceId);
         if (!inv) return;
@@ -3595,7 +3832,16 @@ window.KtxStudentViews = (function () {
         if (!modalsContainer) return;
 
         const remaining = inv.tongTien - inv.daThanhToan;
-        const qrUrl = `https://img.vietqr.io/image/970422-0123456789-compact2.jpg?amount=${remaining}&addInfo=KTX%20${encodeURIComponent(inv.maHoaDon || '')}`;
+        // Mã QR VietQR do backend sinh theo tài khoản KTX đã cấu hình,
+        // không hardcode ngân hàng/tài khoản ở frontend nữa.
+        let qr = null;
+        try {
+            const qrRes = await apiGet(`/api/me/invoices/${encodeURIComponent(inv.maHoaDon)}/qr`);
+            qr = qrRes && qrRes.data ? qrRes.data : qrRes;
+        } catch (e) { /* giữ qr null để hiện thông báo */ }
+        const qrUrl = qr && qr.imageUrl ? qr.imageUrl : '';
+        const qrAmount = qr && qr.amount != null ? qr.amount : remaining;
+        const qrContent = qr && qr.content ? qr.content : inv.maHoaDon;
 
         modalsContainer.innerHTML = `
             <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">
@@ -3608,21 +3854,43 @@ window.KtxStudentViews = (function () {
                     </div>
 
                     <div class="p-3 bg-white rounded-xl border border-slate-200 inline-block shadow-xs">
-                        <img src="${qrUrl}" alt="VietQR" class="w-52 h-52 mx-auto rounded-lg object-contain" />
+                        ${qrUrl ? `<img src="${qrUrl}" alt="VietQR" class="w-52 h-52 mx-auto rounded-lg object-contain" />` : `<p class="text-xs text-rose-600 p-4">Chưa cấu hình tài khoản ngân hàng KTX. Vui lòng liên hệ BQL.</p>`}
                     </div>
 
-                    <div class="space-y-1.5 text-xs text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                    <div class="space-y-1.5 text-xs text-left p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                         <div class="flex justify-between">
                             <span class="text-slate-400">Số tiền:</span>
-                            <strong class="text-base text-[#0B2A5B] dark:text-blue-300 font-bold">${fmtVND(remaining)}</strong>
+                            <strong class="text-base text-[#0B2A5B] dark:text-blue-300 font-bold">${fmtVND(qrAmount)}</strong>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-slate-400">Nội dung:</span>
-                            <strong class="font-mono text-slate-800 dark:text-white">KTX ${esc(inv.maHoaDon)}</strong>
+                            <strong class="font-mono text-slate-800 dark:text-white">${esc(qrContent)}</strong>
                         </div>
                     </div>
 
-                    <p class="text-[11px] text-slate-400">Sau khi chuyển khoản, giao dịch sẽ được kế toán đối soát và cập nhật trong 1-2 giờ làm việc.</p>
+                    <div class="space-y-2 text-left p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                        ${inv.hasPaymentProof ? `
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                                    <span class="material-symbols-outlined text-[15px]">verified</span>
+                                    Đã nộp minh chứng ${esc(inv.ngayNopMinhChung || '')}
+                                </span>
+                                <a href="/api/me/invoices/${encodeURIComponent(inv.maHoaDon)}/payment-proof" target="_blank" rel="noopener" class="text-[11px] font-semibold text-[#0B2A5B] dark:text-blue-400 hover:underline">Xem lại ảnh</a>
+                            </div>
+                        ` : ''}
+                        <div>
+                            <label for="invoiceProofFile" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">${inv.hasPaymentProof ? 'Nộp lại minh chứng (thay ảnh cũ)' : 'Nộp minh chứng thanh toán (sau khi chuyển khoản)'}</label>
+                            <div class="flex items-center gap-2">
+                                <input id="invoiceProofFile" type="file" accept=".jpg,.jpeg,.png,.webp" class="flex-1 min-w-0 text-[11px] text-slate-500 file:mr-2 file:rounded-lg file:border-0 file:bg-[#0B2A5B] file:px-3 file:py-1.5 file:text-white file:font-semibold file:text-xs" />
+                                <button type="button" onclick="KtxStudentViews.submitInvoiceProof('${esc(inv.maHoaDon)}')" class="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold shadow-2xs transition-colors">
+                                    Gửi minh chứng
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-slate-400 mt-1">JPG/PNG/WebP, tối đa 5 MB</p>
+                        </div>
+                    </div>
+
+                    <p class="text-[11px] text-slate-400">Sau khi chuyển khoản, bạn hãy gửi ảnh minh chứng ở trên để BQL đối soát nhanh hơn. Giao dịch sẽ được kế toán cập nhật trong 1-2 giờ làm việc.</p>
 
                     <div class="pt-2">
                         <button type="button" onclick="KtxApp.closeModal()" class="w-full py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm">
@@ -3632,6 +3900,39 @@ window.KtxStudentViews = (function () {
                 </div>
             </div>
         `;
+    }
+
+    async function submitInvoiceProof(invoiceId) {
+        const input = document.getElementById('invoiceProofFile');
+        if (!input || input.files.length === 0) {
+            KtxApp.showToast('Vui lòng chọn ảnh minh chứng trước khi gửi.', 'error');
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('proof', input.files[0]);
+        try {
+            const res = await fetch(`/api/me/invoices/${encodeURIComponent(invoiceId)}/payment-proof`, { method: 'POST', body: fd });
+            const json = await res.json();
+            if (json.success) {
+                KtxApp.showToast(json.message || 'Đã nộp minh chứng thanh toán!');
+                const inv = studentState.invoices.find(i => i.maHoaDon === invoiceId);
+                if (inv) {
+                    inv.hasPaymentProof = true;
+                    inv.ngayNopMinhChung = new Date().toLocaleString('vi-VN');
+                }
+                // Đóng modal và nạp lại bảng để cột "Trạng thái chứng từ" đổi ngay,
+                // không phải đợi sinh viên chuyển tab rồi quay lại.
+                KtxApp.closeModal();
+                await loadInvoicesData();
+                const container = document.getElementById('mainContent');
+                if (container) await renderHoaDon(container);
+            } else {
+                KtxApp.showToast(json.message || 'Không nộp được minh chứng.', 'error');
+            }
+        } catch (e) {
+            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
+        }
     }
 
     async function viewInvoiceReceipt(invoiceId) {
@@ -3735,7 +4036,7 @@ window.KtxStudentViews = (function () {
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    ${renderViewHeader('Yêu cầu Sửa chữa & Báo hỏng', 'Báo cáo sự cố điện, nước, nội thất trong phòng để kỹ thuật viên hỗ trợ kịp thời')}
+                    ${renderViewHeader('Yêu cầu Sửa chữa & Báo hỏng', 'Theo dõi và gửi yêu cầu sửa chữa thiết bị phòng')}
                     ${hasActiveRoom ? `
                         <button type="button" onclick="KtxStudentViews.openCreateMaintenanceModal()" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm inline-flex items-center gap-1.5 transition-all self-start sm:self-auto shrink-0">
                             <span class="material-symbols-outlined text-[17px]">add_circle</span>
@@ -3747,7 +4048,7 @@ window.KtxStudentViews = (function () {
                 ${!hasActiveRoom ? `
                     <div class="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-3">
                         <span class="material-symbols-outlined text-[20px] text-amber-600 shrink-0">lock</span>
-                        <span>Bạn chưa được bố trí phòng nội trú hoặc hợp đồng chưa có hiệu lực để gửi yêu cầu sửa chữa thiết bị phòng.</span>
+                        <span>Cần có hợp đồng nội trú hợp lệ để gửi yêu cầu sửa chữa phòng.</span>
                     </div>
                 ` : ''}
 
@@ -3757,7 +4058,7 @@ window.KtxStudentViews = (function () {
                         <div class="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
                             <span class="material-symbols-outlined text-[30px]">build</span>
                         </div>
-                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Chưa có yêu cầu sửa chữa nào</h3>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Không có sự cố nào cần xử lý</h3>
                         <p class="text-xs text-slate-500 max-w-sm mx-auto">Khi thiết bị trong phòng gặp sự cố hư hỏng, hãy bấm nút "Tạo phiếu báo hỏng" để kỹ thuật viên tiếp nhận.</p>
                     </div>
                 ` : `
@@ -3841,7 +4142,7 @@ window.KtxStudentViews = (function () {
 
                         <div>
                             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mô tả chi tiết sự cố (*)</label>
-                            <textarea id="maintDesc" rows="3" required placeholder="Mô tả cụ thể vị trí và tình trạng hư hỏng..." class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-[#232B3B] text-xs font-semibold"></textarea>
+                            <textarea id="maintDesc" rows="3" required placeholder="Mô tả cụ thể vị trí và tình trạng hư hỏng..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-[#232B3B] text-xs font-semibold"></textarea>
                         </div>
 
                         <div>
@@ -3959,7 +4260,7 @@ window.KtxStudentViews = (function () {
                         </div>
 
                         <div class="space-y-3 text-xs">
-                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
                                 <span class="text-slate-500">Trạng thái:</span>
                                 <div>${statusBadge(ticket.trangThai)}</div>
                             </div>
@@ -4413,38 +4714,38 @@ window.KtxStudentViews = (function () {
         }
 
         if (studentState.errors['sv-ho-tro']) {
-            container.innerHTML = renderErrorAlert('Lỗi tải cẩm nang hỗ trợ', studentState.errors['sv-ho-tro'], 'KtxStudentViews.retryLoadTab(\'sv-ho-tro\')');
+            container.innerHTML = renderErrorAlert('Lỗi tải cẩm nang', studentState.errors['sv-ho-tro'], 'KtxStudentViews.retryLoadTab(\'sv-ho-tro\')');
             return;
         }
 
         const info = studentState.supportInfo || {};
-        const openAcc = studentState.openAccordion = studentState.openAccordion || { 1: true, 2: false, 3: false, 4: false, 5: false };
+        const openAcc = studentState.openAccordion = studentState.openAccordion || { 1: true, 2: false, 3: false, 4: false };
 
-        const faqs = [
-            { q: 'Tôi có thể đổi phòng sau khi đã nhận phòng không?', a: 'Sinh viên có thể làm đơn xin chuyển phòng gửi Ban Quản lý trong 2 tuần đầu học kỳ nếu có lý do chính đáng và còn chỗ trống phù hợp.' },
-            { q: 'Người thân đến thăm KTX cần những thủ tục gì?', a: 'Khách đến thăm phải xuất trình CCCD/CMND tại phòng bảo vệ cổng, ghi sổ theo dõi và chỉ được tiếp đón tại phòng tiếp khách chung từ 07:00 đến 21:00.' },
-            { q: 'Nếu quá 24h chưa nộp tiền giữ chỗ thì xử lý thế nào?', a: 'Vị trí giường sẽ tự động hủy trên hệ thống. Sinh viên phải nộp đơn đăng ký lại nếu đợt đăng ký vẫn còn mở và còn phòng trống.' },
-            { q: 'Tiền điện nước hàng tháng được tính như thế nào?', a: 'Điện nước được tính theo chỉ số đồng hồ thực tế của từng phòng chia đều cho số sinh viên ở trong phòng theo đơn giá quy định của Nhà trường.' }
+        const items = [
+            { id: 1, title: 'Nội quy & Quy chế Ký túc xá UTC2', icon: 'gavel', desc: 'Quy định giờ giấc, nề nếp sinh hoạt nội trú UTC2', content: esc(info.regulations || '1. Chấp hành nghiêm chỉnh nội quy KTX và pháp luật nhà nước.\n2. Giữ gìn an ninh trật tự, vệ sinh chung, không gây ồn ào sau 22h00.\n3. Tiết kiệm điện nước, bảo quản tài sản được giao.\n4. Tuyệt đối không nấu ăn trong phòng, không dùng chất kích thích, cờ bạc.\n5. Tiếp khách tại phòng sinh hoạt chung đúng giờ quy định.') },
+            { id: 2, title: 'Hướng dẫn Đăng ký nội trú trực tuyến', icon: 'how_to_reg', desc: 'Thủ tục đăng ký xét duyệt và thời hạn giữ phòng', content: esc(info.registrationGuide || '1. Kiểm tra thông tin định danh sinh viên.\n2. Chọn tòa nhà và loại phòng theo giới tính quy định.\n3. Chọn phòng còn chỗ trống phù hợp và xác nhận cam kết.\n4. Sau khi được duyệt: Hoàn tất nộp tiền giữ chỗ trong 24h.') },
+            { id: 3, title: 'Cách thức nộp tiền giữ chỗ qua VietQR', icon: 'qr_code_2', desc: 'Quét mã chuyển khoản tự động gạch nợ 15s', content: esc(info.paymentGuide || '• Sau khi đơn được BQL phê duyệt, sinh viên quét mã VietQR tự động trên hệ thống.\n• Giữ nguyên cú pháp nội dung chuyển khoản để hệ thống tự động gạch nợ trong 15 giây.\n• Xem biên lai xác nhận ngay tại mục Hóa đơn & Thanh toán.') },
+            { id: 4, title: 'Quy trình Nhận & Trả phòng KTX', icon: 'key', desc: 'Hồ sơ nhận chìa khóa và thủ tục bàn giao tài sản', content: esc(info.checkInOutProcess || '• Nhận phòng: Xuất trình CCCD và Thẻ sinh viên tại Văn phòng BQL KTX để nhận chìa khóa và ký biên bản bàn giao.\n• Trả phòng: Đăng ký trả phòng trước 1 tuần, dọn dẹp vệ sinh phòng và làm thủ tục thanh lý hợp đồng.') }
         ];
 
-        function renderAccordionItem(id, title, icon, content) {
-            const isOpen = Boolean(openAcc[id]);
+        function renderStandardAccordion(item) {
+            const isOpen = Boolean(openAcc[item.id]);
             return `
                 <div class="rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] overflow-hidden transition-all shadow-xs">
-                    <button type="button" onclick="KtxStudentViews.toggleAccordion(${id})" class="w-full p-4 sm:p-5 flex items-center justify-between text-left focus:outline-hidden hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                        <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-400 flex items-center justify-center shrink-0">
-                                <span class="material-symbols-outlined text-[20px]">${esc(icon)}</span>
+                    <button type="button" onclick="KtxStudentViews.toggleAccordion(${item.id})" class="w-full p-4 sm:p-5 flex items-center justify-between text-left hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                        <div class="flex items-center gap-3.5 min-w-0">
+                            <div class="size-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-[#0B2A5B] dark:text-blue-400 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined text-[20px]">${esc(item.icon)}</span>
                             </div>
-                            <span class="text-sm font-bold text-slate-900 dark:text-white">${esc(title)}</span>
+                            <span class="text-sm font-bold text-slate-900 dark:text-white truncate">${esc(item.title)}</span>
                         </div>
-                        <span class="material-symbols-outlined text-slate-400 text-[20px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}">
+                        <span class="material-symbols-outlined text-slate-400 text-[22px] transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180 text-[#0B2A5B] dark:text-blue-400' : ''}">
                             expand_more
                         </span>
                     </button>
                     ${isOpen ? `
                         <div class="px-5 pb-5 pt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800/60 whitespace-pre-wrap">
-                            ${content}
+                            ${item.content}
                         </div>
                     ` : ''}
                 </div>
@@ -4453,82 +4754,75 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                ${renderViewHeader('Nội quy, Hỗ trợ & Liên hệ BQL', 'Cẩm nang quy chế nội trú, quy trình thanh toán VietQR và kênh hỗ trợ trực tiếp KTX UTC2')}
+                ${renderViewHeader('Nội quy, Hỗ trợ & Liên hệ BQL', 'Cẩm nang quy chế nội trú, quy trình thanh toán VietQR và kênh hỗ trợ trực tiếp KTX UTC2', `
+                    <button type="button" onclick="KtxStudentViews.retryLoadTab('sv-ho-tro')" class="px-3 py-2 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] hover:bg-slate-50 text-slate-700 dark:text-slate-300 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs transition-colors">
+                        <span class="material-symbols-outlined text-[17px]">refresh</span>
+                        <span>Làm mới</span>
+                    </button>
+                `)}
 
+                <!-- Standard 2-Column Symmetrical Grid matching other views -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    <!-- Left Column: Accordions (8 cols) -->
-                    <div class="lg:col-span-8 space-y-4">
-                        ${renderAccordionItem(1, 'Nội quy & Quy chế Ký túc xá UTC2', 'gavel', esc(info.regulations || '1. Chấp hành nghiêm chỉnh nội quy KTX và pháp luật nhà nước.\n2. Giữ gìn an ninh trật tự, không gây ồn ào sau 22h00.\n3. Tiết kiệm điện nước, bảo quản tài sản công cộng.\n4. Tuyệt đối không nấu ăn trong phòng không đúng nơi quy định.'))}
-                        ${renderAccordionItem(2, 'Hướng dẫn Đăng ký nội trú trực tuyến', 'how_to_reg', esc(info.registrationGuide || 'Quy trình 4 bước:\nBước 1: Kiểm tra thông tin định danh sinh viên.\nBước 2: Chọn tòa nhà theo giới tính quy định.\nBước 3: Chọn phòng còn chỗ trống phù hợp.\nBước 4: Xác nhận cam kết và nộp đơn trực tuyến.'))}
-                        ${renderAccordionItem(3, 'Cách thức nộp tiền giữ chỗ qua VietQR', 'qr_code_2', esc(info.paymentGuide || 'Sau khi đơn được BQL phê duyệt:\n- Sinh viên có 24 giờ để hoàn tất chuyển khoản giữ chỗ.\n- Mở app ngân hàng bất kỳ, quét mã VietQR tự động trên hệ thống.\n- Giữ nguyên cú pháp nội dung chuyển khoản để hệ thống tự động gạch nợ trong 15 giây.'))}
-                        ${renderAccordionItem(4, 'Quy trình Nhận & Trả phòng KTX', 'key', esc(info.checkInOutProcess || 'Nhận phòng: Mang CCCD và Giấy báo nhập học / Thẻ sinh viên đến Văn phòng BQL KTX để nhận chìa khóa và ký biên bản bàn giao.\nTrả phòng: Đăng ký trả phòng trước 1 tuần, dọn dẹp vệ sinh phòng và làm thủ tục thanh lý hợp đồng.'))}
-                        ${renderAccordionItem(5, 'Câu hỏi thường gặp (FAQ)', 'quiz', faqs.map(f => `
-                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] mb-2.5">
-                                <div class="font-bold text-slate-800 dark:text-white mb-1">Q: ${esc(f.q)}</div>
-                                <div class="text-slate-600 dark:text-slate-300">A: ${esc(f.a)}</div>
-                            </div>
-                        `).join(''))}
+                    <!-- Left: Standard Guide Accordions (7 cols) -->
+                    <div class="lg:col-span-7 space-y-3.5">
+                        ${items.map(renderStandardAccordion).join('')}
                     </div>
 
-                    <!-- Right Column: Contact & Quick Maintenance Card (4 cols) -->
-                    <div class="lg:col-span-4 space-y-4 sticky top-24">
-                        <!-- Contact BQL Card -->
+                    <!-- Right: Standard Contact & Quick Ticket Cards (5 cols) -->
+                    <div class="lg:col-span-5 space-y-4">
                         <div class="bg-white dark:bg-[#121826] rounded-2xl p-6 shadow-xs border border-slate-200/80 dark:border-[#232B3B] space-y-4">
-                            <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
                                 <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">contact_phone</span>
                                 <h3 class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Thông tin liên hệ BQL</h3>
                             </div>
 
-                            <div class="space-y-3 text-xs">
-                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
-                                    <span class="text-slate-400 block text-[11px]">Hotline khẩn cấp (24/7):</span>
-                                    <a href="tel:02838960000" class="font-bold text-base text-[#0B2A5B] dark:text-blue-300 hover:underline mt-0.5 inline-flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-[18px]">call</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <span class="text-slate-400 block text-[11px] uppercase font-semibold">Hotline 24/7</span>
+                                    <a href="tel:02838960000" class="font-bold text-sm text-[#0B2A5B] dark:text-blue-300 hover:underline mt-1 inline-flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-[16px]">call</span>
                                         <span>028.3896.xxxx</span>
                                     </a>
                                 </div>
 
-                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
-                                    <span class="text-slate-400 block text-[11px]">Email liên hệ BQL:</span>
-                                    <a href="mailto:ktx@utc2.edu.vn" class="font-bold text-slate-900 dark:text-white hover:underline mt-0.5 inline-flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-[18px]">mail</span>
-                                        <span>ktx@utc2.edu.vn</span>
+                                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                                    <span class="text-slate-400 block text-[11px] uppercase font-semibold">Email tiếp nhận</span>
+                                    <a href="mailto:ktx@utc2.edu.vn" class="font-bold text-xs text-slate-800 dark:text-slate-200 hover:underline mt-1 inline-flex items-center gap-1.5 truncate">
+                                        <span class="material-symbols-outlined text-[16px]">mail</span>
+                                        <span class="truncate">ktx@utc2.edu.vn</span>
                                     </a>
                                 </div>
+                            </div>
 
-                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
-                                    <span class="text-slate-400 block text-[11px]">Giờ làm việc văn phòng:</span>
-                                    <span class="font-semibold text-slate-700 dark:text-slate-200 mt-0.5 block">
-                                        Sáng: 07h30 – 11h30<br/>Chiều: 13h00 – 17h00 (T2 – T6)<br/>Bảo vệ túc trực 24/7
-                                    </span>
+                            <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] text-xs space-y-2">
+                                <div class="flex items-start gap-2 text-slate-700 dark:text-slate-300">
+                                    <span class="material-symbols-outlined text-[17px] text-slate-400 shrink-0 mt-0.5">schedule</span>
+                                    <div>
+                                        <div class="font-semibold text-slate-900 dark:text-white">Giờ làm việc văn phòng:</div>
+                                        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                            Sáng: 07h30 – 11h30 • Chiều: 13h00 – 17h00 (T2 – T6)<br/>
+                                            Bảo vệ túc trực 24/7
+                                        </div>
+                                    </div>
                                 </div>
-
-                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
-                                    <span class="text-slate-400 block text-[11px]">Địa chỉ văn phòng:</span>
-                                    <span class="font-semibold text-slate-700 dark:text-slate-200 mt-0.5 block">
-                                        Văn phòng BQL KTX, Tầng trệt Nhà A1, Phân hiệu UTC2, 450-451 Lê Văn Việt, P. Tăng Nhơn Phú A, TP. Thủ Đức, TP.HCM.
-                                    </span>
+                                <div class="flex items-start gap-2 text-slate-700 dark:text-slate-300 pt-1.5 border-t border-slate-200/50 dark:border-slate-800">
+                                    <span class="material-symbols-outlined text-[17px] text-slate-400 shrink-0 mt-0.5">location_on</span>
+                                    <div class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                                        Văn phòng BQL KTX, Tầng trệt Nhà A1, Phân hiệu UTC2, 450-451 Lê Văn Việt, P. Tăng Nhơn Phú A, TP. Thủ Đức.
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Action Card: "Gặp sự cố thiết bị?" -->
-                        <div class="bg-gradient-to-br from-[#0B2A5B] to-[#143F8C] text-white rounded-2xl p-6 shadow-md space-y-3">
-                            <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                                <span class="material-symbols-outlined text-[22px]">build</span>
+                        <!-- Quick Action Card: Report Issue -->
+                        <div class="bg-gradient-to-r from-[#0B2A5B] to-[#143F8C] text-white rounded-2xl p-5 shadow-xs flex items-center justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="text-sm font-bold leading-tight">Gặp sự cố thiết bị phòng?</div>
+                                <div class="text-xs text-blue-100/90 truncate mt-1">Báo hỏng điện, nước hoặc đồ dùng để hỗ trợ kịp thời</div>
                             </div>
-                            <div>
-                                <h4 class="text-sm font-bold">Gặp sự cố thiết bị phòng?</h4>
-                                <p class="text-xs text-blue-100 mt-1 leading-relaxed">
-                                    Đèn chớp nháy, vòi nước rò rỉ hoặc ổ khóa bị kẹt? Hãy gửi yêu cầu báo hỏng để kỹ thuật viên KTX hỗ trợ kiểm tra xử lý ngay.
-                                </p>
-                            </div>
-                            <div class="pt-1">
-                                <button type="button" onclick="KtxApp.navigate('sv-sua-chua')" class="w-full py-2.5 rounded-xl bg-white hover:bg-slate-100 text-[#0B2A5B] font-bold text-xs shadow-sm transition-all inline-flex items-center justify-center gap-1.5">
-                                    <span class="material-symbols-outlined text-[17px]">add_circle</span>
-                                    <span>Tạo phiếu sửa chữa ngay</span>
-                                </button>
-                            </div>
+                            <button type="button" onclick="KtxApp.navigate('sv-sua-chua')" class="px-4 py-2 rounded-xl bg-white text-[#0B2A5B] font-bold text-xs hover:bg-blue-50 shadow-xs transition-all shrink-0">
+                                Tạo phiếu
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -4537,15 +4831,13 @@ window.KtxStudentViews = (function () {
     }
 
     function toggleAccordion(id) {
-        if (!studentState.openAccordion) studentState.openAccordion = {};
+        studentState.openAccordion = studentState.openAccordion || {};
         studentState.openAccordion[id] = !studentState.openAccordion[id];
         const container = document.getElementById('mainContent');
-        if (container) renderHoTro(container);
+        if (container) {
+            renderHoTro(container);
+        }
     }
-
-    // =========================================================================
-    // MAIN RENDER DISPATCHER
-    // =========================================================================
 
     async function renderView(tabId, container, appState) {
         clearTimers();
@@ -4657,14 +4949,19 @@ window.KtxStudentViews = (function () {
         // Group 3: Hóa đơn & Điện nước
         setInvoiceTab,
         openInvoicePaymentModal,
+        submitInvoiceProof,
         viewInvoiceReceipt,
+        registerService,
+        openRegisterServiceModal,
+        submitServiceRegistration,
+        cancelServiceRegistration,
         // Group 3: Sửa chữa
         openCreateMaintenanceModal,
         handleMaintenanceImagePreview,
         submitMaintenanceForm,
         viewMaintenanceDetail,
         // Thông báo
-        openNotificationDetailModal,
+        openNotificationModal,
         setNotifFilter,
         markNotifRead,
         markAllNotifsRead,

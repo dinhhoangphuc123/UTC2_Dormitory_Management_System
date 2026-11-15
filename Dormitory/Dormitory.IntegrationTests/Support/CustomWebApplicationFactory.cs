@@ -9,18 +9,31 @@ namespace Dormitory.IntegrationTests.Support
 {
     public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     {
+        private static readonly IServiceProvider InternalServiceProvider =
+            new ServiceCollection()
+                .AddEntityFrameworkInMemoryDatabase()
+                .BuildServiceProvider();
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.ConfigureServices(services =>
             {
-                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
-                if (descriptor != null)
+                // Remove SqlServer DbContext registrations from Program, otherwise both
+                // SqlServer and InMemory providers end up in the same internal provider.
+                var toRemove = services
+                    .Where(d =>
+                        d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>) ||
+                        d.ServiceType.FullName != null &&
+                            d.ServiceType.FullName.Contains("DbContextOptions", StringComparison.Ordinal))
+                    .ToList();
+                foreach (var descriptor in toRemove)
                 {
                     services.Remove(descriptor);
                 }
 
                 services.AddDbContext<ApplicationDbContext>(options =>
                 {
+                    options.UseInternalServiceProvider(InternalServiceProvider);
                     options.UseInMemoryDatabase("KtxIntegrationTestsDb");
                 });
 
@@ -29,7 +42,8 @@ namespace Dormitory.IntegrationTests.Support
                 var scopedServices = scope.ServiceProvider;
                 var db = scopedServices.GetRequiredService<ApplicationDbContext>();
                 db.Database.EnsureCreated();
-                DbSeeder.SeedAllAsync(db).GetAwaiter().GetResult();
+                // Nạp cả dữ liệu demo để test đăng nhập và các luồng nghiệp vụ có sẵn tài khoản.
+                DbSeeder.SeedAsync(db).GetAwaiter().GetResult();
             });
         }
     }

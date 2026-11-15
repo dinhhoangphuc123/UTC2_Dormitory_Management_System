@@ -63,18 +63,17 @@ namespace Dormitory.Web.Features.Registrations.Services
                 return StepChoDuyet;
             }
 
-            if (donDangKyTrangThai == "daDuyet" && hopDongTrangThai == "choThanhToan")
+            if (donDangKyTrangThai == "daDuyet")
             {
-                return StepDaDuyetChoThanhToan;
-            }
-
-            if (hopDongTrangThai == "hieuLuc")
-            {
-                if (ngayNhanPhongThucTe.HasValue)
+                if (hopDongTrangThai == "hieuLuc")
                 {
-                    return StepHoanTat;
+                    if (ngayNhanPhongThucTe.HasValue)
+                    {
+                        return StepHoanTat;
+                    }
+                    return StepDaThanhToanChuaNhanPhong;
                 }
-                return StepDaThanhToanChuaNhanPhong;
+                return StepDaDuyetChoThanhToan;
             }
 
             return donDangKyTrangThai;
