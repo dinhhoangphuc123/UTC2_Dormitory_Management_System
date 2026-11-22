@@ -60,29 +60,49 @@ namespace Dormitory.Web.Data.Seeding
                 await context.SaveChangesAsync();
             }
 
-            // 3. Loại phòng
-            if (!await context.LoaiPhongs.AnyAsync())
+            // 3. Loại phòng — đúng 4 loại: Tiêu chuẩn Nam/Nữ và Chất lượng cao Nam/Nữ
             {
-                var loaiPhongs = new List<LoaiPhong>
+                var chuanLoaiPhongs = new List<LoaiPhong>
                 {
                     new() { MaLoaiPhong = "LP_TC_NAM", TenLoaiPhong = "Tiêu chuẩn Nam 8 chỗ", SoNguoiToiDa = 8, GiaThueThang = 500000, CoDieuHoa = false, CoNhaVeSinhRieng = true },
                     new() { MaLoaiPhong = "LP_TC_NU", TenLoaiPhong = "Tiêu chuẩn Nữ 8 chỗ", SoNguoiToiDa = 8, GiaThueThang = 500000, CoDieuHoa = false, CoNhaVeSinhRieng = true },
-                    new() { MaLoaiPhong = "LP_CLC", TenLoaiPhong = "Chất lượng cao có máy lạnh", SoNguoiToiDa = 8, GiaThueThang = 700000, CoDieuHoa = true, CoNhaVeSinhRieng = true }
+                    new() { MaLoaiPhong = "LP_CLC", TenLoaiPhong = "Chất lượng cao Nam 8 chỗ", SoNguoiToiDa = 8, GiaThueThang = 700000, CoDieuHoa = true, CoNhaVeSinhRieng = true },
+                    new() { MaLoaiPhong = "LP_CLC_NU", TenLoaiPhong = "Chất lượng cao Nữ 8 chỗ", SoNguoiToiDa = 8, GiaThueThang = 700000, CoDieuHoa = true, CoNhaVeSinhRieng = true }
                 };
-                await context.LoaiPhongs.AddRangeAsync(loaiPhongs);
-                await context.SaveChangesAsync();
+
+                var existingRoomTypeCodes = await context.LoaiPhongs.Select(l => l.MaLoaiPhong).ToHashSetAsync();
+                var missingRoomTypes = chuanLoaiPhongs.Where(l => !existingRoomTypeCodes.Contains(l.MaLoaiPhong)).ToList();
+                bool roomTypeChanged = missingRoomTypes.Count > 0;
+                if (missingRoomTypes.Count > 0)
+                {
+                    await context.LoaiPhongs.AddRangeAsync(missingRoomTypes);
+                }
+
+                // DB đã seed trước đây: LP_CLC đang mang tên chung, cập nhật lại cho rõ giới tính.
+                var legacyClc = await context.LoaiPhongs.FirstOrDefaultAsync(l => l.MaLoaiPhong == "LP_CLC");
+                if (legacyClc != null && legacyClc.TenLoaiPhong != "Chất lượng cao Nam 8 chỗ")
+                {
+                    legacyClc.TenLoaiPhong = "Chất lượng cao Nam 8 chỗ";
+                    legacyClc.CoDieuHoa = true;
+                    roomTypeChanged = true;
+                }
+
+                if (roomTypeChanged)
+                {
+                    await context.SaveChangesAsync();
+                }
             }
 
-            // 4. Phòng & Giường (48 phòng và 384 giường)
+            // 4. Phòng & Giường (61 phòng và 488 giường)
             if (!await context.Phongs.AnyAsync())
             {
                 var buildings = new[]
                 {
-                    new { Id = "A01", Floors = 4, RoomsPerFloor = 4, Loai = "LP_TC_NAM" },
-                    new { Id = "A02", Floors = 4, RoomsPerFloor = 3, Loai = "LP_TC_NAM" },
-                    new { Id = "B01", Floors = 4, RoomsPerFloor = 3, Loai = "LP_TC_NU" },
-                    new { Id = "B02", Floors = 4, RoomsPerFloor = 3, Loai = "LP_TC_NU" },
-                    new { Id = "C01", Floors = 3, RoomsPerFloor = 3, Loai = "LP_CLC" }
+                    new { Id = "A01", Floors = 4, RoomsPerFloor = 4, Loai = "LP_TC_NAM", HighTierTopFloor = false },
+                    new { Id = "A02", Floors = 4, RoomsPerFloor = 3, Loai = "LP_TC_NAM", HighTierTopFloor = false },
+                    new { Id = "B01", Floors = 4, RoomsPerFloor = 3, Loai = "LP_TC_NU", HighTierTopFloor = true },
+                    new { Id = "B02", Floors = 4, RoomsPerFloor = 3, Loai = "LP_TC_NU", HighTierTopFloor = true },
+                    new { Id = "C01", Floors = 3, RoomsPerFloor = 3, Loai = "LP_CLC", HighTierTopFloor = false }
                 };
 
                 int roomIndex = 0;
@@ -100,12 +120,14 @@ namespace Dormitory.Web.Data.Seeding
                             string maPhong = $"{b.Id}_{roomNum}";
 
                             bool isMaintenance = (roomIndex == 12);
+                            // Tầng trên cùng của tòa nữ là phòng Chất lượng cao Nữ
+                            string loaiPhongId = (b.HighTierTopFloor && f == b.Floors) ? "LP_CLC_NU" : b.Loai;
 
                             var p = new Phong
                             {
                                 MaPhong = maPhong,
                                 MaToaNha = b.Id,
-                                MaLoaiPhong = b.Loai,
+                                MaLoaiPhong = loaiPhongId,
                                 SoTang = f,
                                 TrangThai = isMaintenance ? "baoTri" : "hoatDong"
                             };
@@ -128,6 +150,38 @@ namespace Dormitory.Web.Data.Seeding
                 await context.Phongs.AddRangeAsync(phongList);
                 await context.Giuongs.AddRangeAsync(giuongList);
                 await context.SaveChangesAsync();
+            }
+
+            // 4b. DB đã seed trước đây chỉ có 3 loại phòng: chuyển tầng trên cùng của các tòa nữ
+            // sang loại "Chất lượng cao Nữ" để dashboard luôn đủ 4 loại phòng.
+            if (!await context.Phongs.AnyAsync(p => p.MaLoaiPhong == "LP_CLC_NU"))
+            {
+                var nuBuildings = await context.ToaNhas
+                    .Where(t => t.GioiTinhQuyDinh == "nu")
+                    .Select(t => t.MaToaNha)
+                    .ToListAsync();
+
+                var roomsToConvert = new List<Phong>();
+                foreach (var maToaNha in nuBuildings)
+                {
+                    var topFloor = await context.Phongs
+                        .Where(p => p.MaToaNha == maToaNha)
+                        .MaxAsync(p => (int?)p.SoTang);
+                    if (topFloor == null) continue;
+
+                    roomsToConvert.AddRange(await context.Phongs
+                        .Where(p => p.MaToaNha == maToaNha && p.SoTang == topFloor.Value)
+                        .ToListAsync());
+                }
+
+                if (roomsToConvert.Count > 0)
+                {
+                    foreach (var phong in roomsToConvert)
+                    {
+                        phong.MaLoaiPhong = "LP_CLC_NU";
+                    }
+                    await context.SaveChangesAsync();
+                }
             }
 
             // 5. Giá điện nước

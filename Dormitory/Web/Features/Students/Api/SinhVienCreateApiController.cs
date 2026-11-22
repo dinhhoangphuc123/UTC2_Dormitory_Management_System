@@ -1,13 +1,17 @@
 using System.Text.RegularExpressions;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dormitory.Web.Data;
 using Dormitory.Web.Features.Accounts.Entities;
 using Dormitory.Web.Features.Accounts.Services;
+using Dormitory.Web.Features.Contracts.Services;
 using Dormitory.Web.Features.Students.Entities;
-using ClosedXML.Excel;
+using Dormitory.Web.Features.Students.Services;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Helpers;
+using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Students.Api
 {
@@ -21,11 +25,19 @@ namespace Dormitory.Web.Features.Students.Api
 
         private readonly ApplicationDbContext _context;
         private readonly IPasswordHasher _passwordHasher;
+        private readonly IHopDongService? _hopDongService;
+        private readonly ICurrentUser? _currentUser;
 
-        public SinhVienCreateApiController(ApplicationDbContext context, IPasswordHasher? passwordHasher = null)
+        public SinhVienCreateApiController(
+            ApplicationDbContext context,
+            IPasswordHasher? passwordHasher = null,
+            IHopDongService? hopDongService = null,
+            ICurrentUser? currentUser = null)
         {
             _context = context;
             _passwordHasher = passwordHasher ?? new PasswordHasher();
+            _hopDongService = hopDongService;
+            _currentUser = currentUser;
         }
 
         [HttpPost]
@@ -83,11 +95,15 @@ namespace Dormitory.Web.Features.Students.Api
         }
 
         [HttpPost("import")]
-        public async Task<IActionResult> Import(IFormFile file, [FromQuery] string? academicYear)
+        public async Task<IActionResult> Import(IFormFile? file, [FromQuery] string? academicYear = null)
         {
-            var year = string.IsNullOrWhiteSpace(academicYear)
+            var resolvedYear = !string.IsNullOrWhiteSpace(academicYear)
+                ? academicYear
+                : Request?.Query["academicYear"].FirstOrDefault();
+
+            var year = string.IsNullOrWhiteSpace(resolvedYear)
                 ? null
-                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == resolvedYear);
             if (year == null)
                 return BadRequest(ApiResponse.Fail("Vui lòng chọn một năm học hợp lệ trước khi nhập dữ liệu."));
 
@@ -97,117 +113,166 @@ namespace Dormitory.Web.Features.Students.Api
                 return BadRequest(ApiResponse.Fail("Chỉ hỗ trợ file .xlsx."));
 
             int imported = 0;
+            int updated = 0;
+            int skipped = 0;
+            int contractsImported = 0;
+            int contractsSkipped = 0;
             var errors = new List<ImportRowError>();
             var accounts = new List<string>();
+            bool hasContractColumns = false;
 
-            using (var stream = file.OpenReadStream())
-            using (var workbook = new XLWorkbook(stream))
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream);
+            stream.Position = 0;
+
+            try
             {
-                var ws = workbook.Worksheet(1);
-                var usedRange = ws.RangeUsed();
+                using var workbook = new XLWorkbook(stream);
+                var ws = workbook.Worksheets.FirstOrDefault();
+                var usedRange = ws?.RangeUsed();
                 if (usedRange is null)
                     return BadRequest(ApiResponse.Fail("File Excel không có dữ liệu."));
 
-                var rows = usedRange.RowsUsed().Skip(1); // bỏ dòng tiêu đề
-                foreach (var row in rows)
+                var headerRow = usedRange.FirstRow();
+                var cols = ExcelImportHelper.BuildColumnMap(headerRow);
+                bool isNamedLayout = cols.ContainsKey("mssv") &&
+                                     (cols.ContainsKey("hoTen") || cols.ContainsKey("cccd") || cols.ContainsKey("maLop"));
+
+                if (!isNamedLayout)
+                {
+                    // Hỗ trợ file mẫu 11 cột truyền thống theo đúng thứ tự cố định
+                    cols = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["mssv"] = 1,
+                        ["hoTen"] = 2,
+                        ["ngaySinh"] = 3,
+                        ["gioiTinh"] = 4,
+                        ["cccd"] = 5,
+                        ["dienThoai"] = 6,
+                        ["email"] = 7,
+                        ["diaChi"] = 8,
+                        ["maLop"] = 9,
+                        ["namNhapHoc"] = 10,
+                        ["doiTuongUuTien"] = 11
+                    };
+                }
+
+                hasContractColumns = cols.ContainsKey("roomCode") || cols.ContainsKey("bedId");
+
+                foreach (var row in usedRange.RowsUsed().Skip(1))
                 {
                     int rowNumber = row.RowNumber();
-                    var mssv = row.Cell(1).GetString().Trim();
+                    string mssv = ExcelImportHelper.ReadCellText(row, cols, "mssv");
                     if (string.IsNullOrWhiteSpace(mssv))
                     {
                         continue;
                     }
 
-                    var hoTen = row.Cell(2).GetString().Trim();
-                    var ngaySinhText = row.Cell(3).GetString().Trim();
-                    var gioiTinh = row.Cell(4).GetString().Trim();
-                    var cccd = row.Cell(5).GetString().Trim();
-                    var dienThoai = row.Cell(6).GetString().Trim();
-                    var email = row.Cell(7).GetString().Trim();
-                    var diaChi = row.Cell(8).GetString().Trim();
-                    var maLop = row.Cell(9).GetString().Trim();
-                    var namNhapHocText = row.Cell(10).GetString().Trim();
-                    var doiTuongUuTien = row.Cell(11).GetString().Trim();
+                    string appStatus = ExcelImportHelper.ReadCellText(row, cols, "appStatus");
+                    if (ExcelImportHelper.IsIgnoredApplicationStatus(appStatus))
+                    {
+                        skipped++;
+                        continue;
+                    }
 
-                    if (!DateTime.TryParse(ngaySinhText, out var ngaySinh))
+                    if (!ExcelImportHelper.TryReadDate(row, cols, "ngaySinh", null, out var ngaySinh))
                     {
                         errors.Add(new ImportRowError(rowNumber, mssv, "Ngày sinh không hợp lệ."));
                         continue;
                     }
 
-                    if (!int.TryParse(namNhapHocText, out var namNhapHoc))
+                    string namNhapHocText = ExcelImportHelper.ReadCellText(row, cols, "namNhapHoc");
+                    int namNhapHoc;
+                    if (string.IsNullOrWhiteSpace(namNhapHocText))
+                    {
+                        namNhapHoc = year.NgayBatDau.Year;
+                    }
+                    else if (!int.TryParse(namNhapHocText, out namNhapHoc))
                     {
                         errors.Add(new ImportRowError(rowNumber, mssv, "Năm nhập học không hợp lệ."));
                         continue;
                     }
 
-                    if (namNhapHoc < year.NgayBatDau.Year || namNhapHoc > year.NgayKetThuc.Year)
+                    var upsertResult = await StudentExcelHelper.UpsertStudentAsync(
+                        _context,
+                        _passwordHasher,
+                        new StudentExcelRowInput
+                        {
+                            Mssv = mssv,
+                            HoTen = ExcelImportHelper.ReadCellText(row, cols, "hoTen"),
+                            NgaySinh = ngaySinh,
+                            GioiTinh = ExcelImportHelper.ReadCellText(row, cols, "gioiTinh"),
+                            Cccd = ExcelImportHelper.ReadCellText(row, cols, "cccd"),
+                            DienThoai = ExcelImportHelper.ReadCellText(row, cols, "dienThoai"),
+                            Email = ExcelImportHelper.ReadCellText(row, cols, "email"),
+                            DiaChiThuongTru = ExcelImportHelper.ReadCellText(row, cols, "diaChi"),
+                            MaLop = ExcelImportHelper.ReadCellText(row, cols, "maLop"),
+                            NamNhapHoc = namNhapHoc,
+                            DoiTuongUuTien = ExcelImportHelper.ReadCellText(row, cols, "doiTuongUuTien")
+                        },
+                        minAdmissionYear: 1990,
+                        maxAdmissionYear: year.NgayKetThuc.Year + 1);
+
+                    if (!upsertResult.Success)
                     {
-                        errors.Add(new ImportRowError(rowNumber, mssv, "Năm nhập học phải thuộc năm học đang chọn."));
+                        errors.Add(new ImportRowError(rowNumber, mssv, upsertResult.ErrorMessage ?? "Dữ liệu sinh viên không hợp lệ."));
                         continue;
                     }
 
-                    var validationError = await ValidateStudentInputAsync(
-                        mssv, hoTen, cccd, dienThoai, email, maLop, ngaySinh, gioiTinh);
-                    if (validationError != null)
+                    if (upsertResult.IsCreated)
                     {
-                        errors.Add(new ImportRowError(rowNumber, mssv, validationError));
-                        continue;
-                    }
-
-                    var initialPassword = PasswordPolicy.GenerateTemporaryPassword();
-                    var normalizedMssv = mssv.Trim();
-
-                    var student = new SinhVien
-                    {
-                        MaSinhVien = normalizedMssv,
-                        HoTen = hoTen,
-                        NgaySinh = ngaySinh.Date,
-                        GioiTinh = NormalizeGender(gioiTinh),
-                        Cccd = cccd.Trim(),
-                        DienThoai = string.IsNullOrWhiteSpace(dienThoai) ? null : dienThoai.Trim(),
-                        Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant(),
-                        DiaChiThuongTru = string.IsNullOrWhiteSpace(diaChi) ? null : diaChi.Trim(),
-                        MaLop = maLop,
-                        NamNhapHoc = namNhapHoc,
-                        DoiTuongUuTien = string.IsNullOrWhiteSpace(doiTuongUuTien) ? null : doiTuongUuTien.Trim(),
-                        TrangThai = "dangHoc"
-                    };
-
-                    _context.SinhViens.Add(student);
-                    _context.TaiKhoans.Add(new TaiKhoan
-                    {
-                        TenDangNhap = normalizedMssv,
-                        MatKhauHash = _passwordHasher.HashPassword(initialPassword),
-                        MaVaiTro = RoleNames.SinhVien,
-                        MaSinhVien = normalizedMssv,
-                        LaDangHoat = true
-                    });
-
-                    // Lưu từng dòng để lỗi khóa ngoại/trùng lặp không làm hỏng cả file.
-                    try
-                    {
-                        await _context.SaveChangesAsync();
                         imported++;
-                        accounts.Add($"{normalizedMssv}: {initialPassword}");
+                        if (!string.IsNullOrEmpty(upsertResult.TemporaryPassword))
+                        {
+                            accounts.Add($"{mssv}: {upsertResult.TemporaryPassword}");
+                        }
                     }
-                    catch (DbUpdateException ex)
+                    else
                     {
-                        _context.ChangeTracker.Clear();
-                        errors.Add(new ImportRowError(rowNumber, mssv, "Không thể lưu dòng này: " + (ex.InnerException?.Message ?? ex.Message)));
+                        updated++;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is InvalidDataException or FormatException or ArgumentException)
+            {
+                return BadRequest(ApiResponse.Fail("Không thể đọc file Excel. Vui lòng kiểm tra lại định dạng .xlsx."));
+            }
+
+            if (hasContractColumns)
+            {
+                stream.Position = 0;
+                var contractService = _hopDongService ?? new HopDongService(_context, _passwordHasher);
+                var contractResult = await contractService.ImportContractsFromExcelAsync(stream, _currentUser?.StaffId, resolvedYear);
+                if (contractResult != null)
+                {
+                    contractsImported = contractResult.Imported;
+                    contractsSkipped = contractResult.Skipped;
+                    foreach (var ce in contractResult.Errors)
+                    {
+                        if (!errors.Any(e => e.Row == ce.Row && e.Mssv == ce.Mssv))
+                        {
+                            errors.Add(new ImportRowError(ce.Row, ce.Mssv, ce.Message));
+                        }
                     }
                 }
             }
 
-            var message = errors.Count == 0
-                ? $"Đã nhập {imported} sinh viên thành công."
-                : $"Đã nhập {imported} sinh viên, {errors.Count} dòng bị bỏ qua. Xem danh sách lỗi để sửa lại.";
+            var msgParts = new List<string> { $"Đã nhập {imported} hồ sơ sinh viên mới" };
+            if (updated > 0) msgParts.Add($"cập nhật {updated} hồ sơ");
+            if (hasContractColumns) msgParts.Add($"tạo {contractsImported} hợp đồng mới");
+            if (skipped > 0) msgParts.Add($"bỏ qua {skipped} đơn từ chối/hết hạn");
+            if (errors.Count > 0) msgParts.Add($"{errors.Count} dòng lỗi");
+            var message = string.Join(", ", msgParts) + ".";
 
             return Ok(new
             {
                 success = true,
                 message,
                 imported,
+                updated,
+                skipped,
+                contractsImported,
+                contractsSkipped,
                 failed = errors.Count,
                 errors,
                 accounts

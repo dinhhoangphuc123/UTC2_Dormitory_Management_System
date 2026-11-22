@@ -40,7 +40,8 @@ namespace Dormitory.Web.Features.Invoices.Api
             return Ok(ApiResponse<List<InvoiceItemDto>>.Ok(invoices));
         }
 
-        [Authorize(Roles = $"{RoleNames.Admin},{RoleNames.KeToan}")]
+        // BQL (admin/quản lý) và kế toán đều được lập hóa đơn; khớp nút hiển thị ở trang Hóa đơn.
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateInvoiceDto req)
         {
@@ -56,7 +57,28 @@ namespace Dormitory.Web.Features.Invoices.Api
                 return NotFound(ApiResponse.Fail("Không tìm thấy hợp đồng nội trú đang hiệu lực phù hợp với sinh viên và phòng."));
             }
 
-            return Ok(ApiResponse<InvoiceItemDto>.Ok(invoice, $"Đã tạo hóa đơn {invoice.Code}. Bấm Gửi để thông báo cho sinh viên."));
+            return Ok(ApiResponse<InvoiceItemDto>.Ok(invoice,
+                $"Đã lưu nháp hóa đơn {invoice.Code}. Kiểm tra lại rồi bấm Gửi cho sinh viên để phát hành kèm mã VietQR."));
+        }
+
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
+        [HttpPut("{invoiceId}")]
+        public async Task<IActionResult> UpdateDraft(string invoiceId, [FromBody] UpdateInvoiceDraftDto req,
+            [FromQuery] string? academicYear)
+        {
+            var (isValid, errorMessage) = UpdateInvoiceDraftValidator.Validate(req);
+            if (!isValid)
+            {
+                return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
+            }
+
+            var (success, serviceError) = await _hoaDonService.UpdateDraftInvoiceAsync(invoiceId, req, academicYear);
+            if (!success)
+            {
+                return BadRequest(ApiResponse.Fail(serviceError ?? "Không thể chỉnh sửa hóa đơn nháp."));
+            }
+
+            return Ok(ApiResponse.Ok($"Đã cập nhật hóa đơn nháp {invoiceId}."));
         }
 
         public class SendInvoiceRequest
@@ -64,7 +86,7 @@ namespace Dormitory.Web.Features.Invoices.Api
             public string InvoiceId { get; set; } = string.Empty;
         }
 
-        [Authorize(Roles = $"{RoleNames.Admin},{RoleNames.KeToan}")]
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpPost("send")]
         public async Task<IActionResult> Send([FromBody] SendInvoiceRequest req, [FromQuery] string? academicYear)
         {
@@ -85,10 +107,10 @@ namespace Dormitory.Web.Features.Invoices.Api
         public class ConfirmPaymentRequest
         {
             public string InvoiceId { get; set; } = string.Empty;
-            public string PaymentMethod { get; set; } = "Tiền mặt (BQL)";
+            public string PaymentMethod { get; set; } = "Chuyển khoản";
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
         [HttpPost("confirm-payment")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> ConfirmPayment([FromForm] ConfirmPaymentRequest req, IFormFile? proof, [FromQuery] string? academicYear)
@@ -107,6 +129,26 @@ namespace Dormitory.Web.Features.Invoices.Api
             }
 
             return BadRequest(ApiResponse.Fail("Không thể xác nhận thanh toán."));
+        }
+
+        public class RejectPaymentProofRequest
+        {
+            public string Reason { get; set; } = string.Empty;
+        }
+
+        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
+        [HttpPost("{invoiceId}/reject-payment-proof")]
+        public async Task<IActionResult> RejectPaymentProof(string invoiceId, [FromBody] RejectPaymentProofRequest req,
+            [FromQuery] string? academicYear)
+        {
+            var (success, errorMessage) = await _hoaDonService.RejectPaymentProofAsync(
+                invoiceId, req?.Reason, academicYear, _currentUser?.StaffId);
+            if (!success)
+            {
+                return BadRequest(ApiResponse.Fail(errorMessage ?? "Không thể từ chối minh chứng."));
+            }
+
+            return Ok(ApiResponse.Ok($"Đã từ chối minh chứng của hóa đơn {invoiceId}. Sinh viên có thể nộp lại trong thời hạn giữ chỗ."));
         }
 
         [Authorize(Policy = RoleNames.StaffOnlyPolicy)]

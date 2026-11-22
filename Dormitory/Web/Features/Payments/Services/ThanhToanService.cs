@@ -43,7 +43,7 @@ namespace Dormitory.Web.Features.Payments.Services
                         .Include(h => h.DanhSachThanhToan)
                         .Include(h => h.DanhSachChiTietHoaDon)
                         .FirstOrDefaultAsync(h => h.MaHoaDon == req.InvoiceId && (academicYear == null || (h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear)));
-                    if (invoice == null || invoice.TrangThai == "daThanhToan" || invoice.TrangThai == "daHuy")
+                    if (invoice == null || invoice.TrangThai == "daThanhToan" || invoice.TrangThai == "daHuy" || invoice.TrangThai == "nhap")
                     {
                         await tx.RollbackAsync();
                         return false;

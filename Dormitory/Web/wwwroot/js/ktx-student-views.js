@@ -46,6 +46,7 @@ window.KtxStudentViews = (function () {
         regStep: 1,
         selectedBuildingId: null,
         selectedRoomId: null,
+        selectedBedId: null,
         regBuildings: [],
         regRooms: [],
         acceptRules: false,
@@ -210,6 +211,16 @@ window.KtxStudentViews = (function () {
     /**
      * Standard status pill badge
      */
+    function parseDeadlineMs(val) {
+        if (!val) return NaN;
+        const s = String(val).trim();
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+        if (m) {
+            return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4] || 0), Number(m[5] || 0), 0).getTime();
+        }
+        return new Date(s).getTime();
+    }
+
     function statusBadge(state) {
         const s = String(state || '').toLowerCase();
         let bg = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
@@ -238,6 +249,10 @@ window.KtxStudentViews = (function () {
             case 'cho_duyet':
                 bg = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/60';
                 text = 'Chờ BQL duyệt';
+                break;
+            case 'moigui':
+                bg = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/60';
+                text = 'Mới gửi';
                 break;
             case 'hethan':
             case 'het_han':
@@ -395,7 +410,7 @@ window.KtxStudentViews = (function () {
         const el = document.getElementById(elementId);
         if (!el || !deadlineUtcStr) return;
 
-        const targetTime = new Date(deadlineUtcStr).getTime();
+        const targetTime = parseDeadlineMs(deadlineUtcStr);
 
         function updateClock() {
             const now = Date.now();
@@ -844,7 +859,7 @@ window.KtxStudentViews = (function () {
                             <div class="flex items-center gap-3 flex-wrap">
                                 <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">${esc(p.hoTen)}</h2>
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-blue-50 text-[#0B2A5B] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60">
-                                    MSSV: ${esc(p.maSinhVien)}
+                                    MSSV: ${esc(p.maSinhVien || p.mssv || studentState.dashboard?.student?.maSinhVien || '—')}
                                 </span>
                             </div>
                             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
@@ -927,37 +942,6 @@ window.KtxStudentViews = (function () {
                             <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.doiTuongUuTien || 'Không có')}</span>
                         </div>
                     </div>
-
-                    <!-- Change Request History -->
-                    ${studentState.profileRequests.length ? `
-                        <div class="pt-3">
-                            <span class="text-xs font-bold text-slate-800 dark:text-white block mb-2">Lịch sử yêu cầu điều chỉnh hồ sơ</span>
-                            <div class="overflow-x-auto border border-slate-200/60 dark:border-[#232B3B] rounded-xl">
-                                <table class="w-full text-left text-xs">
-                                    <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200/60 dark:border-[#232B3B]">
-                                        <tr>
-                                            <th class="p-2.5">Trường</th>
-                                            <th class="p-2.5">Giá trị mới đề xuất</th>
-                                            <th class="p-2.5">Lý do</th>
-                                            <th class="p-2.5">Ngày gửi</th>
-                                            <th class="p-2.5">Trạng thái</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                                        ${studentState.profileRequests.map(r => `
-                                            <tr>
-                                                <td class="p-2.5 font-semibold text-slate-800 dark:text-white">${esc(r.truong)}</td>
-                                                <td class="p-2.5 font-bold text-blue-700 dark:text-blue-400">${esc(r.giaTriMoi)}</td>
-                                                <td class="p-2.5 text-slate-600 dark:text-slate-300 max-w-[200px] truncate" title="${esc(r.lyDo)}">${esc(r.lyDo)}</td>
-                                                <td class="p-2.5 text-slate-400">${esc(r.ngayGui)}</td>
-                                                <td class="p-2.5">${statusBadge(r.trangThai)}</td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    ` : ''}
                 </div>
 
                 <!-- Block B: Editable Contact Information -->
@@ -1678,8 +1662,7 @@ window.KtxStudentViews = (function () {
                         <span class="text-[11px] text-slate-400 block mt-0.5">${esc(notif.ngayTao)}</span>
                     </div>
 
-                    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
-                        ${esc(notif.noiDung)}
+                    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">${esc(notif.noiDung)}
                     </div>
 
                     <div class="flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -1778,6 +1761,7 @@ window.KtxStudentViews = (function () {
             studentState.regStep = 1;
             studentState.selectedBuildingId = null;
             studentState.selectedRoomId = null;
+            studentState.selectedBedId = null;
             studentState.regRooms = [];
             studentState.acceptRules = false;
         }
@@ -1827,6 +1811,7 @@ window.KtxStudentViews = (function () {
         // Current selected building and room
         const selBuilding = studentState.regBuildings.find(b => b.id === studentState.selectedBuildingId);
         const selRoom = studentState.regRooms.find(r => r.maPhong === studentState.selectedRoomId);
+        const selBed = (selRoom?.beds || []).find(b => b.id === studentState.selectedBedId);
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
@@ -1879,7 +1864,7 @@ window.KtxStudentViews = (function () {
                                 </button>
 
                                 <!-- Step 4 -->
-                                <button type="button" onclick="KtxStudentViews.setRegStep(4)" ${!studentState.selectedRoomId ? 'disabled' : ''} class="group flex flex-col items-center gap-1.5 focus:outline-hidden disabled:opacity-40">
+                                <button type="button" onclick="KtxStudentViews.setRegStep(4)" ${!studentState.selectedBedId ? 'disabled' : ''} class="group flex flex-col items-center gap-1.5 focus:outline-hidden disabled:opacity-40">
                                     <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
                                         step >= 4 ? 'bg-[#0B2A5B] text-white' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'
                                     }">
@@ -2088,12 +2073,72 @@ window.KtxStudentViews = (function () {
                                     </div>
                                 `}
 
+                                ${selRoom ? `
+                                    <div class="rounded-xl border border-slate-200/80 dark:border-[#232B3B] bg-slate-50/60 dark:bg-slate-800/20 p-4 space-y-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">grid_view</span>
+                                                <span class="text-xs font-bold text-slate-800 dark:text-white">Sơ đồ giường · Phòng ${esc(selRoom.maPhong)}</span>
+                                            </div>
+                                            <span class="text-[11px] text-slate-500">${selBed ? `Đã chọn <strong class="text-[#0B2A5B] dark:text-blue-300">${esc(selBed.bedNumber)}</strong>` : 'Chọn 1 giường trống bên dưới'}</span>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                                            ${(selRoom.beds || []).map(b => {
+                                                const isOccupied = b.status === 'Đang ở';
+                                                const isPending = b.status === 'Đã đăng ký';
+                                                const isMaint = b.status === 'Bảo trì';
+                                                const isSelected = b.id === studentState.selectedBedId;
+                                                const canPick = b.selectable === true;
+                                                const cardClass = isOccupied
+                                                    ? 'border-rose-200 bg-rose-50/80 dark:border-rose-900/50 dark:bg-rose-950/25 cursor-not-allowed'
+                                                    : isPending
+                                                        ? 'border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/25 cursor-not-allowed'
+                                                        : isMaint
+                                                            ? 'border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/60 cursor-not-allowed'
+                                                            : isSelected
+                                                                ? 'border-[#0B2A5B] ring-2 ring-[#0B2A5B]/30 bg-blue-50/60 dark:border-blue-500 dark:bg-blue-950/30 cursor-pointer'
+                                                                : 'border-emerald-200 bg-white dark:border-emerald-900/50 dark:bg-slate-800/40 hover:border-emerald-400 cursor-pointer';
+                                                const iconClass = isOccupied ? 'text-rose-500' : isPending ? 'text-amber-500' : isMaint ? 'text-slate-400' : 'text-emerald-600';
+                                                const icon = isMaint ? 'construction' : isOccupied ? 'person' : isPending ? 'hourglass_top' : 'bed';
+
+                                                return `
+                                                    <div ${canPick ? `onclick="KtxStudentViews.selectBed('${esc(b.id)}')"` : ''} class="relative rounded-xl border p-2.5 text-left transition-all ${cardClass}">
+                                                        <div class="flex items-center justify-between">
+                                                            <span class="text-[11px] font-bold text-slate-800 dark:text-white inline-flex items-center gap-1">
+                                                                <span class="material-symbols-outlined text-[15px] ${iconClass}">${icon}</span>
+                                                                ${esc(b.bedNumber)}
+                                                            </span>
+                                                            ${isSelected ? '<span class="material-symbols-outlined text-[16px] text-[#0B2A5B] dark:text-blue-400">check_circle</span>' : ''}
+                                                        </div>
+                                                        <div class="mt-1 min-h-[28px]">
+                                                            ${b.studentName ? `
+                                                                <span class="block text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate" title="${esc(b.studentName)}">${esc(b.studentName)}</span>
+                                                                <span class="block text-[10px] text-slate-400 font-mono truncate">${esc(b.mssv || '')}</span>
+                                                            ` : `
+                                                                <span class="text-[11px] ${isMaint ? 'text-slate-500' : 'text-emerald-600 dark:text-emerald-400 font-semibold'}">${esc(b.status)}</span>
+                                                            `}
+                                                        </div>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+
+                                        <div class="flex flex-wrap items-center gap-3 pt-1 text-[10px] text-slate-500">
+                                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Giường trống</span>
+                                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span>Đang ở</span>
+                                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Đã đăng ký</span>
+                                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>Bảo trì</span>
+                                        </div>
+                                    </div>
+                                ` : ''}
+
                                 <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
                                     <button type="button" onclick="KtxStudentViews.setRegStep(2)" class="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors inline-flex items-center gap-1.5">
                                         <span class="material-symbols-outlined text-[16px]">arrow_back</span>
                                         <span>Quay lại</span>
                                     </button>
-                                    <button type="button" onclick="KtxStudentViews.setRegStep(4)" ${!studentState.selectedRoomId ? 'disabled' : ''} class="px-6 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] disabled:bg-slate-300 text-white font-semibold text-xs shadow-sm inline-flex items-center gap-1.5 transition-all">
+                                    <button type="button" onclick="KtxStudentViews.setRegStep(4)" ${!studentState.selectedBedId ? 'disabled' : ''} class="px-6 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] disabled:bg-slate-300 text-white font-semibold text-xs shadow-sm inline-flex items-center gap-1.5 transition-all">
                                         <span>Tiếp tục: Xác nhận</span>
                                         <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
                                     </button>
@@ -2116,6 +2161,7 @@ window.KtxStudentViews = (function () {
                                         <div>Kỳ học: <strong class="text-slate-900 dark:text-white">${esc(round.maKyHoc)}</strong></div>
                                         <div>Tòa nhà: <strong class="text-slate-900 dark:text-white">${esc(selBuilding?.tenToaNha || '—')}</strong></div>
                                         <div>Phòng đăng ký: <strong class="text-blue-700 dark:text-blue-400 font-bold">${esc(selRoom?.maPhong || '—')}</strong> (${esc(selRoom?.tenLoaiPhong || '')})</div>
+                                        <div>Giường đã chọn: <strong class="text-blue-700 dark:text-blue-400 font-bold">${esc(selBed?.bedNumber || '—')}</strong></div>
                                         <div>Đơn giá dự kiến: <strong class="text-[#0B2A5B] dark:text-blue-300">${fmtVND(selRoom?.giaThueThang || 0)} / tháng</strong></div>
                                     </div>
                                 </div>
@@ -2191,6 +2237,13 @@ window.KtxStudentViews = (function () {
                                     </span>
                                 </div>
 
+                                <div>
+                                    <span class="text-slate-400 block text-[11px]">Giường đã chọn:</span>
+                                    <span class="font-bold text-blue-700 dark:text-blue-400 block mt-0.5">
+                                        ${selBed ? `${esc(selBed.bedNumber)} · Phòng ${esc(selRoom?.maPhong || '')}` : '<span class="text-slate-400 italic">Chưa chọn</span>'}
+                                    </span>
+                                </div>
+
                                 <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
                                     <span class="text-slate-400 block text-[11px]">Đơn giá thuê dự kiến:</span>
                                     <span class="text-base font-bold text-[#0B2A5B] dark:text-blue-300 block mt-0.5">
@@ -2219,8 +2272,8 @@ window.KtxStudentViews = (function () {
             if (window.KtxApp) window.KtxApp.showToast('Vui lòng chọn tòa nhà trước!', 'warning');
             return;
         }
-        if (step === 4 && !studentState.selectedRoomId) {
-            if (window.KtxApp) window.KtxApp.showToast('Vui lòng chọn phòng trước!', 'warning');
+        if (step === 4 && (!studentState.selectedRoomId || !studentState.selectedBedId)) {
+            if (window.KtxApp) window.KtxApp.showToast('Vui lòng chọn phòng và giường trước!', 'warning');
             return;
         }
         studentState.regStep = step;
@@ -2231,6 +2284,7 @@ window.KtxStudentViews = (function () {
     async function selectBuilding(buildingId) {
         studentState.selectedBuildingId = buildingId;
         studentState.selectedRoomId = null;
+        studentState.selectedBedId = null;
         studentState.regRooms = [];
 
         try {
@@ -2245,6 +2299,13 @@ window.KtxStudentViews = (function () {
 
     function selectRoom(roomId) {
         studentState.selectedRoomId = roomId;
+        studentState.selectedBedId = null;
+        const container = document.getElementById('mainContent');
+        if (container) renderDangKyForm(container, studentState.regRoundId);
+    }
+
+    function selectBed(bedId) {
+        studentState.selectedBedId = bedId;
         const container = document.getElementById('mainContent');
         if (container) renderDangKyForm(container, studentState.regRoundId);
     }
@@ -2259,8 +2320,8 @@ window.KtxStudentViews = (function () {
 
     async function submitRegistrationForm(e) {
         if (e) e.preventDefault();
-        if (!studentState.regRoundId || !studentState.selectedRoomId) {
-            if (window.KtxApp) window.KtxApp.showToast('Thông tin đăng ký chưa đầy đủ!', 'error');
+        if (!studentState.regRoundId || !studentState.selectedRoomId || !studentState.selectedBedId) {
+            if (window.KtxApp) window.KtxApp.showToast('Thông tin đăng ký chưa đầy đủ (phòng và giường)!', 'error');
             return;
         }
         if (!studentState.acceptRules) {
@@ -2285,6 +2346,7 @@ window.KtxStudentViews = (function () {
             const res = await apiPost('/api/me/applications', {
                 maDotDangKy: studentState.regRoundId,
                 maPhong: studentState.selectedRoomId,
+                maGiuong: studentState.selectedBedId,
                 acceptRules: true
             });
 
@@ -2333,8 +2395,7 @@ window.KtxStudentViews = (function () {
                         </button>
                     </div>
 
-                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap">
-                        ${esc(content)}
+                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap">${esc(content)}
                     </div>
 
                     <div class="flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -2477,17 +2538,16 @@ window.KtxStudentViews = (function () {
                     </div>
                 ` : `
                     <!-- Table / Card List of Applications -->
-                    <div class="bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-hidden">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50/80 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200/80 dark:border-[#232B3B]">
+                    <div class="bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-visible">
+                        <div class="overflow-visible">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead class="bg-slate-50/80 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200/80 dark:border-[#232B3B] uppercase tracking-wider text-[11px]">
                                     <tr>
-                                        <th class="p-3.5">Mã đơn</th>
-                                        <th class="p-3.5">Đợt đăng ký</th>
-                                        <th class="p-3.5">Phòng / Giường</th>
-                                        <th class="p-3.5">Ngày nộp</th>
-                                        <th class="p-3.5">Trạng thái</th>
-                                        <th class="p-3.5 text-right">Thao tác</th>
+                                        <th class="py-3.5 pl-5 pr-3 whitespace-nowrap">Mã đơn</th>
+                                        <th class="py-3.5 px-4 whitespace-nowrap">Đợt đăng ký</th>
+                                        <th class="py-3.5 px-4 whitespace-nowrap">Phòng / Giường</th>
+                                        <th class="py-3.5 px-4 text-center whitespace-nowrap">Trạng thái</th>
+                                        <th class="py-3.5 pl-3 pr-5 text-center whitespace-nowrap">Thao tác</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -2499,51 +2559,80 @@ window.KtxStudentViews = (function () {
                                         const awaitingPay = isAppAwaitingPayment(app);
                                         const completed = isAppCompleted(app);
                                         const displayState = awaitingPay ? 'duocDuyetChoThanhToan' : (completed ? 'hoanTat' : app.state);
+                                        const safeMenuId = String(app.id ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                                        const appStatusHtml = completed
+                                            ? '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60 whitespace-nowrap">Đã duyệt</span>'
+                                            : statusBadge(displayState);
 
                                         return `
                                             <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                                                <td class="p-3.5 font-mono font-bold text-[#0B2A5B] dark:text-blue-400">
+                                                <td class="py-3.5 pl-5 pr-3 font-mono font-bold text-[#0B2A5B] dark:text-blue-400 whitespace-nowrap">
                                                     ${esc(app.maDonDangKy)}
                                                 </td>
-                                                <td class="p-3.5 font-semibold text-slate-800 dark:text-white">
-                                                    ${esc(app.tenDot)}
+                                                <td class="py-3.5 px-4">
+                                                    <div class="font-semibold text-slate-800 dark:text-white">${esc(app.tenDot)}</div>
+                                                    <div class="text-[11px] text-slate-400 mt-0.5 font-mono">Ngày nộp: ${esc(app.ngayDangKy || '—')}</div>
                                                 </td>
-                                                <td class="p-3.5 text-slate-700 dark:text-slate-300">
+                                                <td class="py-3.5 px-4 text-slate-700 dark:text-slate-300">
                                                     ${roomDisplay}
                                                 </td>
-                                                <td class="p-3.5 text-slate-400">
-                                                    ${esc(app.ngayDangKy)}
-                                                </td>
-                                                <td class="p-3.5">
-                                                    ${statusBadge(displayState)}
+                                                <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                                                    ${appStatusHtml}
                                                     ${app.hanGiuCho && awaitingPay ? `
                                                         <span class="block text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-semibold">
                                                             Hạn: ${esc(app.hanGiuCho)}
                                                         </span>
                                                     ` : ''}
                                                     ${(displayState === 'tuChoi' || displayState === 'biTuChoi' || app.state === 'tuChoi' || app.state === 'biTuChoi') ? `
-                                                        <span class="block text-[11px] text-red-600 dark:text-red-400 mt-1 max-w-[260px] leading-snug">
+                                                        <span class="block text-[11px] text-red-600 dark:text-red-400 mt-1 max-w-[260px] mx-auto leading-snug whitespace-normal">
                                                             Lý do: ${esc(app.rejectionReason || 'Không đạt điều kiện xét duyệt')}
                                                         </span>
                                                     ` : ''}
                                                 </td>
-                                                <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
-                                                    ${awaitingPay ? `
-                                                        <button type="button" onclick="KtxApp.navigate('sv-thanh-toan?appId=${esc(app.id)}')" class="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-[11px] shadow-2xs inline-flex items-center gap-1 transition-all">
-                                                            <span class="material-symbols-outlined text-[14px]">qr_code_2</span>
-                                                            <span>Thanh toán ngay</span>
+                                                <td class="py-3.5 pl-3 pr-5 text-center whitespace-nowrap" onclick="event.stopPropagation();">
+                                                    <div class="relative inline-flex items-center justify-center">
+                                                        <button type="button"
+                                                            onclick="KtxStudentViews.toggleAppActionMenu('${safeMenuId}', event)"
+                                                            aria-haspopup="menu"
+                                                            aria-expanded="false"
+                                                            aria-controls="sv-app-action-menu-${safeMenuId}"
+                                                            title="Thao tác"
+                                                            aria-label="Mở menu thao tác đơn ${esc(app.maDonDangKy)}"
+                                                            class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-[#0B2A5B] hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 mx-auto">
+                                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                                <circle cx="3.5" cy="8" r="1.25" />
+                                                                <circle cx="8" cy="8" r="1.25" />
+                                                                <circle cx="12.5" cy="8" r="1.25" />
+                                                            </svg>
                                                         </button>
-                                                    ` : ''}
-                                                    ${completed ? `
-                                                        <button type="button" onclick="KtxApp.navigate('sv-hop-dong')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] shadow-2xs inline-flex items-center gap-1 transition-all">
-                                                            <span class="material-symbols-outlined text-[14px]">home</span>
-                                                            <span>Xem chỗ ở</span>
-                                                        </button>
-                                                    ` : ''}
-                                                    <button type="button" onclick="KtxStudentViews.openAppDrawer('${esc(app.id)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-semibold text-[11px] transition-colors inline-flex items-center gap-1">
-                                                        <span class="material-symbols-outlined text-[14px]">visibility</span>
-                                                        <span>Chi tiết</span>
-                                                    </button>
+                                                        <div id="sv-app-action-menu-${safeMenuId}"
+                                                            data-sv-app-menu="true"
+                                                            role="menu"
+                                                            class="hidden absolute right-0 top-full mt-1.5 z-50 w-52 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1.5 text-left">
+                                                            ${awaitingPay ? `
+                                                                <button type="button" role="menuitem"
+                                                                    onclick="KtxStudentViews.closeAppActionMenus(); KtxApp.navigate('sv-thanh-toan?appId=${esc(app.id)}')"
+                                                                    class="w-full px-3 py-2 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 flex items-center gap-2 transition-colors text-left">
+                                                                    <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
+                                                                    <span>Thanh toán ngay</span>
+                                                                </button>
+                                                            ` : ''}
+                                                            ${completed ? `
+                                                                <button type="button" role="menuitem"
+                                                                    onclick="KtxStudentViews.closeAppActionMenus(); KtxApp.navigate('sv-hop-dong')"
+                                                                    class="w-full px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 flex items-center gap-2 transition-colors text-left">
+                                                                    <span class="material-symbols-outlined text-[16px]">home</span>
+                                                                    <span>Xem chỗ ở</span>
+                                                                </button>
+                                                            ` : ''}
+                                                            <button type="button" role="menuitem"
+                                                                onclick="KtxStudentViews.closeAppActionMenus(); KtxStudentViews.openAppDrawer('${esc(app.id)}')"
+                                                                class="w-full px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/70 flex items-center gap-2 transition-colors text-left">
+                                                                <span class="material-symbols-outlined text-[16px] text-slate-500">visibility</span>
+                                                                <span>Chi tiết đơn</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         `;
@@ -2739,12 +2828,6 @@ window.KtxStudentViews = (function () {
                             </button>
                         ` : ''}
                         ${completed ? `
-                            <button type="button" onclick="KtxStudentViews.closeAppDrawer(); KtxApp.navigate('sv-hop-dong')" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all">
-                                <span class="material-symbols-outlined text-[18px]">home</span>
-                                <span>Xem thông tin chỗ ở</span>
-                            </button>
-                        ` : ''}
-                        ${app.state === 'hoanTat' ? `
                             <button type="button" onclick="KtxStudentViews.closeAppDrawer(); KtxApp.navigate('sv-hop-dong')" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all">
                                 <span class="material-symbols-outlined text-[18px]">home</span>
                                 <span>Xem thông tin chỗ ở</span>
@@ -3017,6 +3100,46 @@ window.KtxStudentViews = (function () {
                                     </button>
                                 </div>
                             </div>
+
+                            <!-- Proof upload card -->
+                            <div class="bg-white dark:bg-[#121826] rounded-2xl p-5 shadow-xs border border-slate-200/80 dark:border-[#232B3B] text-left space-y-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">receipt_long</span>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-white">Minh chứng chuyển khoản</h3>
+                                </div>
+
+                                ${info.proofRejectionReason ? `
+                                    <div class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 space-y-1">
+                                        <div class="flex items-center gap-1.5 font-bold text-[11px]">
+                                            <span class="material-symbols-outlined text-[15px]">report</span>
+                                            <span>Minh chứng bị từ chối ${esc(info.proofRejectedAt || '')}</span>
+                                        </div>
+                                        <p class="leading-relaxed">${esc(info.proofRejectionReason)}</p>
+                                        <p class="text-[10px] text-red-600/80 dark:text-red-400/80">Vui lòng nộp lại minh chứng mới trước khi hết thời hạn giữ chỗ.</p>
+                                    </div>
+                                ` : ''}
+
+                                ${info.hasPaymentProof ? `
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                                            <span class="material-symbols-outlined text-[15px]">hourglass_top</span>
+                                            Đã nộp ${esc(info.proofSubmittedAt || '')} · chờ BQL đối soát
+                                        </span>
+                                        <a href="/api/me/invoices/${encodeURIComponent(inv.code)}/payment-proof" target="_blank" rel="noopener" class="text-[11px] font-semibold text-[#0B2A5B] dark:text-blue-400 hover:underline shrink-0">Xem lại ảnh</a>
+                                    </div>
+                                ` : `
+                                    <p class="text-[11px] text-slate-500 leading-relaxed">Sau khi chuyển khoản, tải ảnh biên lai/giao dịch để BQL đối soát và hoàn tất đăng ký phòng.</p>
+                                `}
+
+                                <div>
+                                    <label for="registrationProofFile" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">${info.hasPaymentProof ? 'Nộp lại minh chứng (thay ảnh cũ)' : 'Ảnh minh chứng'}</label>
+                                    <div class="flex items-center gap-2">
+                                        <input id="registrationProofFile" type="file" accept=".jpg,.jpeg,.png,.webp" class="flex-1 min-w-0 text-[11px] text-slate-500 file:mr-2 file:rounded-lg file:border-0 file:bg-[#0B2A5B] file:px-3 file:py-1.5 file:text-white file:font-semibold file:text-xs" />
+                                        <button type="button" onclick="KtxStudentViews.submitRegistrationProof('${esc(inv.code)}')" class="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold shadow-2xs transition-colors">Gửi minh chứng</button>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 mt-1">JPG/PNG/WebP, tối đa 5 MB</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `}
@@ -3230,31 +3353,14 @@ window.KtxStudentViews = (function () {
                                 </div>
                                 <div>
                                     <div class="flex items-center gap-2">
-                                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Chỗ ở hiện tại: ${esc(activeContract.toaNha)} - Phòng ${esc(activeContract.soPhong)}</h3>
-                                        ${statusBadge(activeContract.trangThai)}
+                                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Chỗ ở hiện tại: ${esc(activeContract.toaNha)} - Phòng ${esc(activeContract.soPhong || activeContract.phong || activeContract.maPhong || '—')}</h3>
+                                        ${activeContract.trangThai ? statusBadge(activeContract.trangThai) : ""}
                                     </div>
                                     <span class="text-xs text-slate-400 mt-0.5 block">Hợp đồng số: <strong class="font-mono text-slate-700 dark:text-slate-300">${esc(activeContract.maHopDong)}</strong></span>
                                 </div>
                             </div>
 
-                            <!-- Check-in status separate badge + Print CTA -->
-                            <div class="flex items-center gap-2">
-                                <div class="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 ${
-                                    activeContract.daNhanPhong
-                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200'
-                                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200'
-                                }">
-                                    <span class="material-symbols-outlined text-[16px]">
-                                        ${activeContract.daNhanPhong ? 'check_circle' : 'pending_actions'}
-                                    </span>
-                                    <span>${activeContract.daNhanPhong ? 'Đã nhận bàn giao phòng' : 'Chưa nhận phòng'}</span>
-                                </div>
 
-                                <button type="button" onclick="KtxStudentViews.printContract('${esc(activeContract.id)}')" class="px-3.5 py-1.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 transition-all">
-                                    <span class="material-symbols-outlined text-[16px]">print</span>
-                                    <span>In hợp đồng</span>
-                                </button>
-                            </div>
                         </div>
 
                         <!-- Accommodation details grid -->
@@ -3265,7 +3371,7 @@ window.KtxStudentViews = (function () {
                             </div>
                             <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                 <span class="text-slate-400 block text-[11px]">Phòng & Giường</span>
-                                <span class="font-bold text-blue-700 dark:text-blue-400 text-sm mt-0.5 block">Phòng ${esc(activeContract.soPhong)}${activeContract.soGiuong ? ` (G.${esc(activeContract.soGiuong)})` : ''}</span>
+                                <span class="font-bold text-blue-700 dark:text-blue-400 text-sm mt-0.5 block">Phòng ${esc(activeContract.soPhong || activeContract.phong || activeContract.maPhong || '—')}${(activeContract.soGiuong || activeContract.giuong) ? ` (G.${esc(activeContract.soGiuong || activeContract.giuong)})` : ''}</span>
                             </div>
                             <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
                                 <span class="text-slate-400 block text-[11px]">Kỳ học lưu trú</span>
@@ -3549,8 +3655,10 @@ window.KtxStudentViews = (function () {
                                             const proofBadge = remaining <= 0
                                                 ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"><span class="material-symbols-outlined text-[13px]">paid</span>Đã thanh toán</span>'
                                                 : (inv.hasPaymentProof
-                                                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300" title="Đã nộp ${inv.ngayNopMinhChung || ''}"><span class="material-symbols-outlined text-[13px]">hourglass_top</span>Đã nộp · chờ đối soát</span>`
-                                                    : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"><span class="material-symbols-outlined text-[13px]">upload_file</span>Chưa nộp</span>');
+                                                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300" title="Đã nộp ${esc(inv.ngayNopMinhChung || '')}"><span class="material-symbols-outlined text-[13px]">hourglass_top</span>Đã nộp · chờ đối soát</span>`
+                                                    : (inv.lyDoTuChoiMinhChung
+                                                        ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300" title="Lý do: ${esc(inv.lyDoTuChoiMinhChung)}"><span class="material-symbols-outlined text-[13px]">error</span>Bị từ chối · nộp lại</span>`
+                                                        : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"><span class="material-symbols-outlined text-[13px]">upload_file</span>Chưa nộp</span>'));
                                             return `
                                                 <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                                                     <td class="p-3.5 font-mono font-bold text-[#0B2A5B] dark:text-blue-400">${esc(inv.maHoaDon)}</td>
@@ -3813,14 +3921,72 @@ window.KtxStudentViews = (function () {
         }
     }
 
-    async function cancelServiceRegistration(registrationId) {
-        if (!confirm('Bạn chắc chắn muốn hủy đăng ký dịch vụ này?')) return;
+    function cancelServiceRegistration(registrationId) {
+        const svc = (studentState.serviceOptions || []).find(x => Number(x.registrationId) === Number(registrationId));
+        const modalsContainer = document.getElementById('modalsContainer');
+        if (!modalsContainer) return;
+
+        const esc = v => (window.KtxApp && KtxApp.escapeHtml) ? KtxApp.escapeHtml(v == null ? '' : String(v)) : (v == null ? '' : String(v));
+        const serviceName = svc?.name || 'dịch vụ này';
+        const priceText = svc ? `${Number(svc.price || 0).toLocaleString('vi-VN')} đ ${svc.unit === 'lan' ? '/ lần' : '/ tháng'}` : '—';
+
+        modalsContainer.innerHTML = `
+            <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in" onclick="if(event.target === this) KtxApp.closeModal()">
+                <div class="bg-white dark:bg-[#121826] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B] space-y-4" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined text-[20px]">cancel</span>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Xác nhận hủy dịch vụ</h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Dịch vụ sẽ ngừng tính phí từ hôm nay.</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="KtxApp.closeModal()" aria-label="Đóng hộp thoại" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+                            <span class="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2 text-xs">
+                        <div class="flex justify-between gap-3">
+                            <span class="text-slate-400">Dịch vụ:</span>
+                            <span class="font-bold text-slate-900 dark:text-white text-right">${esc(serviceName)}</span>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <span class="text-slate-400">Đơn giá:</span>
+                            <span class="font-semibold text-[#0B2A5B] dark:text-blue-400 text-right">${esc(priceText)}</span>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        Bạn có chắc chắn muốn hủy đăng ký <strong class="text-slate-900 dark:text-white">${esc(serviceName)}</strong> không?
+                    </p>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Quay lại</button>
+                        <button type="button" onclick="KtxStudentViews.confirmCancelServiceRegistration(${Number(registrationId)}, this)" class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs transition-colors disabled:opacity-60">Xác nhận hủy</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function confirmCancelServiceRegistration(registrationId, btn) {
+        if (btn) { btn.disabled = true; btn.textContent = 'Đang hủy...'; }
         try {
             const json = await apiDelete(`/api/me/services/${registrationId}`);
             KtxApp.showToast(json.message || (json.success ? 'Đã hủy đăng ký dịch vụ.' : 'Không hủy được đăng ký.'), json.success ? 'success' : 'error');
-            if (json.success) await refreshServiceOptions();
+            if (json.success) {
+                if (window.KtxApp && typeof KtxApp.closeModal === 'function') KtxApp.closeModal();
+                await refreshServiceOptions();
+            } else if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Xác nhận hủy';
+            }
         } catch (e) {
             KtxApp.showToast(e.message || 'Lỗi kết nối máy chủ', 'error');
+            if (btn) { btn.disabled = false; btn.textContent = 'Xác nhận hủy'; }
         }
     }
 
@@ -3869,6 +4035,16 @@ window.KtxStudentViews = (function () {
                     </div>
 
                     <div class="space-y-2 text-left p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                        ${inv.lyDoTuChoiMinhChung ? `
+                            <div class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 space-y-1 text-left">
+                                <div class="flex items-center gap-1.5 font-bold text-[11px]">
+                                    <span class="material-symbols-outlined text-[15px]">report</span>
+                                    <span>Minh chứng trước bị từ chối ${esc(inv.ngayTuChoiMinhChung || '')}</span>
+                                </div>
+                                <p class="leading-relaxed">${esc(inv.lyDoTuChoiMinhChung)}</p>
+                                <p class="text-[10px] text-red-600/80 dark:text-red-400/80">Bạn có thể nộp lại minh chứng mới ngay bên dưới khi còn trong thời hạn giữ chỗ 24 giờ.</p>
+                            </div>
+                        ` : ''}
                         ${inv.hasPaymentProof ? `
                             <div class="flex items-center justify-between gap-2">
                                 <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
@@ -3902,6 +4078,32 @@ window.KtxStudentViews = (function () {
         `;
     }
 
+    async function submitRegistrationProof(invoiceCode) {
+        const input = document.getElementById('registrationProofFile');
+        if (!input || input.files.length === 0) {
+            KtxApp.showToast('Vui lòng chọn ảnh minh chứng trước khi gửi.', 'error');
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('proof', input.files[0]);
+        try {
+            const res = await fetch(`/api/me/invoices/${encodeURIComponent(invoiceCode)}/payment-proof`, { method: 'POST', body: fd });
+            const json = await res.json();
+            if (json.success) {
+                KtxApp.showToast(json.message || 'Đã nộp minh chứng thanh toán!');
+                await loadPaymentData(studentState.paymentAppId);
+                const container = document.getElementById('mainContent');
+                if (container) await renderThanhToan(container, studentState.paymentAppId);
+                await loadInvoicesData();
+            } else {
+                KtxApp.showToast(json.message || 'Không nộp được minh chứng.', 'error');
+            }
+        } catch (e) {
+            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
+        }
+    }
+
     async function submitInvoiceProof(invoiceId) {
         const input = document.getElementById('invoiceProofFile');
         if (!input || input.files.length === 0) {
@@ -3920,6 +4122,8 @@ window.KtxStudentViews = (function () {
                 if (inv) {
                     inv.hasPaymentProof = true;
                     inv.ngayNopMinhChung = new Date().toLocaleString('vi-VN');
+                    inv.lyDoTuChoiMinhChung = null;
+                    inv.ngayTuChoiMinhChung = null;
                 }
                 // Đóng modal và nạp lại bảng để cột "Trạng thái chứng từ" đổi ngay,
                 // không phải đợi sinh viên chuyển tab rồi quay lại.
@@ -4149,7 +4353,12 @@ window.KtxStudentViews = (function () {
                             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Ảnh chụp hiện trường (tùy chọn, tối đa 5MB)</label>
                             <input type="file" id="maintImage" accept="image/jpeg,image/png,image/jpg" onchange="KtxStudentViews.handleMaintenanceImagePreview(this)" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-[#0B2A5B] hover:file:bg-blue-100" />
                             <div id="maintImagePreview" class="mt-2 hidden">
-                                <img id="maintPreviewImg" src="" alt="Preview" class="w-32 h-24 rounded-lg object-cover border border-slate-200" />
+                                <div class="relative inline-block">
+                                    <img id="maintPreviewImg" src="" alt="Preview" class="w-32 h-24 rounded-lg object-cover border border-slate-200" />
+                                    <button type="button" onclick="KtxStudentViews.clearMaintenanceImage()" title="Xóa ảnh đã chọn" aria-label="Xóa ảnh đã chọn" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-md flex items-center justify-center transition-colors">
+                                        <span class="material-symbols-outlined text-[14px]">close</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -4163,6 +4372,15 @@ window.KtxStudentViews = (function () {
                 </div>
             </div>
         `;
+    }
+
+    function clearMaintenanceImage() {
+        const input = document.getElementById('maintImage');
+        const preview = document.getElementById('maintImagePreview');
+        const img = document.getElementById('maintPreviewImg');
+        if (input) input.value = '';
+        if (img) img.src = '';
+        if (preview) preview.classList.add('hidden');
     }
 
     function handleMaintenanceImagePreview(input) {
@@ -4744,8 +4962,7 @@ window.KtxStudentViews = (function () {
                         </span>
                     </button>
                     ${isOpen ? `
-                        <div class="px-5 pb-5 pt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800/60 whitespace-pre-wrap">
-                            ${item.content}
+                        <div class="px-5 pb-5 pt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800/60 whitespace-pre-wrap">${item.content}
                         </div>
                     ` : ''}
                 </div>
@@ -4910,7 +5127,36 @@ window.KtxStudentViews = (function () {
         }
     }
 
+    function closeAppActionMenus() {
+        document.querySelectorAll('[data-sv-app-menu="true"]').forEach(menu => {
+            menu.classList.add('hidden');
+            const trigger = menu.parentElement?.querySelector(`button[aria-controls="${menu.id}"]`);
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    function toggleAppActionMenu(menuId, event) {
+        if (event) event.stopPropagation();
+        const menu = document.getElementById(`sv-app-action-menu-${menuId}`);
+        if (!menu) return;
+        const wasHidden = menu.classList.contains('hidden');
+        closeAppActionMenus();
+        if (!wasHidden) return;
+        const trigger = event?.currentTarget || menu.parentElement?.querySelector(`button[aria-controls="${menu.id}"]`);
+        menu.classList.remove('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!e.target?.closest?.('[data-sv-app-menu="true"]')) closeAppActionMenus();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeAppActionMenus();
+    });
+
     return {
+        toggleAppActionMenu,
+        closeAppActionMenus,
         hasView,
         renderView,
         statusBadge,
@@ -4934,6 +5180,7 @@ window.KtxStudentViews = (function () {
         setRegStep,
         selectBuilding,
         selectRoom,
+        selectBed,
         toggleAcceptRules,
         submitRegistrationForm,
         openRulesModal,
@@ -4950,14 +5197,17 @@ window.KtxStudentViews = (function () {
         setInvoiceTab,
         openInvoicePaymentModal,
         submitInvoiceProof,
+        submitRegistrationProof,
         viewInvoiceReceipt,
         registerService,
         openRegisterServiceModal,
         submitServiceRegistration,
         cancelServiceRegistration,
+        confirmCancelServiceRegistration,
         // Group 3: Sửa chữa
         openCreateMaintenanceModal,
         handleMaintenanceImagePreview,
+        clearMaintenanceImage,
         submitMaintenanceForm,
         viewMaintenanceDetail,
         // Thông báo

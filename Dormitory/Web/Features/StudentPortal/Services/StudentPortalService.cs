@@ -168,8 +168,8 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 student.Email = newEmail;
             }
 
-            if (dto.DienThoai != null) student.DienThoai = dto.DienThoai.Trim();
-            if (dto.DiaChiThuongTru != null) student.DiaChiThuongTru = dto.DiaChiThuongTru.Trim();
+            if (!string.IsNullOrWhiteSpace(dto.DienThoai)) student.DienThoai = dto.DienThoai.Trim();
+            if (!string.IsNullOrWhiteSpace(dto.DiaChiThuongTru)) student.DiaChiThuongTru = dto.DiaChiThuongTru.Trim();
 
             await _context.SaveChangesAsync();
             return (true, null, 200);
@@ -316,6 +316,37 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             return result;
         }
 
+        // Giường đang bị chiếm: hợp đồng còn hiệu lực hoặc đơn chờ duyệt đã chọn giường.
+        private async Task<Dictionary<string, (string StudentName, string Mssv, string Status)>> LoadBedHoldersAsync(string maKyHoc)
+        {
+            var holders = new Dictionary<string, (string, string, string)>();
+            if (string.IsNullOrEmpty(maKyHoc)) return holders;
+
+            var contractBeds = await _context.HopDongs
+                .Where(h => h.MaKyHoc == maKyHoc && h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy")
+                .Select(h => new { h.MaGiuong, h.MaSinhVien, Name = h.SinhVien != null ? h.SinhVien.HoTen : null })
+                .ToListAsync();
+            foreach (var c in contractBeds)
+            {
+                holders[c.MaGiuong] = (c.Name ?? c.MaSinhVien, c.MaSinhVien, "Đang ở");
+            }
+
+            var pendingBeds = await _context.DonDangKys
+                .Where(d => d.MaGiuong != null && d.TrangThai == "choDuyet" &&
+                            d.DotDangKy != null && d.DotDangKy.MaKyHoc == maKyHoc)
+                .Select(d => new { MaGiuong = d.MaGiuong!, d.MaSinhVien, Name = d.SinhVien != null ? d.SinhVien.HoTen : null })
+                .ToListAsync();
+            foreach (var p in pendingBeds)
+            {
+                if (!holders.ContainsKey(p.MaGiuong))
+                {
+                    holders[p.MaGiuong] = (p.Name ?? p.MaSinhVien, p.MaSinhVien, "Đã đăng ký");
+                }
+            }
+
+            return holders;
+        }
+
         public async Task<List<StudentBuildingDto>> GetBuildingsForRoundAsync(string studentId, string roundId)
         {
             var student = await _context.SinhViens.FirstOrDefaultAsync(s => s.MaSinhVien == studentId);
@@ -330,10 +361,7 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                     .ThenInclude(p => p.DanhSachGiuong)
                 .ToListAsync();
 
-            var occupiedBedIds = await _context.HopDongs
-                .Where(h => h.MaKyHoc == round.MaKyHoc && h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy")
-                .Select(h => h.MaGiuong)
-                .ToListAsync();
+            var bedHolders = await LoadBedHoldersAsync(round.MaKyHoc);
 
             var list = new List<StudentBuildingDto>();
             foreach (var b in buildings)
@@ -341,7 +369,7 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 int totalRooms = b.DanhSachPhong.Count;
                 int availRooms = b.DanhSachPhong.Count(p =>
                     p.TrangThai == "hoatDong" &&
-                    p.DanhSachGiuong.Any(g => g.LaDangHoat && !occupiedBedIds.Contains(g.MaGiuong)));
+                    p.DanhSachGiuong.Any(g => g.LaDangHoat && !bedHolders.ContainsKey(g.MaGiuong)));
 
                 list.Add(b.ToStudentBuildingDto(totalRooms, availRooms));
             }
@@ -370,18 +398,35 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             }
 
             var rooms = await query.ToListAsync();
-
-            var occupiedBedIds = await _context.HopDongs
-                .Where(h => h.MaKyHoc == round.MaKyHoc && h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy")
-                .Select(h => h.MaGiuong)
-                .ToListAsync();
+            var bedHolders = await LoadBedHoldersAsync(round.MaKyHoc);
 
             var result = new List<StudentRoomDto>();
             foreach (var r in rooms)
             {
-                int availableBeds = r.DanhSachGiuong.Count(g => g.LaDangHoat && !occupiedBedIds.Contains(g.MaGiuong));
+                int availableBeds = r.DanhSachGiuong.Count(g => g.LaDangHoat && !bedHolders.ContainsKey(g.MaGiuong));
                 var (selectable, reason) = StudentPortalRules.CheckRoomSelectability(r, availableBeds, student.GioiTinh);
-                result.Add(r.ToStudentRoomDto(availableBeds, selectable, reason));
+
+                var beds = r.DanhSachGiuong
+                    .OrderBy(g => g.SoThuTu)
+                    .Select(g =>
+                    {
+                        bedHolders.TryGetValue(g.MaGiuong, out var holder);
+                        string status = !g.LaDangHoat
+                            ? "Bảo trì"
+                            : (holder.Status ?? "Giường trống");
+                        return new StudentBedDto
+                        {
+                            Id = g.MaGiuong,
+                            BedNumber = $"G{g.SoThuTu}",
+                            Status = status,
+                            StudentName = status == "Giường trống" ? null : holder.StudentName,
+                            Mssv = status == "Giường trống" ? null : holder.Mssv,
+                            Selectable = selectable && status == "Giường trống"
+                        };
+                    })
+                    .ToList();
+
+                result.Add(r.ToStudentRoomDto(availableBeds, beds, selectable, reason));
             }
 
             return result;
@@ -439,15 +484,21 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 return (false, "Phòng đã chọn không phù hợp với giới tính của bạn.", null, 400);
             }
 
-            var occupiedBedIds = await _context.HopDongs
-                .Where(h => h.MaKyHoc == round.MaKyHoc && h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy")
-                .Select(h => h.MaGiuong)
-                .ToListAsync();
-
-            int availableBeds = room.DanhSachGiuong.Count(g => g.LaDangHoat && !occupiedBedIds.Contains(g.MaGiuong));
-            if (availableBeds <= 0)
+            var bed = room.DanhSachGiuong.FirstOrDefault(g => g.MaGiuong == req.MaGiuong);
+            if (bed == null)
             {
-                return (false, "Phòng đã chọn hiện đã hết giường trống.", null, 400);
+                return (false, "Giường đã chọn không thuộc phòng này.", null, 400);
+            }
+
+            if (!bed.LaDangHoat)
+            {
+                return (false, "Giường đã chọn đang bảo trì, vui lòng chọn giường khác.", null, 400);
+            }
+
+            var bedHolders = await LoadBedHoldersAsync(round.MaKyHoc);
+            if (bedHolders.ContainsKey(bed.MaGiuong))
+            {
+                return (false, "Giường đã chọn vừa có người đăng ký, vui lòng chọn giường khác.", null, 400);
             }
 
             string appId = Shared.Helpers.IdGenerator.Next("DK", DateTime.Today);
@@ -458,12 +509,20 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 MaDotDangKy = req.MaDotDangKy,
                 MaPhong = room.MaPhong,
                 MaLoaiPhong = room.MaLoaiPhong,
+                MaGiuong = bed.MaGiuong,
                 TrangThai = "choDuyet",
                 NgayDangKy = now
             };
 
             await _context.DonDangKys.AddAsync(don);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return (false, "Giường đã chọn vừa có người đăng ký, vui lòng chọn giường khác.", null, 409);
+            }
 
             return (true, null, appId, 201);
         }
@@ -594,7 +653,13 @@ namespace Dormitory.Web.Features.StudentPortal.Services
                 ServerNow = DateTime.UtcNow.ToString("o"),
                 Qr = qrDto,
                 Verification = isExpired ? "hetHan" : "dangChoXacMinh",
-                Message = message
+                Message = message,
+                // Minh chứng bị từ chối coi như chưa nộp để sinh viên nộp lại.
+                HasPaymentProof = invoice != null && !string.IsNullOrEmpty(invoice.AnhMinhChung)
+                    && string.IsNullOrEmpty(invoice.LyDoTuChoiMinhChung),
+                ProofSubmittedAt = invoice?.NgayNopMinhChung?.ToString("HH:mm dd/MM/yyyy"),
+                ProofRejectionReason = invoice?.LyDoTuChoiMinhChung,
+                ProofRejectedAt = invoice?.NgayTuChoiMinhChung?.ToString("HH:mm dd/MM/yyyy")
             };
         }
 
@@ -628,7 +693,8 @@ namespace Dormitory.Web.Features.StudentPortal.Services
         public async Task<List<StudentInvoiceListItemDto>> GetInvoicesAsync(string studentId, string? status = null, string? type = null)
         {
             var query = _context.HoaDons
-                .Where(h => h.HopDong != null && h.HopDong.MaSinhVien == studentId)
+                // BQL chưa bấm Gửi thì hóa đơn nháp chưa hiện ở cổng sinh viên.
+                .Where(h => h.HopDong != null && h.HopDong.MaSinhVien == studentId && h.TrangThai != "nhap" && h.TrangThai != "daHuy")
                 .Include(h => h.HopDong)
                 .Include(h => h.DanhSachChiTietHoaDon)
                 .Include(h => h.DanhSachThanhToan)
@@ -667,7 +733,8 @@ namespace Dormitory.Web.Features.StudentPortal.Services
         public async Task<StudentInvoiceDetailDto?> GetInvoiceByIdAsync(string studentId, string invoiceId)
         {
             var invoice = await _context.HoaDons
-                .Where(h => h.MaHoaDon == invoiceId && h.HopDong != null && h.HopDong.MaSinhVien == studentId)
+                .Where(h => h.MaHoaDon == invoiceId && h.HopDong != null && h.HopDong.MaSinhVien == studentId
+                    && h.TrangThai != "nhap" && h.TrangThai != "daHuy")
                 .Include(h => h.HopDong)
                 .Include(h => h.DanhSachChiTietHoaDon)
                 .Include(h => h.DanhSachThanhToan)
@@ -685,7 +752,8 @@ namespace Dormitory.Web.Features.StudentPortal.Services
         public async Task<VietQrDto?> GetInvoiceQrAsync(string studentId, string invoiceId)
         {
             var invoice = await _context.HoaDons
-                .Where(h => h.MaHoaDon == invoiceId && h.HopDong != null && h.HopDong.MaSinhVien == studentId)
+                .Where(h => h.MaHoaDon == invoiceId && h.HopDong != null && h.HopDong.MaSinhVien == studentId
+                    && h.TrangThai != "nhap" && h.TrangThai != "daHuy")
                 .Include(h => h.DanhSachChiTietHoaDon)
                 .Include(h => h.DanhSachThanhToan)
                 .FirstOrDefaultAsync();

@@ -34,6 +34,17 @@ namespace Dormitory.Web.Features.Registrations.DTOs
         public string? Note { get; set; }
         public string? ApprovedBy { get; set; }
         public string? ApprovedAt { get; set; }
+    /// <summary>Sinh viên đã từng có hợp đồng lưu trú tại KTX (đã từng ở KTX).</summary>
+    public bool HasStayedBefore { get; set; }
+
+    /// <summary>Trạng thái thu phí: daNhanThanhToan, choXacNhan, chuaThanhToan.</summary>
+    public string PaymentStatus { get; set; } = "chuaThanhToan";
+
+    /// <summary>Hóa đơn gắn với hợp đồng của đơn đăng ký (dùng để xem minh chứng).</summary>
+    public string? InvoiceId { get; set; }
+    public string? ProofSubmittedAt { get; set; }
+    public string? ProofRejectionReason { get; set; }
+    public string? ProofRejectedAt { get; set; }
     }
 
     public class RejectApplicationDto

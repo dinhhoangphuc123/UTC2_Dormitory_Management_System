@@ -130,6 +130,17 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
         public int AvailableBedsCount { get; set; }
         public bool Selectable { get; set; }
         public string? UnselectableReason { get; set; }
+        public List<StudentBedDto> Beds { get; set; } = new();
+    }
+
+    public class StudentBedDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string BedNumber { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string? StudentName { get; set; }
+        public string? Mssv { get; set; }
+        public bool Selectable { get; set; }
     }
 
     // 4. Applications
@@ -137,6 +148,7 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
     {
         public string MaDotDangKy { get; set; } = string.Empty;
         public string MaPhong { get; set; } = string.Empty;
+        public string MaGiuong { get; set; } = string.Empty;
         public bool AcceptRules { get; set; }
     }
 
@@ -166,6 +178,12 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
         public VietQrDto? Qr { get; set; }
         public string Verification { get; set; } = "dangChoXacMinh"; // dangChoXacMinh, daXacNhan, hetHan
         public string? Message { get; set; }
+
+        /// <summary>Minh chứng thanh toán của sinh viên gắn với hóa đơn giữ chỗ.</summary>
+        public bool HasPaymentProof { get; set; }
+        public string? ProofSubmittedAt { get; set; }
+        public string? ProofRejectionReason { get; set; }
+        public string? ProofRejectedAt { get; set; }
     }
 
     public class PaymentInvoiceDto
@@ -231,6 +249,8 @@ namespace Dormitory.Web.Features.StudentPortal.DTOs
         public bool IsRegistration { get; set; }
         public bool HasPaymentProof { get; set; }
         public string? NgayNopMinhChung { get; set; }
+        public string? LyDoTuChoiMinhChung { get; set; }
+        public string? NgayTuChoiMinhChung { get; set; }
     }
 
     public class StudentInvoiceDetailDto : StudentInvoiceListItemDto

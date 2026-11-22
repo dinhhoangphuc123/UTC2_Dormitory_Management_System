@@ -56,7 +56,7 @@ namespace Dormitory.Web.Features.Dashboard.Services
                     t.HoaDon.HopDong.KyHoc != null && t.HoaDon.HopDong.KyHoc.MaNamHoc == yearCode)
                 .SumAsync(t => (decimal?)t.SoTien) ?? 0;
             decimal totalInvoiceAmount = await _context.ChiTietHoaDons
-                .Where(line => line.HoaDon != null && line.HoaDon.HopDong != null &&
+                .Where(line => line.HoaDon != null && line.HoaDon.TrangThai != "nhap" && line.HoaDon.TrangThai != "daHuy" && line.HoaDon.HopDong != null &&
                     line.HoaDon.HopDong.KyHoc != null && line.HoaDon.HopDong.KyHoc.MaNamHoc == yearCode)
                 .SumAsync(line => (decimal?)(line.ThanhTien ?? line.SoLuong * line.DonGia)) ?? 0;
             decimal debtAmount = Math.Max(0, totalInvoiceAmount - totalFeeRevenue);
@@ -111,6 +111,15 @@ namespace Dormitory.Web.Features.Dashboard.Services
 
             int totalRooms = activeRooms.Count;
             int occupiedRooms = activeRooms.Count(RoomIsRented);
+
+            // Thứ tự chuẩn của 4 loại phòng: Tiêu chuẩn Nam → Tiêu chuẩn Nữ → CLC Nam → CLC Nữ
+            static int RoomTypeRank(string name)
+            {
+                var isHighTier = name.Contains("cao", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+                var isFemale = name.Contains("nữ", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+                return isHighTier * 2 + isFemale;
+            }
+
             var roomTypeStats = activeRooms
                 .GroupBy(p => string.IsNullOrWhiteSpace(p.LoaiPhong?.TenLoaiPhong) ? "Chưa phân loại" : p.LoaiPhong!.TenLoaiPhong.Trim())
                 .Select(g => new RoomTypeStatDto
@@ -119,7 +128,8 @@ namespace Dormitory.Web.Features.Dashboard.Services
                     RoomCount = g.Count(),
                     OccupiedCount = g.Count(RoomIsRented)
                 })
-                .OrderByDescending(r => r.RoomCount)
+                .OrderBy(r => RoomTypeRank(r.Name))
+                .ThenByDescending(r => r.RoomCount)
                 .ToList();
 
             // Load real urgent tasks from database
@@ -213,7 +223,7 @@ namespace Dormitory.Web.Features.Dashboard.Services
 
             // 2. Doanh thu lũy kế theo tháng: năm nay so với cùng kỳ năm trước.
             // Dùng năm dương lịch để biểu đồ luôn so sánh được hai năm liền kề.
-            int currentYear = DateTime.Today.Year;
+            int currentYear = year.NgayBatDau.Year;
             int previousYear = currentYear - 1;
             var trendStart = new DateTime(previousYear, 1, 1);
             var trendEnd = DateTime.Today.Date.AddDays(1);

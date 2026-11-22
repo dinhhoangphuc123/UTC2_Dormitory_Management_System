@@ -108,7 +108,7 @@ namespace Dormitory.IntegrationTests.Features.Utilities
             var invoice = await context.HoaDons
                 .Include(h => h.DanhSachChiTietHoaDon)
                 .SingleAsync(h => h.MaHopDong == contract.MaHopDong && h.Thang == BillMonth && h.Nam == BillYear);
-            Assert.Equal("chuaThanhToan", invoice.TrangThai);
+            Assert.Equal("nhap", invoice.TrangThai); // Chưa gửi thì hóa đơn nằm ở dạng nháp
             Assert.Null(invoice.NgayGui); // SendNow=false thì BQL bấm Gửi sau
             Assert.Equal(new DateTime(BillYear, BillMonth + 1, 15), invoice.HanThanhToan);
 
@@ -169,6 +169,7 @@ namespace Dormitory.IntegrationTests.Features.Utilities
             var invoice = await context.HoaDons
                 .SingleAsync(h => h.MaHopDong == contract.MaHopDong && h.Thang == BillMonth && h.Nam == BillYear);
             Assert.NotNull(invoice.NgayGui);
+            Assert.Equal("chuaThanhToan", invoice.TrangThai);
 
             var notice = await context.ThongBaos.FirstOrDefaultAsync(t =>
                 t.Loai == "hoaDon" && t.TieuDe.Contains("T10/2026"));

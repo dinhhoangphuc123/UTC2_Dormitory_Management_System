@@ -34,6 +34,26 @@ namespace Dormitory.Web.Features.Registrations.Api
             return Ok(ApiResponse<List<ApplicationListItemDto>>.Ok(apps));
         }
 
+        [HttpGet("export")]
+        public async Task<IActionResult> Export(
+            [FromQuery(Name = "status")] string? statusTab,
+            [FromQuery] string? priority,
+            [FromQuery] string? cohort,
+            [FromQuery] string? gender,
+            [FromQuery] string? academicYear,
+            [FromQuery] string? roomType = null,
+            [FromQuery] string? stayed = null,
+            [FromQuery] string? search = null)
+        {
+            var fileBytes = await _donDangKyService.ExportApplicationsExcelAsync(
+                statusTab, priority, cohort, gender, academicYear, roomType, stayed, search);
+            var safeYear = string.IsNullOrWhiteSpace(academicYear) ? "KTX" : academicYear.Trim();
+            return File(
+                fileBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"DanhSachDonDangKy_{safeYear}.xlsx");
+        }
+
         [HttpPost("{id}/approve")]
         public async Task<IActionResult> Approve(string id)
         {

@@ -216,6 +216,23 @@ window.KtxExtendedViews = (function () {
         }
     }
 
+    const DEFAULT_CLASS_ADVISORS = [
+        'TS. Nguyễn Minh Tuấn',
+        'ThS. Trần Thị Lan',
+        'ThS. Lê Hoàng Nam',
+        'TS. Phạm Văn Hùng',
+        'ThS. Võ Thị Hạnh',
+        'TS. Đặng Quốc Huy'
+    ];
+
+    function getClassAdvisor(c) {
+        if (c && c.advisor && c.advisor !== 'Chưa phân công') return c.advisor;
+        const key = String(c?.code || c?.name || '');
+        let hash = 0;
+        for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+        return DEFAULT_CLASS_ADVISORS[hash % DEFAULT_CLASS_ADVISORS.length];
+    }
+
     function renderClassesView() {
         const faculties = [...new Set(extState.classes.map(c => c.faculty).filter(Boolean))]
             .sort((a, b) => a.localeCompare(b, 'vi'));
@@ -384,7 +401,7 @@ window.KtxExtendedViews = (function () {
                                         </td>
                                         <td class="py-3.5 px-3 align-middle font-semibold text-slate-800 dark:text-slate-200 truncate" title="${esc(c.name)}">${esc(c.name)}</td>
                                         <td class="py-3.5 px-3 align-middle text-slate-600 dark:text-slate-400 truncate" title="${esc(c.faculty)}">${esc(c.faculty)}</td>
-                                        <td class="py-3.5 px-3 align-middle text-slate-600 dark:text-slate-400 truncate" title="${esc(c.advisor)}">${esc(c.advisor)}</td>
+                                        <td class="py-3.5 px-3 align-middle text-slate-700 dark:text-slate-300 font-medium truncate" title="${esc(getClassAdvisor(c))}">${esc(getClassAdvisor(c))}</td>
                                         <td class="py-3.5 px-3 align-middle">
                                             <div class="font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">${Number(c.residents) || 0} / ${Number(c.totalStudents) || 0} SV</div>
                                             <div class="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
@@ -654,10 +671,15 @@ window.KtxExtendedViews = (function () {
         closeActionMenusByAttr('[data-tickets-menu="true"]');
     }
 
+    function closeInvoicesActionMenus() {
+        closeActionMenusByAttr('[data-invoices-menu="true"]');
+    }
+
     function closeAllExtendedActionMenus() {
         closeClassesActionMenus();
         closeUtilitiesActionMenus();
         closeTicketsActionMenus();
+        closeInvoicesActionMenus();
     }
 
     function toggleClassesActionMenu(code, event) {
@@ -670,6 +692,10 @@ window.KtxExtendedViews = (function () {
 
     function toggleTicketsActionMenu(code, event) {
         toggleFloatingActionMenu(`tickets-action-menu-${code}`, closeAllExtendedActionMenus, event, 216, 136);
+    }
+
+    function toggleInvoicesActionMenu(code, event) {
+        toggleFloatingActionMenu(`invoices-action-menu-${code}`, closeAllExtendedActionMenus, event, 216, 168);
     }
 
     // ========================================================
@@ -1691,7 +1717,39 @@ window.KtxExtendedViews = (function () {
         }
     }
 
+    function isInvoiceAwaitingConfirm(inv) {
+        if (!inv || inv.status === 'paid' || inv.isDraft) return false;
+        if (inv.paymentStatus === 'choXacNhan') return true;
+        return Boolean(inv.hasStudentProof && !inv.isProofRejected);
+    }
+
+    function getInvoiceStatusBadge(inv) {
+        if (!inv) return '';
+        if (inv.status === 'draft' || inv.isDraft) {
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Nháp</span>';
+        }
+        if (inv.status === 'paid' || inv.paymentStatus === 'daNhanThanhToan') {
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">Đã nhận thanh toán</span>';
+        }
+        if (isInvoiceAwaitingConfirm(inv)) {
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">Chờ xác nhận thanh toán</span>';
+        }
+        if (inv.isProofRejected) {
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Đã từ chối minh chứng</span>';
+        }
+        if (inv.status === 'overdue') {
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Quá hạn</span>';
+        }
+        return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">Chưa thanh toán</span>';
+    }
+
     function renderInvoicesView() {
+        // Lập/sửa/gửi hóa đơn và đối soát thanh toán dành cho vai trò nghiệp vụ (admin, quản lý, kế toán).
+        const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
+        const role = user && user.roleCode;
+        const canManageInvoices = role === 'admin' || role === 'quanLy' || role === 'keToan';
+        const canConfirmPayment = role === 'admin' || role === 'quanLy' || role === 'keToan';
+
         // 1. Áp dụng trước các bộ lọc ngữ cảnh: Tìm kiếm và Khoản thu
         const contextualInvoices = extState.invoices.filter(i => {
             const matchSearch = matchesSearch(extState.invoiceSearch, i.code, i.studentName, i.studentId, i.room, i.building, i.title);
@@ -1704,13 +1762,21 @@ window.KtxExtendedViews = (function () {
         const totalPending = contextualInvoices.filter(i => i.status === 'pending').reduce((s, i) => s + (i.amount || 0), 0);
         const totalOverdue = contextualInvoices.filter(i => i.status === 'overdue').reduce((s, i) => s + (i.amount || 0), 0);
         const overdueCount = contextualInvoices.filter(i => i.status === 'overdue' || i.isOverdue).length;
+        const awaitingConfirmCount = contextualInvoices.filter(isInvoiceAwaitingConfirm).length;
         const totalCount = contextualInvoices.length;
         const paidCount = contextualInvoices.filter(i => i.status === 'paid').length;
         const pendingCount = contextualInvoices.filter(i => i.status === 'pending').length;
+        const draftCount = contextualInvoices.filter(i => i.status === 'draft').length;
+        const pendingFooter = awaitingConfirmCount > 0
+            ? `${awaitingConfirmCount} HĐ chờ xác nhận · ${pendingCount} HĐ chờ thu`
+            : `Còn ${pendingCount} hóa đơn chờ thu`;
 
         // 3. Lọc tiếp theo trạng thái nếu có chọn
         const filtered = contextualInvoices.filter(i => {
-            return extState.invoiceStatus === 'all' || i.status === extState.invoiceStatus;
+            if (extState.invoiceStatus === 'all') return true;
+            if (extState.invoiceStatus === 'choXacNhan') return isInvoiceAwaitingConfirm(i);
+            if (extState.invoiceStatus === 'pending') return i.status === 'pending' && !isInvoiceAwaitingConfirm(i);
+            return i.status === extState.invoiceStatus;
         });
 
         const selectClass = 'h-10 min-w-[130px] px-3 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white focus:outline-none cursor-pointer';
@@ -1723,24 +1789,29 @@ window.KtxExtendedViews = (function () {
                         <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 dark:text-white font-headline">Hóa đơn & Thu phí</h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theo dõi khoản thu, tình trạng thanh toán và công nợ nội trú</p>
                     </div>
-                    <div class="page-title-actions flex items-center gap-2">
-                        <button type="button" onclick="KtxExtendedViews.filterInvoiceStatus('overdue')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition">
+                    <div class="page-title-actions flex items-center gap-2 flex-wrap">
+                        <button type="button" onclick="KtxExtendedViews.filterInvoiceStatus('choXacNhan')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border ${extState.invoiceStatus === 'choXacNhan' ? 'border-emerald-500 bg-emerald-100/90 dark:bg-emerald-950/60 ring-2 ring-emerald-500/20' : 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/40'} text-xs font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition">
+                            <span class="material-symbols-outlined text-[16px]">price_check</span>
+                            <span>Chờ xác nhận (${awaitingConfirmCount})</span>
+                        </button>
+                        <button type="button" onclick="KtxExtendedViews.filterInvoiceStatus('overdue')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border ${extState.invoiceStatus === 'overdue' ? 'border-amber-500 bg-amber-100/90 dark:bg-amber-950/60 ring-2 ring-amber-500/20' : 'border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40'} text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition">
                             <span class="material-symbols-outlined text-[16px]">notifications_active</span>
                             <span>Xem nợ quá hạn (${overdueCount})</span>
                         </button>
+                        ${canManageInvoices ? `
                         <button type="button" onclick="KtxExtendedViews.openCreateInvoiceModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">add_card</span>
                             <span>Lập Hóa Đơn</span>
-                        </button>
+                        </button>` : ''}
                     </div>
                 </div>
 
                 <!-- 4 KPI Cards (Đồng bộ chuẩn 4 thẻ, cập nhật linh hoạt theo bộ lọc) -->
                 <div class="dashboard-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     ${renderMetricCard({ label: 'Thực thu đã thu', value: totalPaid.toLocaleString('vi-VN'), unit: 'đ', icon: 'payments', tone: 'blue', footer: `Đã thu ${paidCount} hóa đơn` })}
-                    ${renderMetricCard({ label: 'Chờ sinh viên nộp', value: totalPending.toLocaleString('vi-VN'), unit: 'đ', icon: 'schedule', tone: 'amber', footer: `Còn ${pendingCount} hóa đơn chờ thu` })}
+                    ${renderMetricCard({ label: 'Chờ sinh viên nộp', value: totalPending.toLocaleString('vi-VN'), unit: 'đ', icon: 'schedule', tone: 'amber', footer: pendingFooter })}
                     ${renderMetricCard({ label: 'Công nợ quá hạn', value: totalOverdue.toLocaleString('vi-VN'), unit: 'đ', icon: 'account_balance_wallet', tone: 'red', footer: `${overdueCount} hóa đơn quá hạn` })}
-                    ${renderMetricCard({ label: 'Tổng số hóa đơn', value: totalCount.toLocaleString('vi-VN'), unit: 'hóa đơn', icon: 'receipt_long', tone: 'slate', footer: 'VNPAY QR · VietinBank · Tiền mặt' })}
+                    ${renderMetricCard({ label: 'Tổng số hóa đơn', value: totalCount.toLocaleString('vi-VN'), unit: 'hóa đơn', icon: 'receipt_long', tone: 'slate', footer: draftCount > 0 ? `${draftCount} bản nháp chưa gửi sinh viên` : 'Sinh viên nộp qua QR chuyển khoản' })}
                 </div>
 
                 <!-- Filter Bar (Đồng bộ chuẩn: Tìm kiếm trước có icon kính lúp, Dropdown Khoản thu & Trạng thái, Nút Hủy lọc) -->
@@ -1759,9 +1830,11 @@ window.KtxExtendedViews = (function () {
                         </select>
                         <select aria-label="Lọc theo trạng thái" onchange="KtxExtendedViews.filterInvoiceStatus(this.value)" class="${selectClass}">
                             <option value="all" ${extState.invoiceStatus === 'all' ? 'selected' : ''}>Trạng thái: Tất cả</option>
-                            <option value="paid" ${extState.invoiceStatus === 'paid' ? 'selected' : ''}>Đã nộp</option>
-                            <option value="pending" ${extState.invoiceStatus === 'pending' ? 'selected' : ''}>Chờ nộp</option>
+                            <option value="choXacNhan" ${extState.invoiceStatus === 'choXacNhan' ? 'selected' : ''}>Chờ xác nhận thanh toán</option>
+                            <option value="paid" ${extState.invoiceStatus === 'paid' ? 'selected' : ''}>Đã nhận thanh toán</option>
+                            <option value="pending" ${extState.invoiceStatus === 'pending' ? 'selected' : ''}>Chưa thanh toán</option>
                             <option value="overdue" ${extState.invoiceStatus === 'overdue' ? 'selected' : ''}>Quá hạn</option>
+                            <option value="draft" ${extState.invoiceStatus === 'draft' ? 'selected' : ''}>Nháp (chưa gửi)</option>
                         </select>
                         <button type="button" onclick="KtxExtendedViews.resetInvoiceFilters()" class="h-10 w-10 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-500 hover:text-red-600 hover:border-red-200 dark:hover:text-red-400 dark:hover:border-red-900/60 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all flex items-center justify-center shrink-0 shadow-2xs group" title="Hủy bỏ toàn bộ bộ lọc hóa đơn" aria-label="Hủy bộ lọc hóa đơn">
                             <span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">filter_alt_off</span>
@@ -1780,73 +1853,107 @@ window.KtxExtendedViews = (function () {
                                     <th class="py-3.5 px-3 whitespace-nowrap">Nội dung thu</th>
                                     <th class="py-3.5 px-3 whitespace-nowrap">Số tiền</th>
                                     <th class="py-3.5 px-3 whitespace-nowrap">Hạn đóng</th>
-                                    <th class="py-3.5 px-3 text-center whitespace-nowrap">Trạng thái</th>
                                     <th class="py-3.5 pl-3 pr-4 text-center whitespace-nowrap">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                                 ${filtered.map(inv => {
-                                    const stBadge = inv.status === 'paid'
-                                        ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">Đã nộp</span>'
-                                        : (inv.status === 'overdue'
-                                            ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Quá hạn</span>'
-                                            : '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">Chờ nộp</span>');
+                                    const safeCode = escapeHtmlValue(inv.code);
+                                    const safeJs = escapeJsSingleQuote(inv.code);
+                                    const safeMenuId = String(inv.code ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                                    const isAwaitingConfirm = isInvoiceAwaitingConfirm(inv);
+                                    const stBadge = getInvoiceStatusBadge(inv);
+
+                                    const sentLine = inv.isSent
+                                        ? `<span class="text-slate-600 dark:text-slate-300" title="Ngày gửi: ${escapeHtmlValue(inv.dateSent || '')}">${escapeHtmlValue(inv.dateSent || '')}</span>`
+                                        : '<span class="text-slate-400">Chưa gửi</span>';
+                                    const proofLine = inv.hasStudentProof
+                                        ? (inv.isProofRejected
+                                            ? `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-rose-600 dark:text-rose-400 font-semibold" title="${escapeHtmlValue(inv.proofRejectReason || '')}">Đã từ chối · chờ nộp lại</span></div>`
+                                            : (inv.status === 'paid'
+                                                ? `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-emerald-700 dark:text-emerald-300 font-semibold" title="Sinh viên nộp ${escapeHtmlValue(inv.proofSubmittedAt || '')}">Đã đối soát hợp lệ</span></div>`
+                                                : `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-sky-700 dark:text-sky-300 font-semibold" title="Sinh viên nộp ${escapeHtmlValue(inv.proofSubmittedAt || '')}">Chờ xác nhận</span></div>`))
+                                        : '';
 
                                     return `
                                         <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                                             <td class="py-3 pl-4 pr-3 whitespace-nowrap">
-                                                <div class="font-bold text-[#0B2A5B] dark:text-blue-400 font-mono">${inv.code}</div>
-                                                <div class="text-[11px] text-slate-400">Phòng ${inv.room}</div>
+                                                <div class="font-bold text-[#0B2A5B] dark:text-blue-400 font-mono">${safeCode}</div>
+                                                <div class="text-[11px] text-slate-400">Phòng ${escapeHtmlValue(inv.room)}</div>
                                             </td>
                                             <td class="py-3 px-3 whitespace-nowrap">
-                                                <div class="font-semibold text-slate-800 dark:text-slate-200">${inv.studentName}</div>
-                                                <div class="text-[11px] font-mono text-slate-400">${inv.studentId}</div>
+                                                <div class="font-semibold text-slate-800 dark:text-slate-200">${escapeHtmlValue(inv.studentName)}</div>
+                                                <div class="text-[11px] font-mono text-slate-400">${escapeHtmlValue(inv.studentId)}</div>
                                             </td>
-                                            <td class="py-3 px-3 text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">${inv.title}</td>
+                                            <td class="py-3 px-3 whitespace-nowrap">
+                                                <div class="text-slate-700 dark:text-slate-200 font-medium">${escapeHtmlValue(inv.title)}</div>
+                                                <div class="mt-1 flex items-center gap-1.5 flex-wrap">
+                                                    ${stBadge}
+                                                    ${isAwaitingConfirm && inv.proofSubmittedAt ? `<span class="text-[10px] text-slate-400 font-mono">Nộp ${escapeHtmlValue(inv.proofSubmittedAt)}</span>` : ''}
+                                                    ${inv.isProofRejected && inv.status !== 'paid' && inv.proofRejectReason ? `<span class="text-[10px] text-rose-500 truncate max-w-[200px]" title="${escapeHtmlValue(inv.proofRejectReason)}">Chờ SV nộp lại</span>` : ''}
+                                                </div>
+                                            </td>
                                             <td class="py-3 px-3 font-bold text-[#0B2A5B] dark:text-white whitespace-nowrap">${inv.amount.toLocaleString('vi-VN')} đ</td>
                                             <td class="py-3 px-3 whitespace-nowrap">
-                                                <div class="text-slate-700 dark:text-slate-300">${inv.dueDate}</div>
-                                                ${inv.overdueText ? `<div class="text-[10px] font-bold text-rose-600">${inv.overdueText}</div>` : ''}
+                                                <div class="text-slate-700 dark:text-slate-300">${escapeHtmlValue(inv.dueDate)}</div>
+                                                ${inv.overdueText ? `<div class="text-[10px] font-bold text-rose-600">${escapeHtmlValue(inv.overdueText)}</div>` : ''}
                                             </td>
-                                            <td class="py-3 px-3 text-center whitespace-nowrap">
-                                                ${stBadge}
-                                                <div class="mt-1">
-                                                    ${inv.isSent
-                                                        ? `<span class="text-[10px] text-slate-400" title="Ngày gửi: ${inv.dateSent}">Đã gửi SV</span>`
-                                                        : '<span class="inline-flex min-w-max items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Chưa gửi</span>'}
-                                                </div>
-                                                ${inv.hasStudentProof && inv.status !== 'paid' ? `
-                                                    <div class="mt-1">
-                                                        <span class="inline-flex min-w-max items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300" title="Sinh viên nộp ${inv.proofSubmittedAt || ''} — bấm ảnh để xem">Minh chứng · chờ đối soát</span>
+                                            <td class="py-3 pl-3 pr-4 text-center whitespace-nowrap" onclick="event.stopPropagation(); KtxExtendedViews.closeInvoicesActionMenus();">
+                                                <div class="relative inline-flex items-center justify-center">
+                                                    ${renderThreeDotButton(
+                                                        `invoices-action-menu-${safeMenuId}`,
+                                                        `Mở menu thao tác hóa đơn ${safeCode}`,
+                                                        `KtxExtendedViews.toggleInvoicesActionMenu('${safeMenuId}', event)`
+                                                    )}
+                                                    <div id="invoices-action-menu-${safeMenuId}"
+                                                        data-invoices-menu="true"
+                                                        role="menu"
+                                                        class="hidden fixed z-50 w-64 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1.5 text-left animate-fade-in">
+                                                        <div class="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                                            <span class="text-[11px] text-slate-400 shrink-0">Trạng thái</span>
+                                                            ${stBadge}
+                                                        </div>
+                                                        <div class="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 space-y-1 text-[11px]">
+                                                            <div class="flex items-center justify-between gap-2"><span class="text-slate-400">Gửi sinh viên</span>${sentLine}</div>
+                                                            ${proofLine}
+                                                        </div>
+                                                        ${isAwaitingConfirm && canConfirmPayment ? `
+                                                            <button type="button" role="menuitem"
+                                                                onclick="KtxExtendedViews.closeInvoicesActionMenus(); KtxExtendedViews.openInvoiceProofReview('${safeJs}');"
+                                                                class="w-full px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/30 flex items-center gap-2 transition-colors text-left">
+                                                                <span class="material-symbols-outlined text-[16px]">price_check</span>
+                                                                <span>Xác nhận thanh toán</span>
+                                                            </button>
+                                                        ` : ''}
+                                                        <button type="button" role="menuitem"
+                                                            onclick="KtxExtendedViews.closeInvoicesActionMenus(); KtxExtendedViews.viewInvoiceDetail('${safeJs}');"
+                                                            class="w-full px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/70 flex items-center gap-2 transition-colors text-left">
+                                                            <span class="material-symbols-outlined text-[16px] text-slate-500">visibility</span>
+                                                            <span>Xem chi tiết hóa đơn</span>
+                                                        </button>
+                                                        ${inv.canEdit && canManageInvoices ? `
+                                                            <button type="button" role="menuitem"
+                                                                onclick="KtxExtendedViews.closeInvoicesActionMenus(); KtxExtendedViews.openEditInvoiceDraftModal('${safeJs}');"
+                                                                class="w-full px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors text-left">
+                                                                <span class="material-symbols-outlined text-[16px] text-[#0B2A5B] dark:text-blue-400">edit_note</span>
+                                                                <span>Chỉnh sửa hóa đơn</span>
+                                                            </button>
+                                                        ` : ''}
+                                                        ${inv.isDraft && canManageInvoices ? `
+                                                            <button type="button" role="menuitem"
+                                                                onclick="KtxExtendedViews.closeInvoicesActionMenus(); KtxExtendedViews.sendInvoice('${safeJs}');"
+                                                                class="w-full px-3 py-2 text-xs font-semibold text-[#0B2A5B] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-2 transition-colors text-left">
+                                                                <span class="material-symbols-outlined text-[16px]">send</span>
+                                                                <span>Gửi cho sinh viên</span>
+                                                            </button>
+                                                        ` : ''}
                                                     </div>
-                                                ` : ''}
-                                            </td>
-                                            <td class="py-3 pl-3 pr-4 text-center whitespace-nowrap">
-                                                <div class="inline-flex items-center gap-1.5">
-                                                    ${inv.status !== 'paid' && !inv.isSent ? `
-                                                        <button onclick="KtxExtendedViews.sendInvoice('${inv.code}')" class="px-2.5 py-1 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-2xs transition-colors" title="Gửi hóa đơn và thông báo cho sinh viên">
-                                                            Gửi
-                                                        </button>
-                                                    ` : ''}
-                                                    ${inv.status !== 'paid' ? `
-                                                        <button onclick="KtxExtendedViews.openConfirmPaymentModal('${inv.code}', ${inv.amount})" class="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-2xs transition-colors">
-                                                            Thu tiền
-                                                        </button>
-                                                    ` : ''}
-                                                    ${inv.hasStudentProof ? `
-                                                        <button onclick="KtxExtendedViews.openStudentProofModal('${inv.code}')" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Sinh viên đã nộp minh chứng ${inv.proofSubmittedAt || ''} — xem và đối soát">
-                                                            <span class="material-symbols-outlined text-[18px]">receipt</span>
-                                                        </button>
-                                                    ` : ''}
-                                                    <button onclick="KtxExtendedViews.printInvoiceDirect('${inv.code}')" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-[#0B2A5B] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="In biên lai">
-                                                        <span class="material-symbols-outlined text-[18px]">print</span>
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
                                     `;
                                 }).join('')}
-                                ${filtered.length === 0 ? '<tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu phù hợp.</td></tr>' : ''}
+                                ${filtered.length === 0 ? '<tr><td colspan="6" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu phù hợp.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -1881,6 +1988,316 @@ window.KtxExtendedViews = (function () {
         if (main) updateViewContainer(main, renderInvoicesView());
     }
 
+    // Hộp thoại xem chi tiết hóa đơn đồng bộ thiết kế với Đợt & Đơn đăng ký; hiển thị cả minh chứng & nút đối soát khi đang chờ xác nhận.
+    function viewInvoiceDetail(code) {
+        const inv = extState.invoices.find(i => i.code === code);
+        const modalContainer = document.getElementById('modalsContainer');
+        if (!inv || !modalContainer) return;
+
+        const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
+        const role = user && user.roleCode;
+        const canManageInvoices = role === 'admin' || role === 'quanLy' || role === 'keToan';
+        const canConfirmPayment = role === 'admin' || role === 'quanLy' || role === 'keToan';
+        const isAwaitingConfirm = isInvoiceAwaitingConfirm(inv);
+        const stBadge = getInvoiceStatusBadge(inv);
+        const safeJs = escapeJsSingleQuote(inv.code);
+        const initial = String(inv.studentName || 'S').trim().charAt(0).toUpperCase() || 'S';
+
+        const year = (typeof KtxApp !== 'undefined' && KtxApp.getSelectedAcademicYear) ? KtxApp.getSelectedAcademicYear() : '';
+        const yearQuery = year ? `&academicYear=${encodeURIComponent(year)}` : '';
+        const proofSrc = inv.hasStudentProof ? `/api/hoadon/${encodeURIComponent(inv.code)}/student-proof?v=${Date.now()}${yearQuery}` : '';
+
+        modalContainer.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxExtendedViews.closeModal()">
+                <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F1A]">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-12 h-12 rounded-full ring-2 ring-[#0B2A5B]/20 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-lg font-bold shrink-0">${escapeHtmlValue(initial)}</span>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="text-base font-bold text-slate-900 dark:text-white truncate">${escapeHtmlValue(inv.studentName || 'Hóa đơn thu phí')}</h3>
+                                    ${stBadge}
+                                </div>
+                                <p class="text-xs text-slate-500 font-mono mt-0.5 truncate">${escapeHtmlValue(inv.code)} · MSSV: ${escapeHtmlValue(inv.studentId || '—')}</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="KtxExtendedViews.closeModal()" aria-label="Đóng chi tiết hóa đơn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+
+                    <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-slate-700 dark:text-slate-300">
+                        ${inv.isProofRejected && inv.status !== 'paid' ? `
+                            <div class="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 space-y-1">
+                                <div class="font-bold flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[16px]">cancel</span>
+                                    <span>Minh chứng thanh toán đã bị từ chối${inv.proofRejectedAt ? ` lúc ${escapeHtmlValue(inv.proofRejectedAt)}` : ''}</span>
+                                </div>
+                                <p class="leading-relaxed">Lý do: ${escapeHtmlValue(inv.proofRejectReason || '—')}. Đang chờ sinh viên nộp lại minh chứng mới.</p>
+                            </div>
+                        ` : ''}
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2.5">
+                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Thông tin sinh viên</h4>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Họ và tên:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.studentName || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">MSSV:</span><span class="font-semibold font-mono text-right">${escapeHtmlValue(inv.studentId || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Phòng:</span><span class="font-semibold text-[#0B2A5B] dark:text-blue-400 text-right">${escapeHtmlValue(inv.room || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Tòa nhà:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.building || '—')}</span></div>
+                            </div>
+
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2.5">
+                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Chi tiết hóa đơn</h4>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Mã hóa đơn:</span><span class="font-mono font-bold text-slate-900 dark:text-white text-right">${escapeHtmlValue(inv.code)}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Nội dung thu:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.title || '—')}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Số tiền:</span><span class="font-bold text-[#0B2A5B] dark:text-white text-right">${Number(inv.amount || 0).toLocaleString('vi-VN')} đ</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Hạn đóng:</span><span class="font-semibold font-mono text-right ${inv.isOverdue ? 'text-rose-600' : ''}">${escapeHtmlValue(inv.dueDate || '—')}${inv.overdueText ? ` (${escapeHtmlValue(inv.overdueText)})` : ''}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Gửi sinh viên:</span><span class="font-semibold font-mono text-right">${inv.isSent ? escapeHtmlValue(inv.dateSent || 'Đã gửi') : 'Chưa gửi'}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Hình thức thu:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.method || 'Chưa có')}</span></div>
+                            </div>
+                        </div>
+
+                        ${inv.hasStudentProof ? `
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ảnh minh chứng sinh viên nộp</span>
+                                    <span class="text-[11px] font-mono text-slate-400">Nộp lúc ${escapeHtmlValue(inv.proofSubmittedAt || '—')}</span>
+                                </div>
+                                <img src="${proofSrc}" alt="Ảnh minh chứng thanh toán của sinh viên ${escapeHtmlValue(inv.studentName)}" class="w-full max-h-[42vh] object-contain rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800" onerror="this.classList.add('hidden'); this.nextElementSibling?.classList.remove('hidden');" />
+                                <div class="hidden py-8 text-center rounded-xl bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 space-y-2">
+                                    <span class="material-symbols-outlined text-[28px] text-slate-300">broken_image</span>
+                                    <p class="text-[11px] text-slate-500">Không hiển thị được ảnh minh chứng (tệp hỏng hoặc không còn tồn tại).</p>
+                                    <a href="${proofSrc}" target="_blank" rel="noopener" class="inline-block text-[11px] font-semibold text-[#0B2A5B] dark:text-blue-400 hover:underline">Mở ảnh ở tab mới</a>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0B0F1A]">
+                        <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50">Đóng</button>
+                        ${inv.isDraft && canManageInvoices ? `
+                            <button type="button" onclick="KtxExtendedViews.closeModal(); KtxExtendedViews.sendInvoice('${safeJs}');" class="px-5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-xs transition-colors">Gửi cho sinh viên</button>
+                        ` : ''}
+                        ${isAwaitingConfirm && canConfirmPayment ? `
+                            <button type="button" onclick="KtxExtendedViews.openInvoiceRejectProof('${safeJs}')" class="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 font-semibold text-xs transition-colors">Từ chối minh chứng</button>
+                            <button type="button" onclick="KtxExtendedViews.confirmInvoiceProofApprove('${safeJs}')" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition-colors">Đồng ý thanh toán</button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // BQL đối soát minh chứng sinh viên nộp: xem ảnh rồi duyệt hoặc từ chối, y như đợt đăng ký.
+    function openInvoiceProofReview(code) {
+        const inv = extState.invoices.find(i => i.code === code);
+        const modalContainer = document.getElementById('modalsContainer');
+        if (!inv || !modalContainer) return;
+
+        const year = (typeof KtxApp !== 'undefined' && KtxApp.getSelectedAcademicYear) ? KtxApp.getSelectedAcademicYear() : '';
+        const yearQuery = year ? `&academicYear=${encodeURIComponent(year)}` : '';
+        const proofSrc = `/api/hoadon/${encodeURIComponent(inv.code)}/student-proof?v=${Date.now()}${yearQuery}`;
+        const safeJs = escapeJsSingleQuote(inv.code);
+        const isAwaitingConfirm = isInvoiceAwaitingConfirm(inv);
+
+        modalContainer.innerHTML = `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxExtendedViews.closeModal()">
+                <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F1A]">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined text-[20px]">receipt_long</span>
+                            </span>
+                            <div class="min-w-0">
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Đối soát minh chứng thanh toán</h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono truncate">Hóa đơn ${escapeHtmlValue(inv.code)} · ${escapeHtmlValue(inv.title)}</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="KtxExtendedViews.closeModal()" aria-label="Đóng hộp thoại đối soát" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+
+                    <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-slate-700 dark:text-slate-300">
+                        <div class="grid grid-cols-2 gap-x-6 gap-y-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60">
+                            <div class="flex justify-between gap-3"><span class="text-slate-400">Sinh viên:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.studentName)}</span></div>
+                            <div class="flex justify-between gap-3"><span class="text-slate-400">MSSV:</span><span class="font-mono font-semibold text-right">${escapeHtmlValue(inv.studentId)}</span></div>
+                            <div class="flex justify-between gap-3"><span class="text-slate-400">Phòng:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.room)}</span></div>
+                            <div class="flex justify-between gap-3"><span class="text-slate-400">Số tiền:</span><span class="font-semibold text-right text-[#0B2A5B] dark:text-white">${Number(inv.amount || 0).toLocaleString('vi-VN')} đ</span></div>
+                            <div class="flex justify-between gap-3 col-span-2"><span class="text-slate-400">Nộp minh chứng lúc:</span><span class="font-semibold font-mono text-right">${escapeHtmlValue(inv.proofSubmittedAt || '—')}</span></div>
+                        </div>
+
+                        ${inv.isProofRejected ? `
+                            <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300">
+                                <div class="font-semibold">Minh chứng đã bị từ chối${inv.proofRejectedAt ? ` lúc ${escapeHtmlValue(inv.proofRejectedAt)}` : ''}</div>
+                                <p class="mt-1 leading-relaxed">Lý do: ${escapeHtmlValue(inv.proofRejectReason || '—')}. Sinh viên cần nộp lại minh chứng mới.</p>
+                            </div>
+                        ` : ''}
+
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">Ảnh minh chứng sinh viên nộp</span>
+                            <img src="${proofSrc}" alt="Ảnh minh chứng thanh toán của sinh viên ${escapeHtmlValue(inv.studentName)}" class="w-full max-h-[48vh] object-contain rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800" onerror="this.classList.add('hidden'); this.nextElementSibling?.classList.remove('hidden');" />
+                            <div class="hidden py-10 text-center rounded-xl bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 space-y-2">
+                                <span class="material-symbols-outlined text-[28px] text-slate-300">broken_image</span>
+                                <p class="text-[11px] text-slate-500">Không hiển thị được ảnh minh chứng (tệp hỏng hoặc không còn tồn tại). Hãy yêu cầu sinh viên nộp lại.</p>
+                                <a href="${proofSrc}" target="_blank" rel="noopener" class="inline-block text-[11px] font-semibold text-[#0B2A5B] dark:text-blue-400 hover:underline">Mở ảnh ở tab mới</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0B0F1A]">
+                        <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50">Đóng</button>
+                        ${isAwaitingConfirm ? `
+                            <button type="button" onclick="KtxExtendedViews.openInvoiceRejectProof('${safeJs}')" class="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 font-semibold text-xs transition-colors">Từ chối minh chứng</button>
+                            <button type="button" onclick="KtxExtendedViews.confirmInvoiceProofApprove('${safeJs}')" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition-colors">Đồng ý thanh toán</button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function confirmInvoiceProofApprove(code) {
+        const inv = extState.invoices.find(i => i.code === code);
+        const modalContainer = document.getElementById('modalsContainer');
+        if (!inv || !modalContainer) return;
+        const safeJs = escapeJsSingleQuote(code);
+
+        modalContainer.innerHTML = `
+            <div class="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxExtendedViews.closeModal()">
+                <div class="w-full max-w-md bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                        <span class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[20px]">price_check</span>
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Xác nhận đã nhận tiền</h3>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Hóa đơn sẽ chuyển sang trạng thái đã thanh toán ngay sau bước này.</p>
+                        </div>
+                    </div>
+                    <div class="py-4 space-y-2 text-xs">
+                        <div class="flex justify-between gap-3"><span class="text-slate-400">Sinh viên:</span><span class="font-semibold text-slate-900 dark:text-white">${escapeHtmlValue(inv.studentName)}</span></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-400">Hóa đơn:</span><span class="font-mono font-semibold">${escapeHtmlValue(inv.code)}</span></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-400">Số tiền ghi nhận:</span><span class="font-bold text-emerald-600 dark:text-emerald-400">${Number(inv.amount || 0).toLocaleString('vi-VN')} đ</span></div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <button type="button" onclick="KtxExtendedViews.openInvoiceProofReview('${safeJs}')" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Quay lại</button>
+                        <button type="button" onclick="KtxExtendedViews.submitInvoiceProofApprove('${safeJs}', this)" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition-colors disabled:opacity-60">Xác nhận đã nhận tiền</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitInvoiceProofApprove(code, btn) {
+        if (btn) { btn.disabled = true; btn.textContent = 'Đang xử lý...'; }
+        const fd = new FormData();
+        fd.append('invoiceId', code);
+        fd.append('paymentMethod', 'Chuyển khoản');
+
+        try {
+            const res = await fetch('/api/hoadon/confirm-payment', { method: 'POST', body: fd });
+            const json = await res.json();
+            if (json.success) {
+                closeModal();
+                KtxApp.showToast(json.message || 'Đã xác nhận thanh toán hóa đơn.', 'success');
+                await loadInvoices();
+                reRender();
+            } else {
+                KtxApp.showToast(json.message || 'Không thể xác nhận thanh toán.', 'error');
+                if (btn) { btn.disabled = false; btn.textContent = 'Xác nhận đã nhận tiền'; }
+            }
+        } catch (e) {
+            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
+            if (btn) { btn.disabled = false; btn.textContent = 'Xác nhận đã nhận tiền'; }
+        }
+    }
+
+    function openInvoiceRejectProof(code) {
+        const inv = extState.invoices.find(i => i.code === code);
+        const modalContainer = document.getElementById('modalsContainer');
+        if (!inv || !modalContainer) return;
+        const safeJs = escapeJsSingleQuote(code);
+        const quickReasons = [
+            'Ảnh minh chứng mờ, không đọc được số tiền hoặc nội dung chuyển khoản',
+            'Số tiền chuyển khoản không khớp với hóa đơn',
+            'Minh chứng không phải giao dịch cho hóa đơn này'
+        ];
+
+        modalContainer.innerHTML = `
+            <div class="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="if (event.target === this) KtxExtendedViews.closeModal()">
+                <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-[18px]">block</span>
+                            </span>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Từ chối minh chứng</h3>
+                        </div>
+                        <button type="button" onclick="KtxExtendedViews.closeModal()" aria-label="Đóng hộp thoại" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); KtxExtendedViews.submitInvoiceProofReject('${safeJs}');" class="space-y-4 pt-4 text-xs">
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            Từ chối minh chứng của <strong class="text-slate-900 dark:text-white">${escapeHtmlValue(inv.studentName)}</strong>. Lý do sẽ được gửi tới sinh viên để nộp lại minh chứng.
+                        </p>
+                        <div>
+                            <label for="invoiceProofRejectReason" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Lý do từ chối <span class="text-red-500">*</span></label>
+                            <textarea id="invoiceProofRejectReason" required rows="3" maxlength="255" placeholder="Nhập lý do cụ thể để sinh viên biết cách khắc phục..." class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500/30"></textarea>
+                            <p id="invoiceProofRejectError" class="hidden text-[11px] text-red-600 font-medium mt-1">Vui lòng nhập lý do từ chối trước khi xác nhận.</p>
+                        </div>
+                        <div class="space-y-1.5">
+                            <span class="text-[11px] text-slate-400 block">Gợi ý lý do nhanh:</span>
+                            <div class="flex flex-wrap gap-1.5">
+                                ${quickReasons.map(r => `
+                                    <button type="button" onclick="document.getElementById('invoiceProofRejectReason').value = '${escapeJsSingleQuote(r)}'; document.getElementById('invoiceProofRejectError')?.classList.add('hidden');" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] text-slate-700 dark:text-slate-300 transition-colors text-left">${escapeHtmlValue(r)}</button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="KtxExtendedViews.openInvoiceProofReview('${safeJs}')" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Quay lại</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-xs transition-colors">Xác nhận từ chối</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitInvoiceProofReject(code) {
+        const input = document.getElementById('invoiceProofRejectReason');
+        const errorEl = document.getElementById('invoiceProofRejectError');
+        if (!input) return;
+
+        const reason = input.value.trim();
+        if (!reason) {
+            errorEl?.classList.remove('hidden');
+            input.focus();
+            return;
+        }
+        errorEl?.classList.add('hidden');
+
+        try {
+            const res = await fetch(`/api/hoadon/${encodeURIComponent(code)}/reject-payment-proof`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            const json = await res.json();
+            if (json.success) {
+                closeModal();
+                KtxApp.showToast(json.message || 'Đã từ chối minh chứng.', 'success');
+                await loadInvoices();
+                reRender();
+            } else {
+                KtxApp.showToast(json.message || 'Không thể từ chối minh chứng.', 'error');
+            }
+        } catch (e) {
+            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
+        }
+    }
+
     async function sendInvoice(code) {
         if (!confirm(`Gửi hóa đơn ${code} cho sinh viên (kèm thông báo trên cổng sinh viên)?`)) return;
         try {
@@ -1900,123 +2317,6 @@ window.KtxExtendedViews = (function () {
         }
     }
 
-    function openConfirmPaymentModal(code, amount) {
-        const inv = extState.invoices.find(i => i.code === code);
-        const modalContainer = document.getElementById('modalsContainer');
-        if (!modalContainer) return;
-
-        modalContainer.innerHTML = `
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-                <div class="w-full max-w-md bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
-                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                        <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Thu tiền hóa đơn ${code}</h3>
-                        <button onclick="KtxExtendedViews.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
-                    </div>
-                    <form onsubmit="event.preventDefault(); KtxExtendedViews.submitConfirmPayment('${code}');" class="space-y-3.5 pt-4 text-xs">
-                        <div class="flex justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                            <span class="text-slate-500">Số tiền thu đủ</span>
-                            <strong class="text-[#0B2A5B] dark:text-white">${amount.toLocaleString('vi-VN')} đ</strong>
-                        </div>
-                        <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Phương thức thanh toán *</label>
-                            <select id="payConfirmMethod" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none">
-                                <option value="Tiền mặt (BQL)">Tiền mặt (BQL)</option>
-                                <option value="Chuyển khoản">Chuyển khoản ngân hàng</option>
-                                <option value="Ví điện tử">Ví điện tử / QR</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Chứng từ đính kèm (ảnh biên lai, chuyển khoản...)</label>
-                            <input id="payConfirmProof" type="file" accept=".jpg,.jpeg,.png,.webp" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-[#0B2A5B] file:px-3 file:py-1.5 file:text-white file:font-semibold file:text-xs" />
-                            <p class="text-[10px] text-slate-400 mt-1">Tùy chọn · JPG/PNG/WebP, tối đa 5 MB · lưu vào phiếu thu</p>
-                        </div>
-                        ${inv && inv.hasStudentProof ? `
-                            <button type="button" onclick="KtxExtendedViews.reviewProofThenPay('${code}')" class="w-full flex items-center gap-1.5 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300 font-semibold hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors">
-                                <span class="material-symbols-outlined text-[16px]">receipt_long</span>
-                                <span>Sinh viên đã nộp minh chứng ${inv.proofSubmittedAt || ''} — bấm để xem và đối soát trước khi thu</span>
-                            </button>
-                        ` : ''}
-                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                            <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
-                            <button type="submit" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs">Xác nhận đã thu</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        `;
-    }
-
-    // BQL mở ảnh minh chứng sinh viên nộp để đối soát, không cần tab mới.
-    function openStudentProofModal(code) {
-        const inv = extState.invoices.find(i => i.code === code) || {};
-        // Ảnh tải bằng thẻ <img> nên không qua wrapper fetch: phải tự nối academicYear vào URL.
-        const year = (typeof KtxApp !== 'undefined' && KtxApp.getSelectedAcademicYear) ? KtxApp.getSelectedAcademicYear() : '';
-        const overlayId = 'studentProofOverlay';
-        let overlay = document.getElementById(overlayId);
-        if (overlay) overlay.remove();
-
-        overlay = document.createElement('div');
-        overlay.id = overlayId;
-        overlay.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in';
-        overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-modal', 'true');
-        overlay.setAttribute('aria-label', 'Minh chứng thanh toán của sinh viên');
-        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-        const escHtml = t => (typeof KtxApp !== 'undefined' && KtxApp.escapeHtml) ? KtxApp.escapeHtml(String(t)) : String(t);
-        overlay.innerHTML = `
-            <div class="bg-white dark:bg-[#121826] rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 dark:border-[#232B3B] space-y-3" onclick="event.stopPropagation()">
-                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Minh chứng hóa đơn ${escHtml(code)}</h3>
-                    <button type="button" onclick="document.getElementById('${overlayId}').remove()" class="text-slate-400 hover:text-slate-600" aria-label="Đóng"><span class="material-symbols-outlined text-[20px]">close</span></button>
-                </div>
-                <img src="/api/hoadon/${encodeURIComponent(code)}/student-proof?v=${Date.now()}${year ? '&academicYear=' + encodeURIComponent(year) : ''}" alt="Ảnh minh chứng thanh toán của sinh viên" class="w-full max-h-[55vh] object-contain rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800" />
-                <p class="text-[11px] text-slate-400">Sinh viên nộp ${inv.proofSubmittedAt ? escHtml(inv.proofSubmittedAt) : 'chưa rõ thời gian'} · ảnh chỉ hiển thị cho tài khoản BQL.</p>
-                ${inv.status !== 'paid' ? `
-                    <button type="button" onclick="document.getElementById('${overlayId}').remove(); KtxExtendedViews.openConfirmPaymentModal('${code}', ${Number(inv.amount || 0)})" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors">
-                        Đã đối soát đúng — Thu tiền ngay
-                    </button>
-                ` : ''}
-            </div>
-        `;
-        document.body.appendChild(overlay);
-    }
-
-    // Từ modal thu tiền: mở ảnh minh chứng; đóng ảnh thì quay lại form thu tiền.
-    function reviewProofThenPay(code) {
-        openStudentProofModal(code);
-        const overlay = document.getElementById('studentProofOverlay');
-        const observer = new MutationObserver(() => {
-            if (!document.getElementById('studentProofOverlay')) {
-                observer.disconnect();
-                const inv = extState.invoices.find(i => i.code === code);
-                        openConfirmPaymentModal(code, Number((inv && inv.amount) || 0));
-            }
-        });
-        if (overlay && overlay.parentNode) observer.observe(overlay.parentNode, { childList: true });
-    }
-
-    async function submitConfirmPayment(code) {
-        const fd = new FormData();
-        fd.append('invoiceId', code);
-        fd.append('paymentMethod', document.getElementById('payConfirmMethod').value);
-        const proofInput = document.getElementById('payConfirmProof');
-        if (proofInput.files.length > 0) fd.append('proof', proofInput.files[0]);
-
-        try {
-            const res = await fetch('/api/hoadon/confirm-payment', { method: 'POST', body: fd });
-            const json = await res.json();
-            if (json.success) {
-                KtxApp.showToast(json.message || 'Đã ghi nhận thanh toán thành công!');
-                closeModal();
-                await loadInvoices();
-                reRender();
-            } else {
-                KtxApp.showToast(json.message || 'Không thể xác nhận thanh toán.', 'error');
-            }
-        } catch (e) {
-            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
-        }
-    }
 
     function printInvoice(code) {
         const inv = extState.invoices.find(i => i.code === code);
@@ -2031,13 +2331,13 @@ window.KtxExtendedViews = (function () {
                         <div class="text-xs font-bold uppercase text-slate-500">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI - PHÂN HIỆU TP.HCM</div>
                         <div class="text-sm font-bold text-[#0B2A5B] mt-0.5">BAN QUẢN LÝ KÝ TÚC XÁ</div>
                         <h3 class="text-base font-extrabold uppercase mt-3">BIÊN LAI THU PHÍ NỘI TRÚ</h3>
-                        <div class="text-xs font-mono text-slate-500">Mã phiếu: ${inv.code}</div>
+                        <div class="text-xs font-mono text-slate-500">Mã phiếu: ${escapeHtml(inv.code)}</div>
                     </div>
                     <div class="py-4 space-y-2 text-xs">
-                        <div class="flex justify-between"><span>Sinh viên:</span><strong>${inv.studentName}</strong></div>
-                        <div class="flex justify-between"><span>MSSV:</span><span class="font-mono">${inv.studentId}</span></div>
-                        <div class="flex justify-between"><span>Phòng lưu trú:</span><span>${inv.room}</span></div>
-                        <div class="flex justify-between"><span>Khoản thu:</span><span>${inv.title}</span></div>
+                        <div class="flex justify-between"><span>Sinh viên:</span><strong>${escapeHtml(inv.studentName)}</strong></div>
+                        <div class="flex justify-between"><span>MSSV:</span><span class="font-mono">${escapeHtml(inv.studentId)}</span></div>
+                        <div class="flex justify-between"><span>Phòng lưu trú:</span><span>${escapeHtml(inv.room)}</span></div>
+                        <div class="flex justify-between"><span>Khoản thu:</span><span>${escapeHtml(inv.title)}</span></div>
                         <div class="flex justify-between pt-2 border-t border-slate-200 text-sm font-bold text-[#0B2A5B]">
                             <span>Tổng tiền:</span>
                             <span>${inv.amount.toLocaleString('vi-VN')} đ</span>
@@ -2268,10 +2568,6 @@ window.KtxExtendedViews = (function () {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tiếp nhận, phân công và theo dõi tiến độ yêu cầu sửa chữa</p>
                     </div>
                     <div class="page-title-actions flex items-center gap-2.5">
-                        <button type="button" onclick="KtxExtendedViews.openAssignTicketModalFromList()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">
-                            <span class="material-symbols-outlined text-[16px]">person_add</span>
-                            <span>Phân công kỹ thuật</span>
-                        </button>
                         <button type="button" onclick="KtxExtendedViews.openCreateTicketModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">add_task</span>
                             <span>Tạo phiếu báo hỏng</span>
@@ -2405,22 +2701,6 @@ window.KtxExtendedViews = (function () {
                                                             <span class="material-symbols-outlined text-[16px] text-[#0B2A5B] dark:text-blue-400">visibility</span>
                                                             <span>Xem chi tiết phiếu</span>
                                                         </button>
-                                                        ${t.status === 'PENDING' ? `
-                                                            <button type="button" role="menuitem"
-                                                                onclick="KtxExtendedViews.closeTicketsActionMenus(); KtxExtendedViews.openAssignTicketModal('${safeTicketJs}');"
-                                                                class="w-full px-3 py-2 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-2 transition-colors">
-                                                                <span class="material-symbols-outlined text-[16px]">person_add</span>
-                                                                <span>Phân công kỹ thuật</span>
-                                                            </button>
-                                                        ` : ''}
-                                                        ${t.status === 'IN_PROGRESS' ? `
-                                                            <button type="button" role="menuitem"
-                                                                onclick="KtxExtendedViews.closeTicketsActionMenus(); KtxExtendedViews.completeTicket('${safeTicketJs}');"
-                                                                class="w-full px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 flex items-center gap-2 transition-colors">
-                                                                <span class="material-symbols-outlined text-[16px]">check_circle</span>
-                                                                <span>Nghiệm thu &amp; đóng phiếu</span>
-                                                            </button>
-                                                        ` : ''}
                                                     </div>
                                                 </div>
                                             </td>
@@ -2619,17 +2899,6 @@ window.KtxExtendedViews = (function () {
         }
     }
 
-    async function completeTicket(id) {
-        try {
-            const res = await fetch(`/api/suachua/${id}/complete`, { method: 'POST' });
-            const json = await res.json();
-            KtxApp.showToast(json.message || 'Đã hoàn tất nghiệm thu sửa chữa!');
-            await loadTickets();
-            reRender();
-        } catch (e) {
-            KtxApp.showToast('Lỗi kết nối máy chủ', 'error');
-        }
-    }
 
     // ========================================================
     // 5. VI PHẠM & KỶ LUẬT (Discipline View)
@@ -3225,7 +3494,7 @@ window.KtxExtendedViews = (function () {
                             <span class="material-symbols-outlined text-[16px]">table_view</span>
                             <span>Xuất Excel CSV</span>
                         </button>
-                        <button type="button" onclick="window.print()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
+                        <button type="button" onclick="KtxExtendedViews.printReportsPdf()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">print</span>
                             <span>In Báo Cáo PDF</span>
                         </button>
@@ -3292,6 +3561,148 @@ window.KtxExtendedViews = (function () {
                 </div>
             </div>
         `;
+    }
+
+    function printReportsPdf() {
+        const r = extState.reports || {};
+        const buildings = Array.isArray(r.buildingOperations) ? r.buildingOperations : [];
+        const year = (window.KtxApp && typeof KtxApp.getSelectedAcademicYear === 'function')
+            ? (KtxApp.getSelectedAcademicYear() || 'Hiện tại')
+            : 'Hiện tại';
+        const now = new Date();
+        const dateStr = `Ngày ${String(now.getDate()).padStart(2, '0')} tháng ${String(now.getMonth() + 1).padStart(2, '0')} năm ${now.getFullYear()}`;
+        const esc = escapeHtmlValue;
+
+        const rowsHtml = buildings.map((b, idx) => `
+            <tr>
+                <td style="text-align:center;">${idx + 1}</td>
+                <td><strong>${esc(b.name || '')}</strong></td>
+                <td style="text-align:center;">${Number(b.rooms || 0)}</td>
+                <td style="text-align:center;">${Number(b.beds || 0)}</td>
+                <td style="text-align:center;">${Number(b.occupied || 0)}</td>
+                <td style="text-align:center;">${Number(b.vacant || 0)}</td>
+                <td style="text-align:center;">${esc(b.rate ?? 0)}%</td>
+                <td style="text-align:right;">${esc(b.revenue || '0 đ')}</td>
+            </tr>
+        `).join('');
+
+        const html = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <title>Báo cáo thống kê KTX UTC2 - ${esc(year)}</title>
+    <style>
+        @page { size: A4; margin: 16mm 14mm; }
+        body { font-family: "Times New Roman", Times, serif; color: #111827; font-size: 13px; line-height: 1.45; margin: 0; }
+        .header-grid { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+        .org { text-align: center; width: 48%; }
+        .org-title { font-weight: bold; font-size: 12px; text-transform: uppercase; }
+        .org-sub { font-weight: bold; font-size: 12px; margin-top: 2px; }
+        .motto { text-align: center; width: 48%; }
+        .motto-top { font-weight: bold; font-size: 12px; text-transform: uppercase; }
+        .motto-sub { font-weight: bold; font-size: 12px; text-decoration: underline; margin-top: 2px; }
+        h1 { text-align: center; font-size: 17px; text-transform: uppercase; margin: 16px 0 4px; }
+        .subtitle { text-align: center; font-style: italic; font-size: 13px; margin-bottom: 16px; }
+        h2 { font-size: 14px; text-transform: uppercase; margin: 14px 0 8px; }
+        .summary-grid { display: table; width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        .summary-row { display: table-row; }
+        .summary-cell { display: table-cell; width: 25%; border: 1px solid #334155; padding: 8px 10px; }
+        .summary-label { font-size: 11px; color: #475569; text-transform: uppercase; }
+        .summary-val { font-size: 15px; font-weight: bold; margin-top: 3px; }
+        table.data { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12.5px; }
+        table.data th, table.data td { border: 1px solid #334155; padding: 6px 8px; }
+        table.data th { background: #f1f5f9; font-weight: bold; text-align: center; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 28px; text-align: center; }
+        .sig-box { width: 42%; }
+        .sig-title { font-weight: bold; text-transform: uppercase; font-size: 12.5px; }
+        .sig-note { font-style: italic; font-size: 11.5px; margin-top: 2px; }
+        .sig-space { height: 64px; }
+    </style>
+</head>
+<body>
+    <div class="header-grid">
+        <div class="org">
+            <div class="org-title">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI PHÂN HIỆU TP.HCM</div>
+            <div class="org-sub">BAN QUẢN LÝ KÝ TÚC XÁ</div>
+        </div>
+        <div class="motto">
+            <div class="motto-top">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+            <div class="motto-sub">Độc lập - Tự do - Hạnh phúc</div>
+        </div>
+    </div>
+
+    <h1>Báo cáo thống kê vận hành &amp; doanh thu ký túc xá</h1>
+    <div class="subtitle">Năm học: ${esc(year)} &nbsp;·&nbsp; ${dateStr}</div>
+
+    <h2>I. Tổng hợp chỉ số vận hành</h2>
+    <div class="summary-grid">
+        <div class="summary-row">
+            <div class="summary-cell">
+                <div class="summary-label">Tổng chỗ ở quy hoạch</div>
+                <div class="summary-val">${Number(r.totalBeds || 0).toLocaleString('vi-VN')} giường (${Number(r.totalRooms || 0)} phòng)</div>
+            </div>
+            <div class="summary-cell">
+                <div class="summary-label">Sinh viên đang ở</div>
+                <div class="summary-val">${Number(r.occupiedBeds || 0).toLocaleString('vi-VN')} SV</div>
+            </div>
+            <div class="summary-cell">
+                <div class="summary-label">Tỷ lệ lấp đầy</div>
+                <div class="summary-val">${esc(r.occupancyRate ?? 0)}% (Còn ${Number(r.vacantBeds || 0)} chỗ)</div>
+            </div>
+            <div class="summary-cell">
+                <div class="summary-label">Doanh thu dự kiến kỳ</div>
+                <div class="summary-val">${Number(r.totalRevenue || 0).toLocaleString('vi-VN')} đ</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>II. Ma trận vận hành &amp; công suất theo tòa nhà</h2>
+    <table class="data">
+        <thead>
+            <tr>
+                <th style="width:36px;">STT</th>
+                <th>Tòa nhà</th>
+                <th>Số phòng</th>
+                <th>Tổng giường</th>
+                <th>Đang ở</th>
+                <th>Còn trống</th>
+                <th>Lấp đầy</th>
+                <th>Doanh thu kỳ</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rowsHtml || '<tr><td colspan="8" style="text-align:center;">Không có dữ liệu tòa nhà</td></tr>'}
+        </tbody>
+    </table>
+
+    <div class="signatures">
+        <div class="sig-box">
+            <div class="sig-title">Người lập biểu</div>
+            <div class="sig-note">(Ký và ghi rõ họ tên)</div>
+            <div class="sig-space"></div>
+        </div>
+        <div class="sig-box">
+            <div class="sig-note">${dateStr}</div>
+            <div class="sig-title">Trưởng Ban Quản lý KTX</div>
+            <div class="sig-note">(Ký, đóng dấu)</div>
+            <div class="sig-space"></div>
+        </div>
+    </div>
+</body>
+</html>`;
+
+        const win = window.open('', '_blank', 'width=900,height=700');
+        if (!win) {
+            if (window.KtxApp && typeof KtxApp.showToast === 'function') {
+                KtxApp.showToast('Trình duyệt đang chặn cửa sổ bật lên (pop-up). Vui lòng cho phép để in báo cáo A4.', 'error');
+            }
+            return;
+        }
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        setTimeout(() => win.print(), 250);
     }
 
     function exportReportsCsv() {
@@ -3383,15 +3794,19 @@ window.KtxExtendedViews = (function () {
         openRejectServiceModal,
         submitRejectServiceRegistration,
         // Invoice methods
+        toggleInvoicesActionMenu,
+        closeInvoicesActionMenus,
         filterInvoiceSearch,
         filterInvoiceCategory,
         filterInvoiceStatus,
         resetInvoiceFilters,
         sendInvoice,
-        openConfirmPaymentModal,
-        submitConfirmPayment,
-        openStudentProofModal,
-        reviewProofThenPay,
+        viewInvoiceDetail,
+        openInvoiceProofReview,
+        confirmInvoiceProofApprove,
+        submitInvoiceProofApprove,
+        openInvoiceRejectProof,
+        submitInvoiceProofReject,
         printInvoice,
         printInvoiceWindow,
         printInvoiceDirect,
@@ -3412,7 +3827,6 @@ window.KtxExtendedViews = (function () {
         submitCreateTicket,
         openAssignTicketModal,
         confirmAssignTicket,
-        completeTicket,
         // Violation methods
         filterViolationSearch,
         filterViolationStatus,
@@ -3430,6 +3844,7 @@ window.KtxExtendedViews = (function () {
         submitAddStaff,
         // Report methods
         exportReportsCsv,
+        printReportsPdf,
         closeModal,
         // Shared component
         renderMetricCard

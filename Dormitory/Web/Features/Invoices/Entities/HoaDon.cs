@@ -46,6 +46,14 @@ namespace Dormitory.Web.Features.Invoices.Entities
         [Column("ngayNopMinhChung", TypeName = "datetime")]
         public DateTime? NgayNopMinhChung { get; set; }
 
+        // Lý do BQL từ chối minh chứng gần nhất; null nghĩa là chưa từ chối.
+        [MaxLength(255)]
+        [Column("lyDoTuChoiMinhChung")]
+        public string? LyDoTuChoiMinhChung { get; set; }
+
+        [Column("ngayTuChoiMinhChung", TypeName = "datetime")]
+        public DateTime? NgayTuChoiMinhChung { get; set; }
+
         [ForeignKey(nameof(MaHopDong))]
         public virtual HopDong? HopDong { get; set; }
 

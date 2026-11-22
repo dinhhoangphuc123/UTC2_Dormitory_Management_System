@@ -6,7 +6,7 @@ namespace Dormitory.Web.Features.StudentPortal.Validators
 {
     public static class UpdateProfileValidator
     {
-        private static readonly Regex PhoneRegex = new(@"^(0[3|5|7|8|9])[0-9]{8}$", RegexOptions.Compiled);
+        private static readonly Regex PhoneRegex = new(@"^(0[35789])[0-9]{8}$", RegexOptions.Compiled);
         private static readonly Regex EmailRegex = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
 
         public static (bool IsValid, string? ErrorMessage) Validate(UpdateProfileDto dto)
@@ -40,7 +40,7 @@ namespace Dormitory.Web.Features.StudentPortal.Validators
 
     public static class GuardianValidator
     {
-        private static readonly Regex PhoneRegex = new(@"^(0[3|5|7|8|9])[0-9]{8}$", RegexOptions.Compiled);
+        private static readonly Regex PhoneRegex = new(@"^(0[35789])[0-9]{8}$", RegexOptions.Compiled);
 
         public static (bool IsValid, string? ErrorMessage) Validate(CreateGuardianDto dto)
         {
@@ -132,6 +132,11 @@ namespace Dormitory.Web.Features.StudentPortal.Validators
             if (string.IsNullOrWhiteSpace(dto.MaPhong))
             {
                 return (false, "Vui lòng chọn phòng đăng ký.");
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.MaGiuong))
+            {
+                return (false, "Vui lòng chọn giường trong phòng.");
             }
 
             if (!dto.AcceptRules)

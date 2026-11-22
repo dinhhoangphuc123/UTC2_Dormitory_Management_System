@@ -107,7 +107,7 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
             };
         }
 
-        public static StudentRoomDto ToStudentRoomDto(this Phong p, int availableBedsCount, bool selectable, string? reason)
+        public static StudentRoomDto ToStudentRoomDto(this Phong p, int availableBedsCount, List<StudentBedDto> beds, bool selectable, string? reason)
         {
             return new StudentRoomDto
             {
@@ -118,7 +118,8 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
                 SucChua = p.LoaiPhong?.SoNguoiToiDa ?? 0,
                 AvailableBedsCount = availableBedsCount,
                 Selectable = selectable,
-                UnselectableReason = reason
+                UnselectableReason = reason,
+                Beds = beds
             };
         }
 
@@ -207,8 +208,11 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
                 DaThanhToan = paid,
                 ConLai = remaining,
                 IsRegistration = isRegistration,
-                HasPaymentProof = !string.IsNullOrEmpty(hd.AnhMinhChung),
-                NgayNopMinhChung = hd.NgayNopMinhChung?.ToString("dd/MM/yyyy HH:mm")
+                // Minh chứng bị từ chối coi như chưa nộp, sinh viên phải nộp lại.
+                HasPaymentProof = !string.IsNullOrEmpty(hd.AnhMinhChung) && string.IsNullOrEmpty(hd.LyDoTuChoiMinhChung),
+                NgayNopMinhChung = hd.NgayNopMinhChung?.ToString("dd/MM/yyyy HH:mm"),
+                LyDoTuChoiMinhChung = hd.LyDoTuChoiMinhChung,
+                NgayTuChoiMinhChung = hd.NgayTuChoiMinhChung?.ToString("dd/MM/yyyy HH:mm")
             };
         }
 
@@ -231,8 +235,10 @@ namespace Dormitory.Web.Features.StudentPortal.Mappings
                 DaThanhToan = paid,
                 ConLai = remaining,
                 IsRegistration = isRegistration,
-                HasPaymentProof = !string.IsNullOrEmpty(hd.AnhMinhChung),
+                HasPaymentProof = !string.IsNullOrEmpty(hd.AnhMinhChung) && string.IsNullOrEmpty(hd.LyDoTuChoiMinhChung),
                 NgayNopMinhChung = hd.NgayNopMinhChung?.ToString("dd/MM/yyyy HH:mm"),
+                LyDoTuChoiMinhChung = hd.LyDoTuChoiMinhChung,
+                NgayTuChoiMinhChung = hd.NgayTuChoiMinhChung?.ToString("dd/MM/yyyy HH:mm"),
                 Lines = hd.DanhSachChiTietHoaDon.Select(l => new PaymentInvoiceLineDto
                 {
                     Description = !string.IsNullOrWhiteSpace(l.NoiDung) ? l.NoiDung : (l.LoaiKhoan switch
