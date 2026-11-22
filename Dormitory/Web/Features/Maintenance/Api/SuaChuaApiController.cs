@@ -4,6 +4,7 @@ using Dormitory.Web.Features.Maintenance.DTOs;
 using Dormitory.Web.Features.Maintenance.Services;
 using Dormitory.Web.Features.Maintenance.Validators;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Helpers;
 
 namespace Dormitory.Web.Features.Maintenance.Api
 {
@@ -13,11 +14,15 @@ namespace Dormitory.Web.Features.Maintenance.Api
     public class SuaChuaApiController : ControllerBase
     {
         private readonly IYeuCauSuaChuaService _suaChuaService;
+        private readonly IWebHostEnvironment _env;
 
-        public SuaChuaApiController(IYeuCauSuaChuaService suaChuaService)
+        public SuaChuaApiController(IYeuCauSuaChuaService suaChuaService, IWebHostEnvironment env)
         {
             _suaChuaService = suaChuaService;
+            _env = env;
         }
+
+        private string AppDataPath => Path.Combine(_env.ContentRootPath, "App_Data");
 
         [HttpGet]
         public async Task<IActionResult> GetAll(
@@ -33,7 +38,8 @@ namespace Dormitory.Web.Features.Maintenance.Api
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateTicketDto req)
+        [RequestSizeLimit(6 * 1024 * 1024)]
+        public async Task<IActionResult> Create([FromForm] CreateTicketDto req, IFormFile? image)
         {
             var (isValid, errorMessage) = CreateTicketValidator.Validate(req);
             if (!isValid)
@@ -41,13 +47,38 @@ namespace Dormitory.Web.Features.Maintenance.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
-            var ticket = await _suaChuaService.CreateTicketAsync(req, Request.Query["academicYear"].FirstOrDefault());
+            string? savedImage = null;
+            if (image != null && image.Length > 0)
+            {
+                var (fileName, imageError) = await MaintenanceImageStorage.SaveAsync(image, AppDataPath);
+                if (imageError != null)
+                {
+                    return BadRequest(ApiResponse.Fail(imageError));
+                }
+                savedImage = fileName;
+            }
+
+            var ticket = await _suaChuaService.CreateTicketAsync(req, Request.Query["academicYear"].FirstOrDefault(), savedImage);
             if (ticket == null)
             {
+                MaintenanceImageStorage.Delete(savedImage, AppDataPath);
                 return NotFound(ApiResponse.Fail("Không tìm thấy hợp đồng nội trú đang hiệu lực cho sinh viên này."));
             }
 
             return Ok(ApiResponse<MaintenanceTicketDto>.Ok(ticket, $"Đã tạo phiếu báo hỏng {ticket.Code} thành công!"));
+        }
+
+        [HttpGet("{id}/image")]
+        public async Task<IActionResult> GetImage(string id, [FromQuery] string? academicYear)
+        {
+            var fileName = await _suaChuaService.GetTicketImageFileNameAsync(id, academicYear);
+            var (bytes, contentType) = await MaintenanceImageStorage.ReadAsync(fileName, AppDataPath);
+            if (bytes == null || contentType == null)
+            {
+                return NotFound();
+            }
+
+            return File(bytes, contentType);
         }
 
         [HttpPost("assign")]

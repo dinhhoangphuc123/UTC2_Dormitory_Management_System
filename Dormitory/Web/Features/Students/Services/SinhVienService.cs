@@ -95,7 +95,7 @@ namespace Dormitory.Web.Features.Students.Services
 
         public async Task<SinhVienListItemDto?> GetStudentByIdAsync(string id, string? academicYear = null)
         {
-            var students = await GetAllStudentsAsync(academicYear: academicYear);
+            var students = await GetAllStudentsAsync(search: id, academicYear: academicYear, page: 1, pageSize: 500);
             return students.FirstOrDefault(s => s.Mssv == id || s.Id == id);
         }
 

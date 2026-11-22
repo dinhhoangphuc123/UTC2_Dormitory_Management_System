@@ -66,6 +66,41 @@ namespace Dormitory.Web.Features.Contracts.Api
         }
 
         [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [HttpPost("import")]
+        public async Task<IActionResult> Import(IFormFile? file, [FromQuery] string? academicYear = null)
+        {
+            var resolvedYear = !string.IsNullOrWhiteSpace(academicYear)
+                ? academicYear
+                : Request?.Query["academicYear"].FirstOrDefault();
+
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(ApiResponse.Fail("Vui lòng chọn file Excel."));
+            }
+
+            if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(ApiResponse.Fail("Chỉ hỗ trợ file .xlsx."));
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream();
+                var result = await _hopDongService.ImportContractsFromExcelAsync(stream, _currentUser?.StaffId, resolvedYear);
+                if (result == null)
+                {
+                    return BadRequest(ApiResponse.Fail("Vui lòng chọn một năm học hợp lệ trước khi nhập hợp đồng."));
+                }
+
+                return Ok(ApiResponse<ImportContractsResultDto>.Ok(result, result.Message));
+            }
+            catch (Exception ex) when (ex is InvalidDataException or FormatException or ArgumentException)
+            {
+                return BadRequest(ApiResponse.Fail("Không thể đọc file Excel. Vui lòng kiểm tra lại định dạng .xlsx."));
+            }
+        }
+
+        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
         [HttpPost("{id}/renew")]
         public async Task<IActionResult> Renew(string id, [FromQuery] int months = 5)
         {

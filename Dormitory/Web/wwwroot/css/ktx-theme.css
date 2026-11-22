@@ -331,8 +331,12 @@ table td {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Lưu ý: KHÔNG dùng animation-fill-mode forwards/both ở đây.
+   Giữ transform sau khi animation kết thúc sẽ biến khung nội dung thành
+   containing block của mọi phần tử position: fixed (menu thao tác 3 chấm,
+   tooltip, dropdown) => menu bị đặt sai toạ độ và bị overflow cắt mất. */
 .page-content-enter {
-    animation: ktxPageEnter 0.28s ease-out both;
+    animation: ktxPageEnter 0.28s ease-out;
 }
 
 .material-symbols-outlined {

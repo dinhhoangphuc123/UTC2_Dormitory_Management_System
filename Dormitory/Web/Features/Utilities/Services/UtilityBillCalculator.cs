@@ -30,6 +30,19 @@ namespace Dormitory.Web.Features.Utilities.Services
             return Math.Round(totalCost / residentCount, 0);
         }
 
+        public static decimal[] SplitCostEvenly(decimal totalCost, int residentCount)
+        {
+            if (totalCost <= 0 || residentCount <= 0) return Array.Empty<decimal>();
+            var baseShare = Math.Floor(totalCost / residentCount);
+            var remainder = totalCost - baseShare * residentCount;
+            var shares = new decimal[residentCount];
+            for (int i = 0; i < residentCount; i++)
+            {
+                shares[i] = i == residentCount - 1 ? baseShare + remainder : baseShare;
+            }
+            return shares;
+        }
+
         public static decimal SplitCostByDays(decimal totalCost, int totalDaysInMonth, int stayedDays)
         {
             if (totalCost <= 0 || totalDaysInMonth <= 0 || stayedDays <= 0) return 0;

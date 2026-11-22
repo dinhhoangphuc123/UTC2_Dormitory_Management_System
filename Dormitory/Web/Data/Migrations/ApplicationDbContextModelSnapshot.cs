@@ -441,6 +441,11 @@ namespace Dormitory.Web.Data.Migrations
                         .HasColumnType("date")
                         .HasColumnName("hanThanhToan");
 
+                    b.Property<string>("LyDoTuChoiMinhChung")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("lyDoTuChoiMinhChung");
+
                     b.Property<string>("MaHopDong")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -462,6 +467,10 @@ namespace Dormitory.Web.Data.Migrations
                     b.Property<DateTime?>("NgayNopMinhChung")
                         .HasColumnType("datetime")
                         .HasColumnName("ngayNopMinhChung");
+
+                    b.Property<DateTime?>("NgayTuChoiMinhChung")
+                        .HasColumnType("datetime")
+                        .HasColumnName("ngayTuChoiMinhChung");
 
                     b.Property<int>("Thang")
                         .HasColumnType("int")
@@ -675,6 +684,11 @@ namespace Dormitory.Web.Data.Migrations
                         .HasColumnType("nvarchar(20)")
                         .HasColumnName("maDotDangKy");
 
+                    b.Property<string>("MaGiuong")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("maGiuong");
+
                     b.Property<string>("MaLoaiPhong")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
@@ -713,6 +727,10 @@ namespace Dormitory.Web.Data.Migrations
                     b.HasKey("MaDonDangKy");
 
                     b.HasIndex("MaDotDangKy");
+
+                    b.HasIndex("MaGiuong")
+                        .IsUnique()
+                        .HasFilter("[maGiuong] IS NOT NULL AND [trangThai] = 'choDuyet'");
 
                     b.HasIndex("MaLoaiPhong");
 
@@ -1657,6 +1675,10 @@ namespace Dormitory.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Dormitory.Web.Features.Rooms.Entities.Giuong", "Giuong")
+                        .WithMany()
+                        .HasForeignKey("MaGiuong");
+
                     b.HasOne("Dormitory.Web.Features.Rooms.Entities.LoaiPhong", "LoaiPhong")
                         .WithMany("DanhSachDonDangKy")
                         .HasForeignKey("MaLoaiPhong");
@@ -1676,6 +1698,8 @@ namespace Dormitory.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("DotDangKy");
+
+                    b.Navigation("Giuong");
 
                     b.Navigation("LoaiPhong");
 

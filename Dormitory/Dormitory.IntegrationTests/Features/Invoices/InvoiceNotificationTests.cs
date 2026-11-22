@@ -13,7 +13,7 @@ using Dormitory.Web.Shared.Models;
 namespace Dormitory.IntegrationTests.Features.Invoices
 {
     // Nghiệp vụ thông báo cho sinh viên quanh vòng đời hóa đơn:
-    // tạo hóa đơn tay phải tự gửi + báo, tất toán hóa đơn thường phải có biên nhận điện tử.
+    // tạo hóa đơn tay chỉ lưu nháp, khi BQL gửi mới phát hành + báo, tất toán hóa đơn thường phải có biên nhận điện tử.
     public class InvoiceNotificationTests : IClassFixture<SqlServerFixture>
     {
         private readonly SqlServerFixture _fixture;
@@ -106,10 +106,10 @@ namespace Dormitory.IntegrationTests.Features.Invoices
             };
         }
 
-        // ============ Tạo hóa đơn tay: tự gửi + thông báo ============
+        // ============ Tạo hóa đơn tay: lưu nháp, BQL gửi mới phát hành ============
 
         [Fact]
-        public async Task CreateInvoice_Ok_TuGuiVaCoThongBao()
+        public async Task CreateInvoice_Ok_LuuNhap_ChiGuiKhiBqlBamGui()
         {
             using var context = _fixture.CreateDbContext();
             var (_, contract) = await BuildRoomWithContractAsync(context, "01", "hieuLuc");
@@ -118,10 +118,20 @@ namespace Dormitory.IntegrationTests.Features.Invoices
             var dto = await service.CreateInvoiceAsync(MakeCreateRequest(context, contract), SqlServerFixture.AcademicYear);
 
             Assert.NotNull(dto);
-            Assert.True(dto!.IsSent);
+            Assert.False(dto!.IsSent);
+            Assert.True(dto.IsDraft);
+            Assert.True(dto.CanEdit);
+            Assert.Equal("draft", dto.Status);
 
             var invoice = await context.HoaDons.Include(h => h.HopDong)
                 .FirstAsync(h => h.MaHoaDon == dto.Code);
+            Assert.Null(invoice.NgayGui);
+            Assert.Equal("nhap", invoice.TrangThai);
+            Assert.False(await context.ThongBaos.AnyAsync(t => t.TieuDe.Contains(dto.Code)));
+
+            // BQL bấm Gửi mới phát hành và báo cho sinh viên.
+            Assert.True(await service.SendInvoiceAsync(dto.Code, SqlServerFixture.AcademicYear));
+            Assert.Equal("chuaThanhToan", invoice.TrangThai);
             Assert.NotNull(invoice.NgayGui);
 
             var notice = await context.ThongBaos.FirstOrDefaultAsync(t =>
@@ -129,8 +139,9 @@ namespace Dormitory.IntegrationTests.Features.Invoices
             Assert.NotNull(notice);
             Assert.Equal(contract.MaSinhVien, notice!.MaSinhVien);
             Assert.Equal("/student/invoice", notice.LienKet);
+            Assert.Contains("VietQR", notice.NoiDung);
 
-            // Không cần BQL bấm Gửi lần nữa; gọi SendInvoiceAsync phải bị chặn để tránh báo trùng.
+            // Gửi lần hai bị chặn để tránh báo trùng.
             Assert.False(await service.SendInvoiceAsync(dto.Code, SqlServerFixture.AcademicYear));
             Assert.Equal(1, await context.ThongBaos.CountAsync(t => t.TieuDe.Contains(dto.Code)));
         }
@@ -161,7 +172,8 @@ namespace Dormitory.IntegrationTests.Features.Invoices
 
             Assert.NotNull(lan1);
             Assert.Equal(lan1!.Code, lan2!.Code);
-            Assert.Equal(1, await context.ThongBaos.CountAsync(t => t.TieuDe.Contains(lan1.Code)));
+            // Bấm lưu nhiều lần vẫn chỉ một hóa đơn nháp và chưa báo cho sinh viên.
+            Assert.Equal(0, await context.ThongBaos.CountAsync(t => t.TieuDe.Contains(lan1.Code)));
         }
 
         // ============ Tất toán hóa đơn thường: biên nhận điện tử ============

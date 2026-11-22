@@ -33,6 +33,10 @@ namespace Dormitory.Web.Features.Registrations.Entities
         [Column("maPhong")]
         public string? MaPhong { get; set; }
 
+        [MaxLength(20)]
+        [Column("maGiuong")]
+        public string? MaGiuong { get; set; }
+
         [Column("ngayDangKy")]
         public DateTime NgayDangKy { get; set; } = DateTime.Now;
 
@@ -63,6 +67,9 @@ namespace Dormitory.Web.Features.Registrations.Entities
 
         [ForeignKey(nameof(MaPhong))]
         public virtual Phong? Phong { get; set; }
+
+        [ForeignKey(nameof(MaGiuong))]
+        public virtual Giuong? Giuong { get; set; }
 
         [ForeignKey(nameof(MaNhanVienDuyet))]
         public virtual NhanVien? NhanVienDuyet { get; set; }

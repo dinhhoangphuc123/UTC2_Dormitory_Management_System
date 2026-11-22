@@ -15,5 +15,6 @@ namespace Dormitory.Web.Features.Maintenance.DTOs
         public string Priority { get; set; } = "Bình thường";
         public string Status { get; set; } = "PENDING"; // PENDING, IN_PROGRESS, COMPLETED
         public string CreatedAt { get; set; } = string.Empty;
+        public bool HasImage { get; set; }
     }
 }

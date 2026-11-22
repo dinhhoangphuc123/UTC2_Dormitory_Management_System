@@ -44,6 +44,14 @@ namespace Dormitory.Web.Features.Utilities.Api
                 return BadRequest(ApiResponse.Fail(errorMessage ?? "Thông tin không hợp lệ."));
             }
 
+            int month = req.Thang ?? DateTime.Today.Month;
+            int yearNumber = req.Nam ?? DateTime.Today.Year;
+            var lockReason = await _dienNuocService.GetUtilityEditLockReasonAsync(req.RoomId, month, yearNumber);
+            if (lockReason != null)
+            {
+                return BadRequest(ApiResponse.Fail(lockReason));
+            }
+
             var updated = await _dienNuocService.RecordUtilityAsync(req, academicYear, _currentUser?.StaffId);
             if (updated == null)
             {

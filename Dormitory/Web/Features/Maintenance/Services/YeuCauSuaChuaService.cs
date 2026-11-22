@@ -70,7 +70,7 @@ namespace Dormitory.Web.Features.Maintenance.Services
             return result;
         }
 
-        public async Task<MaintenanceTicketDto?> CreateTicketAsync(CreateTicketDto req, string? academicYear = null)
+        public async Task<MaintenanceTicketDto?> CreateTicketAsync(CreateTicketDto req, string? academicYear = null, string? imageFileName = null)
         {
             var year = string.IsNullOrWhiteSpace(academicYear)
                 ? null
@@ -96,6 +96,7 @@ namespace Dormitory.Web.Features.Maintenance.Services
                 MaPhong = activeContract.Giuong.MaPhong,
                 MaSinhVienGui = activeContract.MaSinhVien,
                 MoTa = req.Description.Trim(),
+                AnhMinhHoa = imageFileName,
                 NgayGui = DateTime.Now,
                 TrangThai = "moiGui"
             };
@@ -109,6 +110,21 @@ namespace Dormitory.Web.Features.Maintenance.Services
                 .Include(y => y.NhanVienXuLy)
                 .FirstAsync(y => y.MaYeuCau == entity.MaYeuCau))
                 .ToMaintenanceTicketDto();
+        }
+
+        public async Task<string?> GetTicketImageFileNameAsync(string ticketId, string? academicYear = null)
+        {
+            if (!int.TryParse(ticketId, out int id)) return null;
+
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return null;
+
+            var ticket = await _context.YeuCauSuaChuas.AsNoTracking().FirstOrDefaultAsync(y =>
+                y.MaYeuCau == id &&
+                y.NgayGui >= year.NgayBatDau && y.NgayGui < year.NgayKetThuc.Date.AddDays(1));
+            return string.IsNullOrEmpty(ticket?.AnhMinhHoa) ? null : ticket.AnhMinhHoa;
         }
 
         public async Task<bool> AssignTicketAsync(AssignTicketDto req, string? academicYear = null)

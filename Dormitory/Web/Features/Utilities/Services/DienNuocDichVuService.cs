@@ -50,7 +50,18 @@ namespace Dormitory.Web.Features.Utilities.Services
             var serviceCodesByRoom = serviceRows
                 .GroupBy(row => row.RoomId)
                 .ToDictionary(group => group.Key, group => group.Select(row => row.Code).Distinct().ToList());
+
+            // Kỳ hiển thị luôn là tháng hiện tại: sang tháng mới chỉ số cũ được giữ làm mốc
+            // đầu kỳ và nhãn tự quay về "chờ chốt số" mà không cần thao tác gì.
+            int periodMonth = DateTime.Today.Month;
+            int periodYear = DateTime.Today.Year;
+            var lockByRoom = await GetUtilityLockMapAsync(periodMonth, periodYear);
+
             var result = rooms.Select(r => r.ToUtilityItemDto(
+                periodMonth,
+                periodYear,
+                !lockByRoom.ContainsKey(r.MaPhong),
+                lockByRoom.GetValueOrDefault(r.MaPhong),
                 servicesByRoom.GetValueOrDefault(r.MaPhong),
                 serviceCodesByRoom.GetValueOrDefault(r.MaPhong))).ToList();
             if (result.Count > 0)
@@ -88,6 +99,51 @@ namespace Dormitory.Web.Features.Utilities.Services
             return result;
         }
 
+        public async Task<string?> GetUtilityEditLockReasonAsync(string roomId, int month, int year)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || month < 1 || month > 12) return null;
+            var lockByRoom = await GetUtilityLockMapAsync(month, year);
+            return lockByRoom.GetValueOrDefault(roomId);
+        }
+
+        // Khóa chỉnh sửa khi hóa đơn điện nước của kỳ đã gửi cho sinh viên và sinh viên
+        // đã thanh toán hoặc đã nộp minh chứng đang chờ BQL xác nhận.
+        // Minh chứng bị từ chối thì mở khóa để BQL sửa lại số liệu.
+        private async Task<Dictionary<string, string>> GetUtilityLockMapAsync(int month, int year)
+        {
+            var rows = await _context.HoaDons
+                .Where(h => h.Thang == month && h.Nam == year
+                    && h.TrangThai != "daHuy"
+                    && h.HopDong != null && h.HopDong.Giuong != null
+                    && h.DanhSachChiTietHoaDon.Any(d => d.LoaiKhoan == "dien" || d.LoaiKhoan == "nuoc"))
+                .Select(h => new
+                {
+                    RoomId = h.HopDong!.Giuong!.MaPhong,
+                    h.TrangThai,
+                    h.NgayGui,
+                    h.AnhMinhChung,
+                    h.LyDoTuChoiMinhChung
+                })
+                .ToListAsync();
+
+            var map = new Dictionary<string, string>();
+            foreach (var group in rows.GroupBy(row => row.RoomId))
+            {
+                if (group.Any(row => row.TrangThai == "daThanhToan"))
+                {
+                    map[group.Key] = "Hóa đơn kỳ này đã được sinh viên thanh toán nên không thể chỉnh sửa số điện nước.";
+                }
+                else if (group.Any(row => row.NgayGui != null &&
+                    !string.IsNullOrEmpty(row.AnhMinhChung) &&
+                    string.IsNullOrEmpty(row.LyDoTuChoiMinhChung)))
+                {
+                    map[group.Key] = "Sinh viên đã gửi minh chứng thanh toán chờ xác nhận nên không thể chỉnh sửa số điện nước.";
+                }
+            }
+
+            return map;
+        }
+
         public async Task<UtilityItemDto?> RecordUtilityAsync(RecordUtilityDto req, string? academicYear = null, string? staffId = null)
         {
             var year = string.IsNullOrWhiteSpace(academicYear)
@@ -104,6 +160,10 @@ namespace Dormitory.Web.Features.Utilities.Services
             var yearEnd = new DateTime(year.NgayKetThuc.Year, year.NgayKetThuc.Month, 1);
             var currentPeriod = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
             if (period < yearStart || period > yearEnd || period > currentPeriod)
+                return null;
+
+            // Sinh viên đã trả tiền hoặc đang chờ xác nhận minh chứng thì khóa số liệu kỳ đó.
+            if (await GetUtilityEditLockReasonAsync(req.RoomId, month, yearNumber) != null)
                 return null;
 
             var room = await _context.Phongs
@@ -218,7 +278,8 @@ namespace Dormitory.Web.Features.Utilities.Services
             var residentContracts = await _context.HopDongs
                 .Where(h => h.Giuong != null && h.Giuong.MaPhong == room.MaPhong &&
                     h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy" &&
-                    h.NgayBatDau <= monthEnd && h.NgayKetThuc >= period)
+                    h.NgayBatDau <= monthEnd && h.NgayKetThuc >= period &&
+                    (academicYear == null || (h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear)))
                 .ToListAsync();
             int soNguoiChia = residentContracts.Count > 0 ? residentContracts.Count : 1;
 
@@ -242,6 +303,13 @@ namespace Dormitory.Web.Features.Utilities.Services
             roomBill.TongTien = tongTien;
             roomBill.SoNguoiChia = soNguoiChia;
             roomBill.TienMoiNguoi = UtilityBillCalculator.SplitCostPerPerson(tongTien, soNguoiChia);
+
+            // Hóa đơn đã lập nhưng chưa bị khóa (chưa thanh toán, chưa nộp minh chứng)
+            // thì cập nhật lại số tiền điện/nước trên hóa đơn đã gửi cho từng sinh viên.
+            if (roomBill.TrangThai == "daChot")
+            {
+                await SyncFinalizedInvoiceUtilitiesAsync(room, month, yearNumber, tienDien, tienNuoc, soNguoiChia);
+            }
 
             // Checkbox dịch vụ trong form ghi chỉ số phải tác động thật vào DangKyDichVu.
             await SyncRoomServicesAsync(residentContracts, period, monthEnd, req.HasInternet, req.HasTrash, staffId, now);
@@ -271,6 +339,45 @@ namespace Dormitory.Web.Features.Utilities.Services
                 Status = isOver ? "EXCEEDED" : "RECORDED",
                 UpdatedAt = now.ToString("dd/MM/yyyy HH:mm")
             };
+        }
+
+        // Đã chốt hóa đơn nhưng còn được sửa: cập nhật số tiền điện/nước trên hóa đơn
+        // chưa thanh toán để sinh viên thấy đúng số liệu mới.
+        private async Task SyncFinalizedInvoiceUtilitiesAsync(
+            Dormitory.Web.Features.Rooms.Entities.Phong room, int month, int yearNumber,
+            decimal tienDien, decimal tienNuoc, int soNguoiChia)
+        {
+            decimal perElec = UtilityBillCalculator.SplitCostPerPerson(tienDien, soNguoiChia);
+            decimal perWat = UtilityBillCalculator.SplitCostPerPerson(tienNuoc, soNguoiChia);
+            string ky = $"T{month:D2}/{yearNumber}";
+
+            var invoices = await _context.HoaDons
+                .Include(h => h.DanhSachChiTietHoaDon)
+                .Where(h => h.Thang == month && h.Nam == yearNumber
+                    && (h.TrangThai == "chuaThanhToan" || h.TrangThai == "nhap")
+                    && h.HopDong != null && h.HopDong.Giuong != null && h.HopDong.Giuong.MaPhong == room.MaPhong)
+                .ToListAsync();
+
+            foreach (var invoice in invoices)
+            {
+                foreach (var line in invoice.DanhSachChiTietHoaDon)
+                {
+                    if (line.LoaiKhoan == "dien")
+                    {
+                        line.NoiDung = $"Tiền điện {ky} (chia {soNguoiChia} người)";
+                        line.SoLuong = 1;
+                        line.DonGia = perElec;
+                        line.ThanhTien = perElec;
+                    }
+                    else if (line.LoaiKhoan == "nuoc")
+                    {
+                        line.NoiDung = $"Tiền nước {ky} (chia {soNguoiChia} người)";
+                        line.SoLuong = 1;
+                        line.DonGia = perWat;
+                        line.ThanhTien = perWat;
+                    }
+                }
+            }
         }
 
         // Bật checkbox dịch vụ thì ghi đăng ký "dangDung" cho mọi hợp đồng còn ở trong phòng
@@ -341,14 +448,26 @@ namespace Dormitory.Web.Features.Utilities.Services
             if (string.IsNullOrWhiteSpace(req.RoomId))
                 return (false, "Mã phòng không được để trống.", null);
 
-            // Chốt hóa đơn phòng có kỳ ghi chỉ số mới nhất còn "chuaChot".
-            var roomBill = await _context.HoaDonPhongs
+            // Chốt hóa đơn phòng có kỳ ghi chỉ số mới nhất còn "chuaChot",
+            // hoặc đúng kỳ được chỉ định khi BQL chốt bù hóa đơn tồn.
+            var billQuery = _context.HoaDonPhongs
                 .Include(b => b.Phong)
-                .Where(b => b.MaPhong == req.RoomId && b.TrangThai == "chuaChot")
+                .Where(b => b.MaPhong == req.RoomId && b.TrangThai == "chuaChot");
+            if (req.Thang.HasValue && req.Nam.HasValue)
+            {
+                billQuery = billQuery.Where(b => b.Thang == req.Thang.Value && b.Nam == req.Nam.Value);
+            }
+
+            var roomBill = await billQuery
                 .OrderByDescending(b => b.Nam).ThenByDescending(b => b.Thang)
                 .FirstOrDefaultAsync();
             if (roomBill == null)
                 return (false, "Phòng này không có hóa đơn điện nước chờ chốt.", null);
+
+            // Đã gửi hóa đơn và sinh viên đã trả tiền/nộp minh chứng chờ xác nhận thì không chốt lại.
+            var lockReason = await GetUtilityEditLockReasonAsync(req.RoomId, roomBill.Thang, roomBill.Nam);
+            if (lockReason != null)
+                return (false, lockReason, null);
 
             var period = new DateTime(roomBill.Nam, roomBill.Thang, 1);
             var monthEnd = period.AddMonths(1).AddDays(-1);
@@ -369,7 +488,8 @@ namespace Dormitory.Web.Features.Utilities.Services
             var contractIds = residentContracts.Select(c => c.MaHopDong).ToList();
             var alreadyBilled = await _context.HoaDons
                 .Where(h => contractIds.Contains(h.MaHopDong) && h.Thang == roomBill.Thang && h.Nam == roomBill.Nam
-                    && h.DanhSachChiTietHoaDon.Any())
+                    && h.TrangThai != "daHuy"
+                    && h.DanhSachChiTietHoaDon.Any(d => d.LoaiKhoan == "dien" || d.LoaiKhoan == "nuoc"))
                 .Select(h => h.MaHopDong)
                 .ToHashSetAsync();
 
@@ -416,7 +536,8 @@ namespace Dormitory.Web.Features.Utilities.Services
                     Thang = roomBill.Thang,
                     Nam = roomBill.Nam,
                     HanThanhToan = dueDate,
-                    TrangThai = "chuaThanhToan",
+                    // BQL bỏ chọn "Gửi ngay" thì hóa đơn nằm ở dạng nháp để còn rà lại.
+                    TrangThai = req.SendNow ? "chuaThanhToan" : "nhap",
                     NgayLap = DateTime.Now
                 };
                 invoice.DanhSachChiTietHoaDon.Add(new ChiTietHoaDon

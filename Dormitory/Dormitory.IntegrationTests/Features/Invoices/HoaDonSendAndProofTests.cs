@@ -272,6 +272,141 @@ namespace Dormitory.IntegrationTests.Features.Invoices
         }
 
         [Fact]
+        public async Task RejectPaymentProofAsync_Ok_LuuLyDoVaLichSu_NopLaiXoaLyDo()
+        {
+            var dir = NewProofDir();
+            try
+            {
+                using var context = _fixture.CreateDbContext();
+                var invoice = await GetUnpaidInvoiceAsync(context);
+                var studentId = invoice.HopDong!.MaSinhVien;
+                var service = new HoaDonService(context);
+
+                Assert.True((await service.SubmitPaymentProofAsync(
+                    invoice.MaHoaDon, studentId, MakeProof("bien-lai.png", FakeImageBytes()), dir)).Success);
+
+                // Mới nộp minh chứng: phải nằm trong trạng thái chờ xác nhận thanh toán.
+                var submittedList = await service.GetAllInvoicesAsync(null, null, "choXacNhan", null, SqlServerFixture.AcademicYear);
+                var submittedDto = submittedList.Single(x => x.Code == invoice.MaHoaDon);
+                Assert.Equal("choXacNhan", submittedDto.PaymentStatus);
+
+                var (success, error) = await service.RejectPaymentProofAsync(invoice.MaHoaDon, "Ảnh minh chứng bị mờ");
+                Assert.True(success);
+                Assert.Null(error);
+                Assert.Equal("Ảnh minh chứng bị mờ", invoice.LyDoTuChoiMinhChung);
+                Assert.NotNull(invoice.NgayTuChoiMinhChung);
+                Assert.NotNull(invoice.AnhMinhChung);
+
+                var notice = await context.ThongBaos.FirstOrDefaultAsync(t =>
+                    t.TieuDe == "Minh chứng thanh toán bị từ chối" && t.MaSinhVien == studentId);
+                Assert.NotNull(notice);
+                Assert.Contains("Ảnh minh chứng bị mờ", notice!.NoiDung);
+
+                // Dòng hóa đơn phải quay về chuaThanhToan và biến mất khỏi bộ lọc choXacNhan.
+                var reviewerDto = (await service.GetAllInvoicesAsync(null, null, null, null, SqlServerFixture.AcademicYear))
+                    .Single(x => x.Code == invoice.MaHoaDon);
+                Assert.True(reviewerDto.HasStudentProof);
+                Assert.True(reviewerDto.IsProofRejected);
+                Assert.Equal("chuaThanhToan", reviewerDto.PaymentStatus);
+                Assert.Equal("Ảnh minh chứng bị mờ", reviewerDto.ProofRejectReason);
+                Assert.NotNull(reviewerDto.ProofRejectedAt);
+                Assert.DoesNotContain(
+                    await service.GetAllInvoicesAsync(null, null, "choXacNhan", null, SqlServerFixture.AcademicYear),
+                    x => x.Code == invoice.MaHoaDon);
+                // Chặn xác nhận nhầm minh chứng đã bị từ chối khi không có chứng từ mới.
+                Assert.False(await service.ConfirmPaymentAsync(
+                    invoice.MaHoaDon, "Chuyển khoản", SqlServerFixture.AcademicYear, "NV02"));
+
+                // Sinh viên nộp lại thì lý do từ chối cũ phải được xóa và quay lại choXacNhan.
+                var resubmit = await service.SubmitPaymentProofAsync(
+                    invoice.MaHoaDon, studentId, MakeProof("bien-lai-2.png", FakeImageBytes()), dir);
+                Assert.True(resubmit.Success);
+                Assert.Null(invoice.LyDoTuChoiMinhChung);
+                Assert.Null(invoice.NgayTuChoiMinhChung);
+                var resubmittedDto = (await service.GetAllInvoicesAsync(null, null, "choXacNhan", null, SqlServerFixture.AcademicYear))
+                    .Single(x => x.Code == invoice.MaHoaDon);
+                Assert.False(resubmittedDto.IsProofRejected);
+                Assert.Equal("choXacNhan", resubmittedDto.PaymentStatus);
+            }
+            finally { CleanDir(dir); }
+        }
+
+        [Fact]
+        public async Task RejectPaymentProofAsync_Sai_ThieuLyDoHoacChuaNopMinhChung_TraFalse()
+        {
+            var dir = NewProofDir();
+            try
+            {
+                using var context = _fixture.CreateDbContext();
+                var invoice = await GetUnpaidInvoiceAsync(context);
+                var service = new HoaDonService(context);
+
+                var (success, error) = await service.RejectPaymentProofAsync(invoice.MaHoaDon, "   ");
+                Assert.False(success);
+                Assert.Contains("lý do", error!);
+
+                // Chưa nộp minh chứng thì không có gì để từ chối.
+                var (success2, error2) = await service.RejectPaymentProofAsync(invoice.MaHoaDon, "Sai số tiền");
+                Assert.False(success2);
+                Assert.Contains("chưa nộp minh chứng", error2!);
+                Assert.Null(invoice.LyDoTuChoiMinhChung);
+            }
+            finally { CleanDir(dir); }
+        }
+
+        [Fact]
+        public async Task SubmitPaymentProofAsync_Sai_HetHanGiuCho_TraFalse()
+        {
+            var dir = NewProofDir();
+            try
+            {
+                using var context = _fixture.CreateDbContext();
+                var invoice = await GetUnpaidInvoiceAsync(context);
+                invoice.HopDong!.TrangThai = "choThanhToan";
+                invoice.HopDong.HanGiuCho = DateTime.Now.AddHours(-1);
+                await context.SaveChangesAsync();
+
+                var service = new HoaDonService(context);
+                var (success, error) = await service.SubmitPaymentProofAsync(
+                    invoice.MaHoaDon, invoice.HopDong.MaSinhVien, MakeProof("bien-lai.png", FakeImageBytes()), dir);
+
+                Assert.False(success);
+                Assert.Contains("24 giờ", error!);
+                Assert.Null(invoice.AnhMinhChung);
+            }
+            finally { CleanDir(dir); }
+        }
+
+        [Fact]
+        public async Task RejectPaymentProofController_Ok_Tra200_Sai_Tra400()
+        {
+            var dir = NewProofDir();
+            try
+            {
+                using var context = _fixture.CreateDbContext();
+                var invoice = await GetUnpaidInvoiceAsync(context);
+                var service = new HoaDonService(context);
+                var controller = new HoaDonApiController(service);
+
+                Assert.True((await service.SubmitPaymentProofAsync(
+                    invoice.MaHoaDon, invoice.HopDong!.MaSinhVien, MakeProof("bien-lai.png", FakeImageBytes()), dir)).Success);
+
+                var okResult = await controller.RejectPaymentProof(
+                    invoice.MaHoaDon,
+                    new HoaDonApiController.RejectPaymentProofRequest { Reason = "Nội dung chuyển khoản sai" },
+                    SqlServerFixture.AcademicYear);
+                Assert.IsType<OkObjectResult>(okResult);
+
+                var badResult = await controller.RejectPaymentProof(
+                    invoice.MaHoaDon,
+                    new HoaDonApiController.RejectPaymentProofRequest { Reason = "" },
+                    SqlServerFixture.AcademicYear);
+                Assert.IsType<BadRequestObjectResult>(badResult);
+            }
+            finally { CleanDir(dir); }
+        }
+
+        [Fact]
         public async Task ProcessPaymentAsync_Ok_LuuMinhChungLenThanhToan()
         {
             var dir = NewProofDir();

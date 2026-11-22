@@ -58,7 +58,22 @@ namespace Dormitory.Web.Features.Invoices.Services
 
             if (!string.IsNullOrWhiteSpace(status) && status != "all")
             {
-                result = result.Where(i => i.Status.Equals(status, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (status.Equals("choXacNhan", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = result.Where(i => i.PaymentStatus.Equals("choXacNhan", StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                else if (status.Equals("daNhanThanhToan", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = result.Where(i => i.PaymentStatus.Equals("daNhanThanhToan", StringComparison.OrdinalIgnoreCase) || i.Status.Equals("paid", StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                else if (status.Equals("chuaThanhToan", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = result.Where(i => i.PaymentStatus.Equals("chuaThanhToan", StringComparison.OrdinalIgnoreCase) && !i.IsDraft).ToList();
+                }
+                else
+                {
+                    result = result.Where(i => i.Status.Equals(status, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
             }
 
             return result;
@@ -143,7 +158,8 @@ namespace Dormitory.Web.Features.Invoices.Services
                 Thang = invoiceMonth,
                 Nam = invoiceYear,
                 HanThanhToan = dueDate.Date,
-                TrangThai = "chuaThanhToan",
+                // Hóa đơn lập tay lưu nháp trước; chỉ khi BQL bấm Gửi sinh viên mới nhận được.
+                TrangThai = "nhap",
                 NgayLap = DateTime.Now
             };
             invoice.DanhSachChiTietHoaDon.Add(new()
@@ -155,26 +171,49 @@ namespace Dormitory.Web.Features.Invoices.Services
                 ThanhTien = amount
             });
 
-            // Gán hợp đồng trước khi lưu để hóa đơn tạo tay được gửi ngay,
-            // sinh viên nhận thông báo mà không phải đợi BQL bấm Gửi.
             invoice.HopDong = contract;
-            invoice.NgayGui = DateTime.Now;
-            _context.ThongBaos.Add(new ThongBao
-            {
-                MaSinhVien = contract.MaSinhVien,
-                TieuDe = $"Hóa đơn {invoice.MaHoaDon} đã được phát hành",
-                NoiDung = $"Ký túc xá đã gửi hóa đơn tháng {invoice.Thang:D2}/{invoice.Nam} (số tiền phải nộp {amount:n0} đ, hạn nộp {invoice.HanThanhToan:dd/MM/yyyy}). " +
-                          "Bạn vào mục Hóa đơn & Biên nhận để xem và thanh toán.",
-                Loai = "hoaDon",
-                LienKet = "/student/invoice",
-                DaDoc = false,
-                NgayTao = DateTime.Now
-            });
-
             _context.HoaDons.Add(invoice);
             await _context.SaveChangesAsync();
 
             return invoice.ToInvoiceItemDto();
+        }
+
+        public async Task<(bool Success, string? ErrorMessage)> UpdateDraftInvoiceAsync(
+            string invoiceId, UpdateInvoiceDraftDto req, string? academicYear = null)
+        {
+            if (string.IsNullOrWhiteSpace(invoiceId)) return (false, "Mã hóa đơn không được để trống.");
+            if (!DateTime.TryParseExact(
+                    req.DueDate,
+                    new[] { "dd/MM/yyyy", "yyyy-MM-dd" },
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var dueDate))
+            {
+                return (false, "Hạn thanh toán không hợp lệ.");
+            }
+
+            var invoice = await _context.HoaDons
+                .Include(h => h.HopDong)
+                .Include(h => h.DanhSachChiTietHoaDon)
+                .Include(h => h.DanhSachThanhToan)
+                .FirstOrDefaultAsync(h => h.MaHoaDon == invoiceId &&
+                    (academicYear == null || (h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear)));
+
+            if (invoice == null) return (false, "Không tìm thấy hóa đơn.");
+            if (invoice.TrangThai != "nhap") return (false, "Chỉ chỉnh sửa được hóa đơn nháp chưa gửi sinh viên.");
+            if (invoice.DanhSachChiTietHoaDon.Count != 1)
+                return (false, "Hóa đơn điện nước nhiều khoản phải chỉnh sửa ở trang Điện nước & Dịch vụ.");
+
+            var amount = InvoiceCalculator.CalculateTotal(req.Amount);
+            var line = invoice.DanhSachChiTietHoaDon.First();
+            line.NoiDung = req.Title.Trim();
+            line.SoLuong = 1;
+            line.DonGia = amount;
+            line.ThanhTien = amount;
+            invoice.HanThanhToan = dueDate.Date;
+
+            await _context.SaveChangesAsync();
+            return (true, null);
         }
 
         public async Task<bool> SendInvoiceAsync(string invoiceId, string? academicYear = null)
@@ -191,13 +230,15 @@ namespace Dormitory.Web.Features.Invoices.Services
             var total = invoice.DanhSachChiTietHoaDon.Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia);
             var outstanding = PaymentRules.CalculateOutstanding(total, invoice.DanhSachThanhToan.Sum(t => t.SoTien));
 
+            // Nháp chuyển thành hóa đơn chính thức khi BQL bấm gửi.
+            if (invoice.TrangThai == "nhap") invoice.TrangThai = "chuaThanhToan";
             invoice.NgayGui = DateTime.Now;
             _context.ThongBaos.Add(new ThongBao
             {
                 MaSinhVien = invoice.HopDong!.MaSinhVien,
                 TieuDe = $"Hóa đơn {invoice.MaHoaDon} đã được phát hành",
                 NoiDung = $"Ký túc xá đã gửi hóa đơn tháng {invoice.Thang:D2}/{invoice.Nam} (số tiền còn phải nộp {outstanding:n0} đ, hạn nộp {invoice.HanThanhToan:dd/MM/yyyy}). " +
-                          "Bạn vào mục Hóa đơn & Biên nhận để xem và thanh toán.",
+                          "Bạn vào mục Hóa đơn & Biên nhận, mở hóa đơn để quét mã VietQR đã điền sẵn số tiền và nội dung chuyển khoản, sau đó gửi ảnh minh chứng để BQL đối soát.",
                 Loai = "hoaDon",
                 LienKet = "/student/invoice",
                 DaDoc = false,
@@ -233,7 +274,14 @@ namespace Dormitory.Web.Features.Invoices.Services
                         .Include(h => h.DanhSachChiTietHoaDon)
                         .FirstOrDefaultAsync(h => h.MaHoaDon == invoiceId && (academicYear == null || (h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear)));
 
-                    if (invoice == null || invoice.TrangThai == "daThanhToan" || invoice.TrangThai == "daHuy")
+                    if (invoice == null || invoice.TrangThai == "daThanhToan" || invoice.TrangThai == "daHuy" || invoice.TrangThai == "nhap")
+                    {
+                        await tx.RollbackAsync();
+                        return false;
+                    }
+
+                    // Chặn xác nhận nhầm hóa đơn có minh chứng đã bị từ chối mà sinh viên chưa nộp lại (trừ trường hợp BQL đính kèm chứng từ mới).
+                    if (!string.IsNullOrEmpty(invoice.LyDoTuChoiMinhChung) && proofFileName == null)
                     {
                         await tx.RollbackAsync();
                         return false;
@@ -260,7 +308,8 @@ namespace Dormitory.Web.Features.Invoices.Services
                         .Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia);
 
                     // Áp phạt trễ hạn đúng một lần cho mỗi hóa đơn quá hạn.
-                    int daysOverdue = (DateTime.Today - invoice.HanThanhToan.Date).Days;
+                    var paymentRefDate = invoice.NgayNopMinhChung?.Date ?? DateTime.Today;
+                    int daysOverdue = (paymentRefDate - invoice.HanThanhToan.Date).Days;
                     var penalty = InvoiceCalculator.CalculateLatePenalty(baseTotal, daysOverdue);
                     bool hasPenalty = invoice.DanhSachChiTietHoaDon.Any(d => d.LoaiKhoan == "phatTreHan");
                     if (penalty > 0 && !hasPenalty)
@@ -295,7 +344,7 @@ namespace Dormitory.Web.Features.Invoices.Services
                         NgayThanhToan = DateTime.Now,
                         PhuongThuc = paymentType,
                         MaNhanVienThu = staffId,
-                        AnhMinhChung = proofFileName
+                        AnhMinhChung = proofFileName ?? (!string.IsNullOrEmpty(invoice.AnhMinhChung) ? invoice.AnhMinhChung : null)
                     });
                     invoice.TrangThai = "daThanhToan";
 
@@ -354,7 +403,15 @@ namespace Dormitory.Web.Features.Invoices.Services
                     h.HopDong != null && h.HopDong.MaSinhVien == studentId);
 
             if (invoice == null) return (false, "Không tìm thấy hóa đơn.");
+            if (invoice.TrangThai == "nhap") return (false, "Hóa đơn chưa được gửi cho sinh viên nên chưa thể nộp minh chứng.");
+            if (invoice.TrangThai == "daHuy") return (false, "Hóa đơn đã bị hủy, không thể nộp minh chứng.");
             if (invoice.TrangThai == "daThanhToan") return (false, "Hóa đơn đã được thanh toán, không cần nộp minh chứng.");
+
+            if (invoice.HopDong != null && invoice.HopDong.TrangThai == "choThanhToan" &&
+                Features.Registrations.Services.RegistrationRules.IsReservationExpired(invoice.HopDong.HanGiuCho, DateTime.Now))
+            {
+                return (false, "Đã hết thời hạn giữ chỗ 24 giờ, không thể nộp minh chứng thanh toán.");
+            }
 
             var (fileName, error) = await PaymentProofStorage.SaveAsync(proofFile, appDataPath);
             if (fileName == null) return (false, error);
@@ -363,6 +420,46 @@ namespace Dormitory.Web.Features.Invoices.Services
             PaymentProofStorage.Delete(invoice.AnhMinhChung, appDataPath);
             invoice.AnhMinhChung = fileName;
             invoice.NgayNopMinhChung = DateTime.Now;
+            // Nộp lại nghĩa là phản hồi lý do từ chối trước đó.
+            invoice.LyDoTuChoiMinhChung = null;
+            invoice.NgayTuChoiMinhChung = null;
+            await _context.SaveChangesAsync();
+            return (true, null);
+        }
+
+        public async Task<(bool Success, string? ErrorMessage)> RejectPaymentProofAsync(
+            string invoiceId, string? reason, string? academicYear = null, string? staffId = null)
+        {
+            if (string.IsNullOrWhiteSpace(reason)) return (false, "Vui lòng nhập lý do từ chối minh chứng.");
+
+            var invoice = await _context.HoaDons
+                .Include(h => h.HopDong)
+                .FirstOrDefaultAsync(h => h.MaHoaDon == invoiceId);
+            if (invoice == null) return (false, "Không tìm thấy hóa đơn.");
+            if (invoice.TrangThai == "daThanhToan") return (false, "Hóa đơn đã được thanh toán, không thể từ chối.");
+            if (string.IsNullOrEmpty(invoice.AnhMinhChung)) return (false, "Sinh viên chưa nộp minh chứng để từ chối.");
+
+            invoice.LyDoTuChoiMinhChung = reason.Trim();
+            invoice.NgayTuChoiMinhChung = DateTime.Now;
+
+            if (invoice.HopDong != null)
+            {
+                // Hóa đơn giữ chỗ nói rõ hạn 24h; hóa đơn thường nhắc hạn thanh toán.
+                string deadlineText = invoice.HopDong.HanGiuCho is DateTime hold
+                    ? $"trước {hold:HH:mm dd/MM/yyyy}"
+                    : $"trước hạn thanh toán {invoice.HanThanhToan:dd/MM/yyyy}";
+                _context.ThongBaos.Add(new Features.Students.Entities.ThongBao
+                {
+                    MaSinhVien = invoice.HopDong.MaSinhVien,
+                    TieuDe = "Minh chứng thanh toán bị từ chối",
+                    NoiDung = $"Minh chứng cho hóa đơn {invoice.MaHoaDon} chưa hợp lệ. Lý do: {reason.Trim()}. Vui lòng nộp lại minh chứng {deadlineText}.",
+                    Loai = "thanhToan",
+                    LienKet = "/student/invoice",
+                    DaDoc = false,
+                    NgayTao = DateTime.Now
+                });
+            }
+
             await _context.SaveChangesAsync();
             return (true, null);
         }

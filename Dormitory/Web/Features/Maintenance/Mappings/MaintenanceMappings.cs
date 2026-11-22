@@ -51,7 +51,8 @@ namespace Dormitory.Web.Features.Maintenance.Mappings
                 Technician = t.NhanVienXuLy?.HoTen,
                 Priority = pri,
                 Status = st,
-                CreatedAt = t.NgayGui.ToString("dd/MM/yyyy HH:mm")
+                CreatedAt = t.NgayGui.ToString("dd/MM/yyyy HH:mm"),
+                HasImage = !string.IsNullOrEmpty(t.AnhMinhHoa)
             };
         }
     }

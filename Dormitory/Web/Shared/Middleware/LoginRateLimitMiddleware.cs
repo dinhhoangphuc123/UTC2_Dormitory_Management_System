@@ -45,10 +45,6 @@ public sealed class LoginRateLimitMiddleware
 
             overLimit = queue.Count >= MaxAttempts;
             retryAfter = overLimit ? (queue.Peek() + Window - now) : TimeSpan.Zero;
-            if (!overLimit)
-            {
-                queue.Enqueue(now);
-            }
         }
 
         if (overLimit)
@@ -62,5 +58,30 @@ public sealed class LoginRateLimitMiddleware
         }
 
         await _next(context);
+
+        bool loginFailed = context.Response.StatusCode is StatusCodes.Status401Unauthorized or StatusCodes.Status400BadRequest
+            || (context.Request.Path.Equals("/Account/Login", StringComparison.OrdinalIgnoreCase)
+                && context.Response.StatusCode == StatusCodes.Status200OK);
+        if (loginFailed)
+        {
+            lock (queue)
+            {
+                queue.Enqueue(DateTime.UtcNow);
+            }
+        }
+
+        if (Attempts.Count > 1000)
+        {
+            foreach (var kv in Attempts)
+            {
+                lock (kv.Value)
+                {
+                    if (kv.Value.Count == 0 || kv.Value.Peek() < now - Window)
+                    {
+                        Attempts.TryRemove(kv.Key, out _);
+                    }
+                }
+            }
+        }
     }
 }

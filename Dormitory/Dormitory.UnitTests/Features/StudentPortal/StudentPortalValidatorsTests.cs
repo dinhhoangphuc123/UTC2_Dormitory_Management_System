@@ -78,6 +78,7 @@ namespace Dormitory.UnitTests.Features.StudentPortal
             {
                 MaDotDangKy = "DOT01",
                 MaPhong = "A101",
+                MaGiuong = "A101_G1",
                 AcceptRules = false
             };
             var (isValid, err) = SubmitApplicationValidator.Validate(dto);
@@ -87,6 +88,21 @@ namespace Dormitory.UnitTests.Features.StudentPortal
             dto.AcceptRules = true;
             var (validOk, _) = SubmitApplicationValidator.Validate(dto);
             Assert.True(validOk);
+        }
+
+        [Fact]
+        public void SubmitApplicationValidator_RequiresBed()
+        {
+            var dto = new SubmitApplicationRequestDto
+            {
+                MaDotDangKy = "DOT01",
+                MaPhong = "A101",
+                MaGiuong = "",
+                AcceptRules = true
+            };
+            var (isValid, err) = SubmitApplicationValidator.Validate(dto);
+            Assert.False(isValid);
+            Assert.Contains("giường", err);
         }
 
         [Fact]
