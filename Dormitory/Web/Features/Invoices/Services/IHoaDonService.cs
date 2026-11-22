@@ -16,6 +16,6 @@ namespace Dormitory.Web.Features.Invoices.Services
         Task<(bool Success, string? ErrorMessage)> RejectPaymentProofAsync(string invoiceId, string? reason,
             string? academicYear = null, string? staffId = null);
         Task<(byte[]? FileBytes, string? ContentType)> GetInvoiceProofAsync(string invoiceId, string? studentId = null, string? appDataPath = null);
-        Task<(byte[]? FileBytes, string? ContentType)> GetPaymentProofAsync(string paymentId, string? appDataPath = null);
+        Task<(byte[]? FileBytes, string? ContentType)> GetPaymentProofAsync(string paymentId, string? appDataPath = null, string? invoiceId = null);
     }
 }

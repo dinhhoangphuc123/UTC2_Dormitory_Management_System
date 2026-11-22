@@ -150,22 +150,31 @@ namespace Dormitory.Web.Features.StudentPortal.Services
             var student = await _context.SinhViens.FirstOrDefaultAsync(s => s.MaSinhVien == studentId);
             if (student == null) return (false, "Không tìm thấy sinh viên.", 404);
 
-            var newEmail = dto.Email?.Trim();
-            if (newEmail != null && !string.Equals(newEmail, student.Email, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(dto.Email))
             {
-                // Đổi email phải xác minh lại mật khẩu hiện tại vì email dùng để đặt lại mật khẩu.
-                if (string.IsNullOrWhiteSpace(dto.CurrentPassword))
+                var trimmedEmail = dto.Email.Trim();
+                if (!string.Equals(trimmedEmail, student.Email, StringComparison.OrdinalIgnoreCase))
                 {
-                    return (false, "Vui lòng nhập mật khẩu hiện tại để thay đổi email.", 400);
-                }
+                    // Đổi email phải xác minh lại mật khẩu hiện tại vì email dùng để đặt lại mật khẩu.
+                    if (string.IsNullOrWhiteSpace(dto.CurrentPassword))
+                    {
+                        return (false, "Vui lòng nhập mật khẩu hiện tại để thay đổi email.", 400);
+                    }
 
-                var account = await _context.TaiKhoans.FirstOrDefaultAsync(t => t.MaSinhVien == studentId);
-                if (account == null || !_passwordHasher.VerifyPassword(dto.CurrentPassword, account.MatKhauHash))
-                {
-                    return (false, "Mật khẩu hiện tại không chính xác.", 400);
-                }
+                    var account = await _context.TaiKhoans.FirstOrDefaultAsync(t => t.MaSinhVien == studentId);
+                    if (account == null || !_passwordHasher.VerifyPassword(dto.CurrentPassword, account.MatKhauHash))
+                    {
+                        return (false, "Mật khẩu hiện tại không chính xác.", 400);
+                    }
 
-                student.Email = newEmail;
+                    var normalizedEmail = trimmedEmail.ToLowerInvariant();
+                    if (await _context.SinhViens.AnyAsync(s => s.MaSinhVien != studentId && s.Email != null && s.Email.ToLower() == normalizedEmail))
+                    {
+                        return (false, "Email này đã được sử dụng cho một sinh viên khác.", 400);
+                    }
+
+                    student.Email = trimmedEmail;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(dto.DienThoai)) student.DienThoai = dto.DienThoai.Trim();

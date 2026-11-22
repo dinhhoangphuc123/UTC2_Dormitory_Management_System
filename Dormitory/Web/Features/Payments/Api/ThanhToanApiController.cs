@@ -25,7 +25,7 @@ namespace Dormitory.Web.Features.Payments.Api
             _env = env;
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOrAccountantPolicy)]
         [HttpPost("confirm")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> Confirm([FromForm] ConfirmPaymentDto req, IFormFile? proof, [FromQuery] string? academicYear)

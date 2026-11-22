@@ -21,9 +21,10 @@ public sealed class LoginRateLimitMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        var path = context.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
         var isLogin = HttpMethods.IsPost(context.Request.Method) &&
-            (context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) ||
-             context.Request.Path.Equals("/Account/Login", StringComparison.OrdinalIgnoreCase));
+            (path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) ||
+             path.Equals("/Account/Login", StringComparison.OrdinalIgnoreCase));
         if (!isLogin)
         {
             await _next(context);
@@ -59,9 +60,12 @@ public sealed class LoginRateLimitMiddleware
 
         await _next(context);
 
+        bool isFormLogin = path.Equals("/Account/Login", StringComparison.OrdinalIgnoreCase);
         bool loginFailed = context.Response.StatusCode is StatusCodes.Status401Unauthorized or StatusCodes.Status400BadRequest
-            || (context.Request.Path.Equals("/Account/Login", StringComparison.OrdinalIgnoreCase)
-                && context.Response.StatusCode == StatusCodes.Status200OK);
+            || (isFormLogin && context.Response.StatusCode == StatusCodes.Status200OK);
+        bool loginSucceeded = (!isFormLogin && context.Response.StatusCode == StatusCodes.Status200OK)
+            || context.Response.StatusCode == StatusCodes.Status302Found;
+
         if (loginFailed)
         {
             lock (queue)
@@ -69,14 +73,26 @@ public sealed class LoginRateLimitMiddleware
                 queue.Enqueue(DateTime.UtcNow);
             }
         }
+        else if (loginSucceeded)
+        {
+            lock (queue)
+            {
+                queue.Clear();
+            }
+            Attempts.TryRemove(ip, out _);
+        }
 
-        if (Attempts.Count > 1000)
+        if (Attempts.Count > 100)
         {
             foreach (var kv in Attempts)
             {
                 lock (kv.Value)
                 {
-                    if (kv.Value.Count == 0 || kv.Value.Peek() < now - Window)
+                    while (kv.Value.Count > 0 && kv.Value.Peek() < now - Window)
+                    {
+                        kv.Value.Dequeue();
+                    }
+                    if (kv.Value.Count == 0)
                     {
                         Attempts.TryRemove(kv.Key, out _);
                     }

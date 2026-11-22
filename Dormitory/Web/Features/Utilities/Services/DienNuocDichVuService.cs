@@ -66,8 +66,11 @@ namespace Dormitory.Web.Features.Utilities.Services
                 serviceCodesByRoom.GetValueOrDefault(r.MaPhong))).ToList();
             if (result.Count > 0)
             {
-                var electricityRate = await GetCurrentRateAsync("dien", year.NgayKetThuc.Date);
-                var waterRate = await GetCurrentRateAsync("nuoc", year.NgayKetThuc.Date);
+                var rateRefDate = new DateTime(periodYear, periodMonth, 1);
+                var electricityRate = await GetCurrentRateAsync("dien", rateRefDate)
+                    ?? await GetCurrentRateAsync("dien", year.NgayKetThuc.Date);
+                var waterRate = await GetCurrentRateAsync("nuoc", rateRefDate)
+                    ?? await GetCurrentRateAsync("nuoc", year.NgayKetThuc.Date);
                 foreach (var item in result)
                 {
                     item.ElectricityRate = electricityRate?.Gia;
@@ -81,7 +84,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                 result = result.Where(u => u.Room.ToLower().Contains(s) || u.Building.ToLower().Contains(s)).ToList();
             }
 
-            if (!string.IsNullOrWhiteSpace(building) && building != "ALL")
+            if (!string.IsNullOrWhiteSpace(building) && !string.Equals(building, "ALL", StringComparison.OrdinalIgnoreCase))
             {
                 result = result.Where(u => u.Building.Equals(building, StringComparison.OrdinalIgnoreCase)).ToList();
             }
@@ -91,7 +94,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                 result = result.Where(u => u.Floor == floor.Value).ToList();
             }
 
-            if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+            if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase))
             {
                 result = result.Where(u => u.Status.Equals(status, StringComparison.OrdinalIgnoreCase)).ToList();
             }
@@ -218,6 +221,16 @@ namespace Dormitory.Web.Features.Utilities.Services
             if (elecRate == null || waterRate == null)
                 return null;
 
+            string? validStaffId = null;
+            if (!string.IsNullOrWhiteSpace(staffId))
+            {
+                var trimmedStaff = staffId.Trim();
+                if (await _context.NhanViens.AnyAsync(n => n.MaNhanVien == trimmedStaff))
+                {
+                    validStaffId = trimmedStaff;
+                }
+            }
+
             if (elecIndex == null)
             {
                 elecIndex = new ChiSoDienNuoc
@@ -230,7 +243,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                     ChiSoMoi = req.NewElectric,
                     MaGia = elecRate.MaGia,
                     NgayGhi = now,
-                    MaNhanVienGhi = staffId
+                    MaNhanVienGhi = validStaffId
                 };
                 _context.ChiSoDienNuocs.Add(elecIndex);
             }
@@ -239,7 +252,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                 elecIndex.ChiSoMoi = req.NewElectric;
                 elecIndex.NgayGhi = now;
                 elecIndex.MaGia = elecRate.MaGia;
-                if (!string.IsNullOrWhiteSpace(staffId)) elecIndex.MaNhanVienGhi = staffId;
+                if (!string.IsNullOrWhiteSpace(validStaffId)) elecIndex.MaNhanVienGhi = validStaffId;
             }
 
             if (waterIndex == null)
@@ -254,7 +267,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                     ChiSoMoi = req.NewWater,
                     MaGia = waterRate.MaGia,
                     NgayGhi = now,
-                    MaNhanVienGhi = staffId
+                    MaNhanVienGhi = validStaffId
                 };
                 _context.ChiSoDienNuocs.Add(waterIndex);
             }
@@ -263,7 +276,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                 waterIndex.ChiSoMoi = req.NewWater;
                 waterIndex.NgayGhi = now;
                 waterIndex.MaGia = waterRate.MaGia;
-                if (!string.IsNullOrWhiteSpace(staffId)) waterIndex.MaNhanVienGhi = staffId;
+                if (!string.IsNullOrWhiteSpace(validStaffId)) waterIndex.MaNhanVienGhi = validStaffId;
             }
 
             decimal usageElec = req.NewElectric - oldElec;
@@ -277,7 +290,7 @@ namespace Dormitory.Web.Features.Utilities.Services
             var monthEnd = period.AddMonths(1).AddDays(-1);
             var residentContracts = await _context.HopDongs
                 .Where(h => h.Giuong != null && h.Giuong.MaPhong == room.MaPhong &&
-                    h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy" &&
+                    h.TrangThai == "hieuLuc" &&
                     h.NgayBatDau <= monthEnd && h.NgayKetThuc >= period &&
                     (academicYear == null || (h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear)))
                 .ToListAsync();
@@ -312,7 +325,7 @@ namespace Dormitory.Web.Features.Utilities.Services
             }
 
             // Checkbox dịch vụ trong form ghi chỉ số phải tác động thật vào DangKyDichVu.
-            await SyncRoomServicesAsync(residentContracts, period, monthEnd, req.HasInternet, req.HasTrash, staffId, now);
+            await SyncRoomServicesAsync(residentContracts, period, monthEnd, req.HasInternet, req.HasTrash, validStaffId, now);
 
             await _context.SaveChangesAsync();
 
@@ -473,10 +486,10 @@ namespace Dormitory.Web.Features.Utilities.Services
             var monthEnd = period.AddMonths(1).AddDays(-1);
 
             // Đúng danh sách người ở dùng để chia tiền khi ghi chỉ số:
-            // hợp đồng phủ qua kỳ hóa đơn và chưa kết thúc/hủy.
+            // hợp đồng phủ qua kỳ hóa đơn và đang có hiệu lực.
             var residentContracts = await _context.HopDongs
                 .Where(h => h.Giuong != null && h.Giuong.MaPhong == roomBill.MaPhong &&
-                    h.TrangThai != "daKetThuc" && h.TrangThai != "daHuy" &&
+                    h.TrangThai == "hieuLuc" &&
                     h.NgayBatDau <= monthEnd && h.NgayKetThuc >= period &&
                     h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear)
                 .ToListAsync();

@@ -8,7 +8,7 @@ using Dormitory.Web.Shared.Middleware;
 
 namespace Dormitory.Web.Features.StudentPortal.Api
 {
-    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+    [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
     [SkipAcademicYearScope]
     [ApiController]
     [Route("api/thongbao")]

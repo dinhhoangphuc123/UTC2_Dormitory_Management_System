@@ -60,6 +60,10 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(RoleNames.Admin, RoleNames.QuanLy, RoleNames.KeToan));
     options.AddPolicy(RoleNames.AdminOrManagerPolicy, policy =>
         policy.RequireRole(RoleNames.Admin, RoleNames.QuanLy));
+    options.AddPolicy(RoleNames.ManagerOnlyPolicy, policy =>
+        policy.RequireRole(RoleNames.QuanLy));
+    options.AddPolicy(RoleNames.ManagerOrAccountantPolicy, policy =>
+        policy.RequireRole(RoleNames.QuanLy, RoleNames.KeToan));
     options.AddPolicy(RoleNames.StudentOnlyPolicy, policy =>
         policy.RequireRole(RoleNames.SinhVien));
 });

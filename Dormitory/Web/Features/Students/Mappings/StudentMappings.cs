@@ -17,7 +17,10 @@ namespace Dormitory.Web.Features.Students.Mappings
             var displayedContract = activeContract ?? selectedYearContract;
             var phong = displayedContract?.Giuong?.Phong;
             var toa = phong?.ToaNha;
-            var invoices = s.DanhSachHopDong?.SelectMany(h => h.DanhSachHoaDon).ToList() ?? [];
+            var invoices = s.DanhSachHopDong?
+                .SelectMany(h => h.DanhSachHoaDon)
+                .Where(i => i.TrangThai != "nhap" && i.TrangThai != "daHuy")
+                .ToList() ?? [];
             var debtAmount = invoices.Sum(i => Math.Max(
                 0,
                 i.DanhSachChiTietHoaDon.Sum(line => line.ThanhTien ?? line.SoLuong * line.DonGia) -

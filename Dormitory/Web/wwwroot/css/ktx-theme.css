@@ -198,7 +198,7 @@ table td {
 .page-title-banner .page-title-actions button .material-symbols-svg,
 .page-title-banner button .material-symbols-outlined,
 .page-title-banner button .material-symbols-svg {
-    color: #0b2a5b !important;
+    color: #0b2a5b !important; border-radius: 12px !important; font-weight: 600 !important;
     stroke: #0b2a5b !important;
 }
 
@@ -251,7 +251,7 @@ table td {
 .page-title-banner > div:last-child button:last-child {
     border-color: #fff !important;
     background-color: #fff !important;
-    color: #0b2a5b !important;
+    color: #0b2a5b !important; border-radius: 12px !important; font-weight: 600 !important;
 }
 
 @media (max-width: 639px) {
@@ -2434,7 +2434,7 @@ a:hover .lu-droplet .lu-droplet-droplet,
 [onclick]:hover .lu-droplet .lu-droplet-droplet,
 .group:hover .lu-droplet .lu-droplet-droplet,
 .cursor-pointer:hover .lu-droplet .lu-droplet-droplet {
-  animation: kf-lu-droplet-droplet 0.6s easeOut both !important;
+  animation: kf-lu-droplet-droplet 0.6s ease-out both !important;
 }
 
 
@@ -2469,6 +2469,279 @@ a:hover .lu-moon .lu-moon-shape,
 .hu-moon-0-1:hover .lu-moon-shape,
 button:hover .hu-moon-0-1 .lu-moon-shape {
   animation: kf-hu-moon-0-1-moon 0.8s cubic-bezier(0.4, 0, 0.2, 1) both !important;
+}
+
+/* ========================================================
+   UNIFIED ENTERPRISE UI LAYER (ALL ROLES, FORMS, MOTION & ICONS)
+   Đồng bộ bố cục cân đối, form/modal sang trọng, chuyển động
+   nhất quán và tiết chế icon trên toàn hệ thống.
+   ======================================================== */
+:root {
+  --ktx-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ktx-duration: 160ms;
+  --ktx-radius-card: 16px;
+  --ktx-radius-control: 10px;
+  --ktx-border-light: #e2e8f0;
+  --ktx-border-dark: #232b3b;
+  --ktx-focus-ring: 0 0 0 3px rgba(11, 42, 91, 0.14);
+}
+
+.dark {
+  --ktx-focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.22);
+}
+
+/* 1. Chuyển động & tương tác thống nhất (không giật/nhảy lộn xộn) */
+#mainContent button,
+#modalsContainer button,
+#mainContent a,
+#mainContent input,
+#mainContent select,
+#mainContent textarea,
+#modalsContainer input,
+#modalsContainer select,
+#modalsContainer textarea {
+  transition: background-color var(--ktx-duration) var(--ktx-ease),
+              border-color var(--ktx-duration) var(--ktx-ease),
+              color var(--ktx-duration) var(--ktx-ease),
+              box-shadow var(--ktx-duration) var(--ktx-ease),
+              opacity var(--ktx-duration) var(--ktx-ease) !important;
+}
+
+#mainContent .hover\:-translate-y-0\.5:hover,
+#mainContent .hover\:-translate-y-1:hover,
+#mainContent .hover\:scale-105:hover,
+#mainContent .hover\:scale-\[1\.02\]:hover {
+  transform: none !important;
+}
+
+#mainContent button:active:not(:disabled),
+#modalsContainer button:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+/* 2. Đồng bộ bố cục Form & Input (cân đối, đối xứng, dễ nhập liệu) */
+#mainContent form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]),
+#mainContent form select,
+#modalsContainer input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]),
+#modalsContainer select {
+  min-height: 42px;
+  border-radius: var(--ktx-radius-control);
+  border-color: #cbd5e1;
+}
+
+.dark #mainContent form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]),
+.dark #mainContent form select,
+.dark #modalsContainer input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]),
+.dark #modalsContainer select {
+  border-color: #2d3748;
+}
+
+#mainContent form textarea,
+#modalsContainer textarea {
+  min-height: 92px;
+  border-radius: var(--ktx-radius-control);
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+#mainContent form input:focus,
+#mainContent form select:focus,
+#mainContent form textarea:focus,
+#modalsContainer input:focus,
+#modalsContainer select:focus,
+#modalsContainer textarea:focus {
+  outline: none !important;
+  border-color: var(--color-primary-container) !important;
+  box-shadow: var(--ktx-focus-ring) !important;
+}
+
+.dark #mainContent form input:focus,
+.dark #mainContent form select:focus,
+.dark #mainContent form textarea:focus,
+.dark #modalsContainer input:focus,
+.dark #modalsContainer select:focus,
+.dark #modalsContainer textarea:focus {
+  border-color: #60a5fa !important;
+}
+
+#mainContent form label,
+#modalsContainer label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* 3. Đồng bộ Modal (khung, header, body, footer cân xứng 2 bên) */
+#modalsContainer > div > div:not(#contractPrintModalShell) {
+  border-radius: var(--ktx-radius-card);
+  box-shadow: 0 24px 48px -12px rgba(11, 21, 35, 0.28);
+}
+
+#modalsContainer form .grid {
+  align-items: start;
+}
+
+#modalsContainer button[type="submit"],
+#modalsContainer button[type="button"] {
+  min-height: 38px;
+  border-radius: var(--ktx-radius-control);
+}
+
+/* 4. Đồng bộ khoảng cách & tỷ lệ Card / Bảng */
+#mainContent table thead th {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+#mainContent table tbody tr {
+  transition: background-color var(--ktx-duration) var(--ktx-ease);
+}
+
+/* 5. Tiết chế & căn chỉnh đồng đều Icon trên toàn hệ thống */
+#mainContent button .material-symbols-outlined,
+#modalsContainer button .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+#mainContent .page-title-banner button .material-symbols-outlined {
+  font-size: 19px;
+}
+
+/* 6. Đồng bộ độ tương phản & màu chữ hài hòa, dịu mắt (toàn bộ trang & role) */
+#mainContent,
+#modalsContainer {
+  color: #1e293b;
+}
+
+.dark #mainContent,
+.dark #modalsContainer {
+  color: #e2e8f0;
+}
+
+/* Chế độ sáng: nâng chữ nhãn quá nhạt (slate-400) lên mức đọc rõ WCAG AA, dịu màu xanh gắt (trừ banner navy) */
+html:not(.dark) #mainContent :not(.page-title-banner) > .text-slate-400,
+html:not(.dark) #mainContent .text-slate-400:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-slate-400 {
+  color: #64748b !important;
+}
+
+html:not(.dark) #mainContent .text-slate-500:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-slate-500 {
+  color: #475569 !important;
+}
+
+html:not(.dark) #mainContent .text-slate-900:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-slate-900 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #mainContent .text-blue-600:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-blue-600,
+html:not(.dark) #mainContent .text-blue-500:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-blue-500 {
+  color: #0b2a5b !important;
+}
+
+html:not(.dark) #mainContent .text-emerald-600:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-emerald-600 {
+  color: #047857 !important;
+}
+
+html:not(.dark) #mainContent .text-amber-600:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-amber-600 {
+  color: #b45309 !important;
+}
+
+html:not(.dark) #mainContent .text-red-600:not(.page-title-banner *),
+html:not(.dark) #modalsContainer .text-red-600 {
+  color: #b91c1c !important;
+}
+
+/* Chế độ tối: dịu độ chói chữ trắng và giữ rõ chữ phụ */
+.dark #mainContent .text-slate-400:not(.page-title-banner *),
+.dark #modalsContainer .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.dark #mainContent .text-slate-300:not(.page-title-banner *),
+.dark #modalsContainer .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+.dark #mainContent .text-white:not(.page-title-banner *):not(button *),
+.dark #modalsContainer .text-white:not(button *) {
+  color: #f1f5f9 !important;
+}
+
+/* Giữ nguyên độ nét cao cho chữ trên banner navy ở mọi trang */
+html #mainContent .page-title-banner h1,
+html #mainContent .page-title-banner h2 {
+  color: #ffffff !important;
+}
+
+html #mainContent .page-title-banner p {
+  color: #dbeafe !important;
+}
+
+/* 7. Đồng bộ Chế độ Sáng / Tối (Dark Mode) toàn bộ trang và tất cả các role */
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* Giữ banner tiêu đề Navy nổi bật, có chiều sâu nhẹ và nút trên banner luôn sắc nét ở cả chế độ sáng & tối */
+.dark .page-title-banner {
+  background: linear-gradient(135deg, #0b2a5b 0%, #10356e 100%) !important;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  box-shadow: 0 8px 24px -6px rgba(2, 6, 23, 0.55);
+}
+
+.dark .page-title-banner > div:last-child button {
+  background-color: #ffffff !important;
+  color: #0b2a5b !important;
+  border-color: #ffffff !important;
+}
+
+.dark .page-title-banner > div:last-child button:hover {
+  background-color: #eff6ff !important;
+}
+
+/* Đồng bộ thanh cuộn ở chế độ tối */
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.65);
+}
+
+/* Tự động nâng màu chữ xanh đậm #0B2A5B sang xanh sáng dễ đọc trên nền tối */
+.dark #mainContent .text-\[\#0B2A5B\]:not(.page-title-banner *):not(button),
+.dark #mainContent .text-\[\#0b2a5b\]:not(.page-title-banner *):not(button),
+.dark #modalsContainer .text-\[\#0B2A5B\]:not(button),
+.dark #modalsContainer .text-\[\#0b2a5b\]:not(button),
+.dark #commandPaletteContainer .text-\[\#0B2A5B\]:not(button) {
+  color: #60a5fa !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Chế độ in văn bản hợp đồng A4 trực tiếp */

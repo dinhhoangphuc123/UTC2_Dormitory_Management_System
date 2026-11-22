@@ -186,23 +186,23 @@ window.KtxStudentViews = (function () {
             blue: 'text-[#0B2A5B] dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 border-blue-200/60 dark:border-blue-900/40',
             green: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-900/40',
             amber: 'text-amber-700 dark:text-amber-400 bg-amber-50/80 dark:bg-amber-950/40 border-amber-200/60 dark:border-amber-900/40',
-            red: 'text-rose-700 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 border-rose-200/60 dark:border-rose-900/40',
+            red: 'text-red-700 dark:text-red-400 bg-red-50/80 dark:bg-red-950/40 border-red-200/60 dark:border-red-900/40',
             slate: 'text-slate-700 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800'
         }[tone] || 'text-[#0B2A5B] dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 border-blue-200/60 dark:border-blue-900/40';
 
         return `
-            <div class="group relative rounded-2xl bg-white dark:bg-[#111827] p-5 border border-slate-200/80 dark:border-[#232B3B] shadow-xs hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between min-h-[115px]">
+            <div class="group relative h-full rounded-2xl bg-white dark:bg-[#111827] p-5 border border-slate-200/80 dark:border-[#232B3B] shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between min-h-[124px]">
                 <div class="flex items-center justify-between gap-3">
-                    <span class="text-[11px] font-bold tracking-wider uppercase text-slate-400 dark:text-slate-500 truncate">${esc(opts.label)}</span>
+                    <span class="text-xs font-bold tracking-wider uppercase text-slate-700 dark:text-slate-200 truncate">${esc(opts.label)}</span>
                     ${opts.icon ? `
                         <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${toneStyles}">
                             <span class="material-symbols-outlined text-[19px]">${opts.icon}</span>
                         </div>
                     ` : ''}
                 </div>
-                <div class="mt-3 flex items-baseline justify-between gap-2">
-                    <span class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">${esc(opts.value)}</span>
-                    ${opts.footer ? `<span class="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate max-w-[130px] text-right">${esc(opts.footer)}</span>` : ''}
+                <div class="mt-3 flex flex-col gap-1">
+                    <span class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums whitespace-nowrap truncate">${esc(opts.value)}</span>
+                    ${opts.footer ? `<span class="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">${esc(opts.footer)}</span>` : ''}
                 </div>
             </div>
         `;
@@ -257,7 +257,7 @@ window.KtxStudentViews = (function () {
             case 'hethan':
             case 'het_han':
             case 'hethanthanhtoan':
-                bg = 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800/60';
+                bg = 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/60';
                 text = 'Hết hạn thanh toán';
                 break;
             case 'bituchoi':
@@ -269,7 +269,7 @@ window.KtxStudentViews = (function () {
             case 'dathanhtoan':
             case 'dathanhtoanchonhanphong':
             case 'dathanhtoanchuanhanphong':
-                bg = 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800/60';
+                bg = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60';
                 text = 'Đã thanh toán (Chờ nhận phòng)';
                 break;
             case 'hoantat':
@@ -311,18 +311,72 @@ window.KtxStudentViews = (function () {
         return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${bg}">${esc(text)}</span>`;
     }
 
+    function wrapStudentContainer(rawContainer) {
+        if (!rawContainer || rawContainer.__ktxWrapped) return rawContainer;
+        return new Proxy(rawContainer, {
+            get(target, prop) {
+                if (prop === '__ktxWrapped') return true;
+                const val = target[prop];
+                return typeof val === 'function' ? val.bind(target) : val;
+            },
+            set(target, prop, value) {
+                if (prop === 'innerHTML') {
+                    updateStudentContainer(target, value);
+                    return true;
+                }
+                target[prop] = value;
+                return true;
+            }
+        });
+    }
+
+    function updateStudentContainer(container, html) {
+        if (!container) return;
+        const tab = studentState.activeTab || 'sv-tong-quan';
+        const isSameTab = container.dataset.renderedTab === tab && container.children.length > 0 && !container.querySelector('.animate-pulse');
+        container.dataset.renderedTab = tab;
+
+        if (isSameTab && window.KtxApp && typeof window.KtxApp.preserveSearchFocusAndUpdate === 'function') {
+            window.KtxApp.preserveSearchFocusAndUpdate(container, html);
+        } else {
+            if (window.KtxApp && typeof window.KtxApp.preserveSearchFocusAndUpdate === 'function') {
+                container.innerHTML = '';
+                window.KtxApp.preserveSearchFocusAndUpdate(container, html);
+            } else {
+                container.innerHTML = html;
+            }
+            const entered = container.firstElementChild;
+            if (entered) {
+                entered.classList.add('page-content-enter');
+                entered.addEventListener('animationend', () => entered.classList.remove('page-content-enter'), { once: true });
+            }
+        }
+    }
+
     /**
-     * Standard view header
+     * Standard view header — đồng bộ banner navy .page-title-banner với các vai trò khác
      */
-    function renderViewHeader(title, subtitle, actionsHtml = '') {
+    function renderViewHeader(title, subtitle, actionsHtml = '', options = {}) {
+        const showRefresh = options.showRefresh !== false;
+        const refreshTabArg = options.refreshTab ? `'${esc(options.refreshTab)}'` : '';
+        const refreshButtonHtml = showRefresh ? `
+            <button type="button" onclick="KtxStudentViews.retryLoadTab(${refreshTabArg})" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-sm hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1.5 border border-white focus:outline-none focus:ring-2 focus:ring-blue-300" aria-label="Làm mới dữ liệu trang">
+                <span class="material-symbols-outlined text-[20px] text-[#0b2a5b]">refresh</span>
+                <span>Làm mới</span>
+            </button>
+        ` : '';
+        const combinedActions = `${actionsHtml || ''}${refreshButtonHtml}`;
+
         return `
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 mb-6 border-b border-slate-200/70 dark:border-slate-800/80">
-                <div class="min-w-0">
-                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white truncate">${esc(title)}</h1>
-                    ${subtitle ? `<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">${esc(subtitle)}</p>` : ''}
+            <section class="page-title-banner w-full relative overflow-hidden" aria-label="${esc(title)}">
+                <div class="dashboard-title-content relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-white font-headline truncate">${esc(title)}</h1>
+                        ${subtitle ? `<p class="text-blue-100 text-sm mt-0.5 truncate">${esc(subtitle)}</p>` : ''}
+                    </div>
+                    ${combinedActions ? `<div class="page-title-actions flex items-center gap-2.5 shrink-0 flex-wrap">${combinedActions}</div>` : ''}
                 </div>
-                ${actionsHtml ? `<div class="flex items-center gap-2 shrink-0">${actionsHtml}</div>` : ''}
-            </div>
+            </section>
         `;
     }
 
@@ -332,7 +386,7 @@ window.KtxStudentViews = (function () {
     function renderLoadingSkeleton(title, subtitle) {
         return `
             <div class="space-y-6 animate-pulse page-content-enter">
-                ${renderViewHeader(title, subtitle)}
+                ${renderViewHeader(title, subtitle, '', { showRefresh: false })}
                 <div class="h-32 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="h-28 bg-white dark:bg-[#121826] rounded-2xl border border-slate-200/80 dark:border-[#232B3B]"></div>
@@ -521,13 +575,13 @@ window.KtxStudentViews = (function () {
             case 'hetHan':
             case 'biTuChoi':
                 return `
-                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-transparent dark:from-rose-950/40 dark:via-rose-900/10 border border-rose-300/80 dark:border-rose-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent dark:from-red-950/40 dark:via-red-900/10 border border-red-300/80 dark:border-red-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
                         <div class="flex items-center gap-4 min-w-0">
-                            <div class="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <div class="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                                 <span class="material-symbols-outlined text-[24px]">${state === 'hetHan' ? 'event_busy' : 'cancel'}</span>
                             </div>
                             <div class="min-w-0">
-                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-400 tracking-wide">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-700 dark:text-red-400 tracking-wide">
                                     ${state === 'hetHan' ? 'HẾT HẠN GIỮ CHỖ' : 'KHÔNG ĐƯỢC DUYỆT'}
                                 </span>
                                 <h2 class="text-base font-bold text-slate-900 dark:text-white mt-1">
@@ -550,13 +604,13 @@ window.KtxStudentViews = (function () {
 
             case 'daThanhToanChoNhanPhong':
                 return `
-                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-500/10 via-teal-500/5 to-transparent dark:from-teal-950/40 dark:via-teal-900/10 border border-teal-300/80 dark:border-teal-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+                    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-950/40 dark:via-emerald-900/10 border border-emerald-300/80 dark:border-emerald-800/50 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
                         <div class="flex items-center gap-4 min-w-0">
-                            <div class="w-12 h-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                                 <span class="material-symbols-outlined text-[24px]">verified</span>
                             </div>
                             <div class="min-w-0">
-                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-800 dark:text-teal-300 tracking-wide">ĐÃ GIỮ CHỖ</span>
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 tracking-wide">ĐÃ GIỮ CHỖ</span>
                                 <h2 class="text-base font-bold text-slate-900 dark:text-white mt-1">Thanh toán hoàn tất — Chờ nhận phòng</h2>
                             </div>
                         </div>
@@ -627,10 +681,11 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderTongQuan(container) {
+        container = wrapStudentContainer(container);
         clearTimers();
         if (!studentState.dashboard && !studentState.loading['sv-tong-quan']) {
             studentState.loading['sv-tong-quan'] = true;
-            container.innerHTML = renderLoadingSkeleton('Tổng quan Sinh viên', 'Đang nạp dữ liệu trung tâm nội trú...');
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderLoadingSkeleton('Tổng quan Sinh viên', 'Đang nạp dữ liệu trung tâm nội trú...'); }
             await loadDashboardData();
             studentState.loading['sv-tong-quan'] = false;
         }
@@ -652,7 +707,7 @@ window.KtxStudentViews = (function () {
         const heroHtml = renderDashboardHero(d);
 
         const metricCards = `
-            <div class="cursor-pointer transition-transform hover:-translate-y-0.5" onclick="KtxApp.navigate('sv-hoa-don')">
+            <div class="h-full cursor-pointer" onclick="KtxApp.navigate('sv-hoa-don')">
                 ${renderMetricCard({
                     label: 'CẦN THANH TOÁN',
                     value: fmtVND(d.amountDue),
@@ -661,7 +716,7 @@ window.KtxStudentViews = (function () {
                     footer: d.amountDue > 0 ? (d.nextDueDate ? `Hạn nộp: ${esc(d.nextDueDate)}` : 'Khoản nợ hiện tại') : 'Không có nợ tồn đọng'
                 })}
             </div>
-            <div class="cursor-pointer transition-transform hover:-translate-y-0.5" onclick="KtxApp.navigate('sv-hoa-don')">
+            <div class="h-full cursor-pointer" onclick="KtxApp.navigate('sv-hoa-don')">
                 ${renderMetricCard({
                     label: 'HÓA ĐƠN CÒN NỢ',
                     value: String(d.unpaidInvoiceCount || 0),
@@ -670,7 +725,7 @@ window.KtxStudentViews = (function () {
                     footer: d.unpaidInvoiceCount > 0 ? 'Cần thanh toán sớm' : 'Đã hoàn tất thanh toán'
                 })}
             </div>
-            <div class="cursor-pointer transition-transform hover:-translate-y-0.5" onclick="KtxApp.navigate('sv-thong-bao')">
+            <div class="h-full cursor-pointer" onclick="KtxApp.navigate('sv-thong-bao')">
                 ${renderMetricCard({
                     label: 'THÔNG BÁO CHƯA ĐỌC',
                     value: String(d.unreadNotificationCount || 0),
@@ -679,7 +734,7 @@ window.KtxStudentViews = (function () {
                     footer: 'Từ Ban Quản lý KTX'
                 })}
             </div>
-            <div class="cursor-pointer transition-transform hover:-translate-y-0.5" onclick="KtxApp.navigate('sv-sua-chua')">
+            <div class="h-full cursor-pointer" onclick="KtxApp.navigate('sv-sua-chua')">
                 ${renderMetricCard({
                     label: 'PHIẾU SỬA CHỮA ĐANG MỞ',
                     value: String(d.openMaintenanceCount || 0),
@@ -695,12 +750,7 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                ${renderViewHeader('Tổng quan Sinh viên', 'Trung tâm theo dõi trạng thái nội trú, hóa đơn, thông báo và hỗ trợ KTX', `
-                    <button type="button" onclick="KtxStudentViews.retryLoadTab('sv-tong-quan')" class="px-3 py-2 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs">
-                        <span class="material-symbols-outlined text-[17px]">refresh</span>
-                        <span>Làm mới</span>
-                    </button>
-                `)}
+                ${renderViewHeader('Tổng quan Sinh viên', 'Trung tâm theo dõi trạng thái nội trú, hóa đơn, thông báo và hỗ trợ KTX')}
 
                 <!-- Hero Registration State Banner -->
                 ${heroHtml}
@@ -825,9 +875,10 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderHoSo(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.profile && !studentState.loading['sv-ho-so']) {
             studentState.loading['sv-ho-so'] = true;
-            container.innerHTML = renderLoadingSkeleton('Hồ sơ của tôi', 'Đang nạp thông tin cá nhân...');
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderLoadingSkeleton('Hồ sơ của tôi', 'Đang nạp thông tin cá nhân...'); }
             await loadProfileData();
             studentState.loading['sv-ho-so'] = false;
         }
@@ -842,12 +893,7 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                ${renderViewHeader('Hồ sơ của tôi', 'Thông tin định danh sinh viên, thông tin liên hệ và người thân', `
-                    <button type="button" onclick="KtxStudentViews.retryLoadTab('sv-ho-so')" class="px-3 py-2 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs">
-                        <span class="material-symbols-outlined text-[17px]">refresh</span>
-                        <span>Làm mới</span>
-                    </button>
-                `)}
+                ${renderViewHeader('Hồ sơ của tôi', 'Thông tin định danh sinh viên, thông tin liên hệ và người thân')}
 
                 <!-- Top: Profile Header Card -->
                 <div class="p-6 sm:p-7 rounded-2xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
@@ -883,58 +929,32 @@ window.KtxStudentViews = (function () {
                             <span class="material-symbols-outlined text-[20px] text-[#0B2A5B] dark:text-blue-400">badge</span>
                             <h3 class="text-sm font-bold text-slate-900 dark:text-white">Thông tin định danh</h3>
                         </div>
-                        <span class="text-[11px] text-slate-400 italic">Chỉ đọc • Bấm điều chỉnh để đề xuất BQL sửa</span>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
-                            <div>
-                                <span class="text-slate-400 block text-[11px]">Họ và tên</span>
-                                <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.hoTen)}</span>
-                            </div>
-                            <button type="button" onclick="KtxStudentViews.openChangeRequestModal('hoTen', 'Họ và tên', '${esc(p.hoTen)}')" class="text-[#0B2A5B] dark:text-blue-400 hover:underline font-semibold text-[11px]">
-                                Điều chỉnh
-                            </button>
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <span class="text-slate-400 block text-[11px]">Họ và tên</span>
+                            <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.hoTen)}</span>
                         </div>
 
-                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
-                            <div>
-                                <span class="text-slate-400 block text-[11px]">Ngày sinh</span>
-                                <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.ngaySinh)}</span>
-                            </div>
-                            <button type="button" onclick="KtxStudentViews.openChangeRequestModal('ngaySinh', 'Ngày sinh', '${esc(p.ngaySinh)}')" class="text-[#0B2A5B] dark:text-blue-400 hover:underline font-semibold text-[11px]">
-                                Điều chỉnh
-                            </button>
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <span class="text-slate-400 block text-[11px]">Ngày sinh</span>
+                            <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.ngaySinh)}</span>
                         </div>
 
-                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
-                            <div>
-                                <span class="text-slate-400 block text-[11px]">Giới tính</span>
-                                <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${p.gioiTinh === 'nam' ? 'Nam' : 'Nữ'}</span>
-                            </div>
-                            <button type="button" onclick="KtxStudentViews.openChangeRequestModal('gioiTinh', 'Giới tính', '${esc(p.gioiTinh)}')" class="text-[#0B2A5B] dark:text-blue-400 hover:underline font-semibold text-[11px]">
-                                Điều chỉnh
-                            </button>
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <span class="text-slate-400 block text-[11px]">Giới tính</span>
+                            <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${String(p.gioiTinh || '').toLowerCase() === 'nam' ? 'Nam' : 'Nữ'}</span>
                         </div>
 
-                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
-                            <div>
-                                <span class="text-slate-400 block text-[11px]">Số CCCD / Mã định danh</span>
-                                <span class="font-mono font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(maskCccd(p.cccd))}</span>
-                            </div>
-                            <button type="button" onclick="KtxStudentViews.openChangeRequestModal('cccd', 'Số CCCD', '${esc(p.cccd)}')" class="text-[#0B2A5B] dark:text-blue-400 hover:underline font-semibold text-[11px]">
-                                Điều chỉnh
-                            </button>
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <span class="text-slate-400 block text-[11px]">Số CCCD / Mã định danh</span>
+                            <span class="font-mono font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(maskCccd(p.cccd))}</span>
                         </div>
 
-                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] flex items-center justify-between">
-                            <div>
-                                <span class="text-slate-400 block text-[11px]">Mã lớp sinh viên</span>
-                                <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.maLop)}</span>
-                            </div>
-                            <button type="button" onclick="KtxStudentViews.openChangeRequestModal('maLop', 'Mã lớp', '${esc(p.maLop)}')" class="text-[#0B2A5B] dark:text-blue-400 hover:underline font-semibold text-[11px]">
-                                Điều chỉnh
-                            </button>
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
+                            <span class="text-slate-400 block text-[11px]">Mã lớp sinh viên</span>
+                            <span class="font-bold text-slate-900 dark:text-white text-sm mt-0.5 block">${esc(p.maLop)}</span>
                         </div>
 
                         <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
@@ -1118,10 +1138,11 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderDotDangKy(container) {
+        container = wrapStudentContainer(container);
         clearTimers();
         if (!studentState.rounds.length && !studentState.loading['sv-dot-dang-ky']) {
             studentState.loading['sv-dot-dang-ky'] = true;
-            container.innerHTML = renderLoadingSkeleton('Đợt đăng ký Nội trú', 'Đang nạp danh sách đợt xét tuyển...');
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderLoadingSkeleton('Đợt đăng ký Nội trú', 'Đang nạp danh sách đợt xét tuyển...'); }
             await loadRoundsData();
             studentState.loading['sv-dot-dang-ky'] = false;
         }
@@ -1145,12 +1166,7 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                ${renderViewHeader('Đợt đăng ký Nội trú', 'Tra cứu danh sách đợt đăng ký, tiêu chuẩn xét duyệt và phòng còn trống', `
-                    <button type="button" onclick="KtxStudentViews.retryLoadTab('sv-dot-dang-ky')" class="px-3 py-2 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs">
-                        <span class="material-symbols-outlined text-[17px]">refresh</span>
-                        <span>Làm mới</span>
-                    </button>
-                `)}
+                ${renderViewHeader('Đợt đăng ký Nội trú', 'Tra cứu danh sách đợt đăng ký, tiêu chuẩn xét duyệt và phòng còn trống')}
 
                 <!-- Filter Tabs -->
                 <div class="flex items-center gap-2 border-b border-slate-200/60 dark:border-[#232B3B] pb-2 overflow-x-auto">
@@ -1756,6 +1772,7 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderDangKyForm(container, roundId) {
+        container = wrapStudentContainer(container);
         if (roundId && roundId !== studentState.regRoundId) {
             studentState.regRoundId = roundId;
             studentState.regStep = 1;
@@ -1771,7 +1788,7 @@ window.KtxStudentViews = (function () {
         }
 
         if (studentState.loading['sv-dang-ky']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -2061,7 +2078,7 @@ window.KtxStudentViews = (function () {
                                                         </div>
 
                                                         ${!isSelectable ? `
-                                                            <div class="mt-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200">
+                                                            <div class="mt-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200">
                                                                 <span class="material-symbols-outlined text-[13px]">block</span>
                                                                 <span>${esc(r.unselectableReason || 'Không thể chọn')}</span>
                                                             </div>
@@ -2091,7 +2108,7 @@ window.KtxStudentViews = (function () {
                                                 const isSelected = b.id === studentState.selectedBedId;
                                                 const canPick = b.selectable === true;
                                                 const cardClass = isOccupied
-                                                    ? 'border-rose-200 bg-rose-50/80 dark:border-rose-900/50 dark:bg-rose-950/25 cursor-not-allowed'
+                                                    ? 'border-red-200 bg-red-50/80 dark:border-red-900/50 dark:bg-red-950/25 cursor-not-allowed'
                                                     : isPending
                                                         ? 'border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/25 cursor-not-allowed'
                                                         : isMaint
@@ -2099,7 +2116,7 @@ window.KtxStudentViews = (function () {
                                                             : isSelected
                                                                 ? 'border-[#0B2A5B] ring-2 ring-[#0B2A5B]/30 bg-blue-50/60 dark:border-blue-500 dark:bg-blue-950/30 cursor-pointer'
                                                                 : 'border-emerald-200 bg-white dark:border-emerald-900/50 dark:bg-slate-800/40 hover:border-emerald-400 cursor-pointer';
-                                                const iconClass = isOccupied ? 'text-rose-500' : isPending ? 'text-amber-500' : isMaint ? 'text-slate-400' : 'text-emerald-600';
+                                                const iconClass = isOccupied ? 'text-red-500' : isPending ? 'text-amber-500' : isMaint ? 'text-slate-400' : 'text-emerald-600';
                                                 const icon = isMaint ? 'construction' : isOccupied ? 'person' : isPending ? 'hourglass_top' : 'bed';
 
                                                 return `
@@ -2126,7 +2143,7 @@ window.KtxStudentViews = (function () {
 
                                         <div class="flex flex-wrap items-center gap-3 pt-1 text-[10px] text-slate-500">
                                             <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Giường trống</span>
-                                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span>Đang ở</span>
+                                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>Đang ở</span>
                                             <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Đã đăng ký</span>
                                             <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>Bảo trì</span>
                                         </div>
@@ -2461,12 +2478,13 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderDonCuaToi(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.applications.length && !studentState.errors['sv-don-cua-toi']) {
             await loadApplicationsData();
         }
 
         if (studentState.loading['sv-don-cua-toi']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -2612,7 +2630,7 @@ window.KtxStudentViews = (function () {
                                                             ${awaitingPay ? `
                                                                 <button type="button" role="menuitem"
                                                                     onclick="KtxStudentViews.closeAppActionMenus(); KtxApp.navigate('sv-thanh-toan?appId=${esc(app.id)}')"
-                                                                    class="w-full px-3 py-2 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 flex items-center gap-2 transition-colors text-left">
+                                                                    class="w-full px-3 py-2 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-2 transition-colors text-left">
                                                                     <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
                                                                     <span>Thanh toán ngay</span>
                                                                 </button>
@@ -2712,7 +2730,7 @@ window.KtxStudentViews = (function () {
                         ` : ''}
 
                         ${isExpired ? `
-                            <div class="p-3.5 rounded-xl bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 text-xs">
+                            <div class="p-3.5 rounded-xl bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 text-xs">
                                 Đơn đăng ký đã bị hủy tự động do quá thời hạn 24 giờ mà không hoàn tất nộp phí giữ chỗ.
                             </div>
                         ` : ''}
@@ -2784,11 +2802,11 @@ window.KtxStudentViews = (function () {
                                 <div class="relative">
                                     <span class="absolute -left-8 top-0.5 w-7 h-7 rounded-full ${
                                         isExpired
-                                            ? 'bg-rose-600 text-white'
+                                            ? 'bg-red-600 text-white'
                                             : stepIdx >= 3
                                                 ? 'bg-emerald-600 text-white'
                                                 : stepIdx === 2
-                                                    ? 'bg-orange-500 text-white animate-pulse'
+                                                    ? 'bg-amber-500 text-white animate-pulse'
                                                     : 'bg-slate-200 text-slate-400 dark:bg-slate-700'
                                     } flex items-center justify-center ring-4 ring-white dark:ring-[#121826]">
                                         <span class="material-symbols-outlined text-[15px]">
@@ -2822,7 +2840,7 @@ window.KtxStudentViews = (function () {
                     <!-- Drawer Footer Actions -->
                     <div class="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
                         ${awaitingPay ? `
-                            <button type="button" onclick="KtxStudentViews.closeAppDrawer(); KtxApp.navigate('sv-thanh-toan?appId=${esc(app.id)}')" class="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all">
+                            <button type="button" onclick="KtxStudentViews.closeAppDrawer(); KtxApp.navigate('sv-thanh-toan?appId=${esc(app.id)}')" class="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all">
                                 <span class="material-symbols-outlined text-[18px]">qr_code_2</span>
                                 <span>Thanh toán giữ chỗ ngay</span>
                             </button>
@@ -2881,6 +2899,7 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderThanhToan(container, appId) {
+        container = wrapStudentContainer(container);
         clearTimers();
 
         if (appId && appId !== studentState.paymentAppId) {
@@ -2893,7 +2912,7 @@ window.KtxStudentViews = (function () {
         }
 
         if (studentState.loading['sv-thanh-toan']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -3183,7 +3202,7 @@ window.KtxStudentViews = (function () {
 
             // Warning style if under 3 hours
             if (diff < 10800 && card) {
-                card.className = 'bg-rose-50 dark:bg-rose-950/40 rounded-2xl p-5 shadow-xs border border-rose-300 dark:border-rose-800 flex items-center justify-between text-rose-700 animate-pulse';
+                card.className = 'bg-red-50 dark:bg-red-950/40 rounded-2xl p-5 shadow-xs border border-red-300 dark:border-red-800 flex items-center justify-between text-red-700 animate-pulse';
             }
 
             diff--;
@@ -3196,6 +3215,10 @@ window.KtxStudentViews = (function () {
 
     function startPaymentPolling(appId) {
         if (!appId) return;
+        if (studentState.paymentPollTimer) {
+            clearInterval(studentState.paymentPollTimer);
+            studentState.paymentPollTimer = null;
+        }
 
         const timer = setInterval(async () => {
             if (studentState.activeTab !== 'sv-thanh-toan') {
@@ -3217,6 +3240,7 @@ window.KtxStudentViews = (function () {
             }
         }, 15000);
 
+        studentState.paymentPollTimer = timer;
         studentState.activeIntervals.push(timer);
     }
 
@@ -3305,12 +3329,13 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderHopDong(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.contracts.length && !studentState.errors['sv-hop-dong']) {
             await loadContractsData();
         }
 
         if (studentState.loading['sv-hop-dong']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -3571,12 +3596,13 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderHoaDon(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.invoices.length && !studentState.errors['sv-hoa-don']) {
             await loadInvoicesData();
         }
 
         if (studentState.loading['sv-hoa-don']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -3663,13 +3689,13 @@ window.KtxStudentViews = (function () {
                                                 <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                                                     <td class="p-3.5 font-mono font-bold text-[#0B2A5B] dark:text-blue-400">${esc(inv.maHoaDon)}</td>
                                                     <td class="p-3.5 font-semibold text-slate-800 dark:text-white">Tháng ${inv.thang}/${inv.nam}</td>
-                                                    <td class="p-3.5 text-rose-600 font-semibold">${esc(inv.hanThanhToan)}</td>
+                                                    <td class="p-3.5 text-red-600 font-semibold">${esc(inv.hanThanhToan)}</td>
                                                     <td class="p-3.5 text-right font-semibold">${fmtVND(inv.tongTien)}</td>
                                                     <td class="p-3.5 text-right text-slate-500">${fmtVND(inv.daThanhToan)}</td>
-                                                    <td class="p-3.5 text-right font-bold text-rose-600">${fmtVND(remaining)}</td>
+                                                    <td class="p-3.5 text-right font-bold text-red-600">${fmtVND(remaining)}</td>
                                                     <td class="p-3.5 text-center whitespace-nowrap">${proofBadge}</td>
                                                     <td class="p-3.5 text-right">
-                                                        <button type="button" onclick="KtxStudentViews.openInvoicePaymentModal('${esc(inv.id)}')" class="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs shadow-2xs inline-flex items-center gap-1 transition-all">
+                                                        <button type="button" onclick="KtxStudentViews.openInvoicePaymentModal('${esc(inv.id)}')" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-2xs inline-flex items-center gap-1 transition-all">
                                                             <span class="material-symbols-outlined text-[15px]">qr_code_2</span>
                                                             <span>Thanh toán</span>
                                                         </button>
@@ -3751,7 +3777,7 @@ window.KtxStudentViews = (function () {
                                                 <th class="p-3 text-right font-bold text-blue-700">Tiêu thụ điện</th>
                                                 <th class="p-3 text-right">Nước cũ (m³)</th>
                                                 <th class="p-3 text-right">Nước mới (m³)</th>
-                                                <th class="p-3 text-right font-bold text-teal-700">Tiêu thụ nước</th>
+                                                <th class="p-3 text-right font-bold text-emerald-700">Tiêu thụ nước</th>
                                                 <th class="p-3">Ngày ghi</th>
                                             </tr>
                                         </thead>
@@ -3764,7 +3790,7 @@ window.KtxStudentViews = (function () {
                                                     <td class="p-3 text-right font-bold text-blue-700 dark:text-blue-400">${m.dienTieuThu} kWh</td>
                                                     <td class="p-3 text-right text-slate-500">${m.chiSoNuocCu}</td>
                                                     <td class="p-3 text-right text-slate-500">${m.chiSoNuocMoi}</td>
-                                                    <td class="p-3 text-right font-bold text-teal-700 dark:text-teal-400">${m.nuocTieuThu} m³</td>
+                                                    <td class="p-3 text-right font-bold text-emerald-700 dark:text-emerald-400">${m.nuocTieuThu} m³</td>
                                                     <td class="p-3 text-slate-400">${esc(m.ngayGhi || '—')}</td>
                                                 </tr>
                                             `).join('')}
@@ -3790,7 +3816,7 @@ window.KtxStudentViews = (function () {
                                         let badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Chưa đăng ký</span>';
                                         if (s.status === 'dangDung') badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">Đang sử dụng</span>';
                                         else if (s.status === 'choDuyet') badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">Chờ BQL duyệt</span>';
-                                        else if (s.status === 'daTuChoi') badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Đã từ chối</span>';
+                                        else if (s.status === 'daTuChoi') badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">Đã từ chối</span>';
                                         const canCancel = (s.status === 'dangDung' || s.status === 'choDuyet') && s.registrationId;
                                         return `
                                         <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B] space-y-2 text-xs flex flex-col">
@@ -3812,10 +3838,10 @@ window.KtxStudentViews = (function () {
                                                     <span>${esc(s.ngayBatDau)}</span>
                                                 </div>
                                             ` : ''}
-                                            ${s.status === 'daTuChoi' && s.lyDoTuChoi ? `<p class="text-[10px] text-rose-500">Lý do từ chối: ${esc(s.lyDoTuChoi)}</p>` : ''}
+                                            ${s.status === 'daTuChoi' && s.lyDoTuChoi ? `<p class="text-[10px] text-red-500">Lý do từ chối: ${esc(s.lyDoTuChoi)}</p>` : ''}
                                             <div class="pt-1 mt-auto">
                                                 ${canCancel ? `
-                                                    <button type="button" onclick="KtxStudentViews.cancelServiceRegistration(${s.registrationId})" class="w-full py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-semibold transition-colors">
+                                                    <button type="button" onclick="KtxStudentViews.cancelServiceRegistration(${s.registrationId})" class="w-full py-2 rounded-xl border border-red-200 dark:border-red-900/60 bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition-colors">
                                                         Hủy đăng ký
                                                     </button>
                                                 ` : `
@@ -3935,7 +3961,7 @@ window.KtxStudentViews = (function () {
                 <div class="bg-white dark:bg-[#121826] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-[#232B3B] space-y-4" onclick="event.stopPropagation()">
                     <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <div class="flex items-center gap-2.5">
-                            <span class="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                            <span class="w-9 h-9 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
                                 <span class="material-symbols-outlined text-[20px]">cancel</span>
                             </span>
                             <div>
@@ -3965,7 +3991,7 @@ window.KtxStudentViews = (function () {
 
                     <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Quay lại</button>
-                        <button type="button" onclick="KtxStudentViews.confirmCancelServiceRegistration(${Number(registrationId)}, this)" class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs transition-colors disabled:opacity-60">Xác nhận hủy</button>
+                        <button type="button" onclick="KtxStudentViews.confirmCancelServiceRegistration(${Number(registrationId)}, this)" class="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs shadow-xs transition-colors disabled:opacity-60">Xác nhận hủy</button>
                     </div>
                 </div>
             </div>
@@ -4020,7 +4046,7 @@ window.KtxStudentViews = (function () {
                     </div>
 
                     <div class="p-3 bg-white rounded-xl border border-slate-200 inline-block shadow-xs">
-                        ${qrUrl ? `<img src="${qrUrl}" alt="VietQR" class="w-52 h-52 mx-auto rounded-lg object-contain" />` : `<p class="text-xs text-rose-600 p-4">Chưa cấu hình tài khoản ngân hàng KTX. Vui lòng liên hệ BQL.</p>`}
+                        ${qrUrl ? `<img src="${qrUrl}" alt="VietQR" class="w-52 h-52 mx-auto rounded-lg object-contain" />` : `<p class="text-xs text-red-600 p-4">Chưa cấu hình tài khoản ngân hàng KTX. Vui lòng liên hệ BQL.</p>`}
                     </div>
 
                     <div class="space-y-1.5 text-xs text-left p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-[#232B3B]">
@@ -4219,12 +4245,13 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderSuaChua(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.maintenanceTickets.length && !studentState.errors['sv-sua-chua']) {
             await loadMaintenanceData();
         }
 
         if (studentState.loading['sv-sua-chua']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -4239,15 +4266,16 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    ${renderViewHeader('Yêu cầu Sửa chữa & Báo hỏng', 'Theo dõi và gửi yêu cầu sửa chữa thiết bị phòng')}
-                    ${hasActiveRoom ? `
-                        <button type="button" onclick="KtxStudentViews.openCreateMaintenanceModal()" class="px-5 py-2.5 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white font-semibold text-xs shadow-sm inline-flex items-center gap-1.5 transition-all self-start sm:self-auto shrink-0">
-                            <span class="material-symbols-outlined text-[17px]">add_circle</span>
+                ${renderViewHeader(
+                    'Yêu cầu Sửa chữa & Báo hỏng',
+                    'Theo dõi và gửi yêu cầu sửa chữa thiết bị phòng',
+                    hasActiveRoom ? `
+                        <button type="button" onclick="KtxStudentViews.openCreateMaintenanceModal()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-sm hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1.5 border border-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                            <span class="material-symbols-outlined text-[20px] text-[#0b2a5b]">add_circle</span>
                             <span>Tạo phiếu báo hỏng</span>
                         </button>
-                    ` : ''}
-                </div>
+                    ` : ''
+                )}
 
                 ${!hasActiveRoom ? `
                     <div class="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-3">
@@ -4355,7 +4383,7 @@ window.KtxStudentViews = (function () {
                             <div id="maintImagePreview" class="mt-2 hidden">
                                 <div class="relative inline-block">
                                     <img id="maintPreviewImg" src="" alt="Preview" class="w-32 h-24 rounded-lg object-cover border border-slate-200" />
-                                    <button type="button" onclick="KtxStudentViews.clearMaintenanceImage()" title="Xóa ảnh đã chọn" aria-label="Xóa ảnh đã chọn" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-md flex items-center justify-center transition-colors">
+                                    <button type="button" onclick="KtxStudentViews.clearMaintenanceImage()" title="Xóa ảnh đã chọn" aria-label="Xóa ảnh đã chọn" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-md flex items-center justify-center transition-colors">
                                         <span class="material-symbols-outlined text-[14px]">close</span>
                                     </button>
                                 </div>
@@ -4522,12 +4550,13 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderViPham(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.violations.length && !studentState.errors['sv-vi-pham']) {
             await loadViolationsData();
         }
 
         if (studentState.loading['sv-vi-pham']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -4538,8 +4567,6 @@ window.KtxStudentViews = (function () {
 
         const list = studentState.violations || [];
         const totalViolations = list.length;
-        const totalFines = list.reduce((sum, v) => sum + (Number(v.tienPhat) || 0), 0);
-        const unpaidFines = list.filter(v => !v.daNopPhat).reduce((sum, v) => sum + (Number(v.tienPhat) || 0), 0);
         const latestViolation = list.length > 0 ? list[0] : null;
 
         function getActionBadge(action) {
@@ -4547,14 +4574,14 @@ window.KtxStudentViews = (function () {
             if (a.includes('nhắc nhở')) {
                 return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Nhắc nhở</span>';
             }
-            if (a.includes('phạt tiền')) {
-                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">Phạt tiền</span>';
+            if (a.includes('khiển trách')) {
+                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">Khiển trách</span>';
             }
             if (a.includes('cảnh cáo')) {
-                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300 border border-orange-200 dark:border-orange-800/60">Cảnh cáo</span>';
+                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">Cảnh cáo</span>';
             }
             if (a.includes('buộc rời') || a.includes('trục xuất') || a.includes('đuổi')) {
-                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-300 dark:border-rose-800/60">Buộc rời KTX</span>';
+                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-300 dark:border-red-800/60">Buộc rời KTX</span>';
             }
             return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200">${esc(action || 'Xử lý')}</span>`;
         }
@@ -4578,10 +4605,10 @@ window.KtxStudentViews = (function () {
                         color: latestViolation ? 'amber' : 'slate'
                     })}
                     ${renderMetricCard({
-                        label: 'Tổng tiền phạt nợ',
-                        value: fmtVND(unpaidFines),
-                        footer: unpaidFines === 0 ? 'Đã hoàn tất mọi nghĩa vụ phạt' : `Tổng mức phạt: ${fmtVND(totalFines)}`,
-                        color: unpaidFines === 0 ? 'green' : 'red'
+                        label: 'Hình thức xử lý gần nhất',
+                        value: latestViolation ? esc(latestViolation.hinhThucXuLy || 'Nhắc nhở') : 'Chấp hành tốt',
+                        footer: latestViolation ? 'Theo Quy chế nội trú KTX UTC2' : 'Chưa có hình thức kỷ luật nào',
+                        color: latestViolation ? 'blue' : 'green'
                     })}
                 </div>
 
@@ -4598,16 +4625,14 @@ window.KtxStudentViews = (function () {
                 ` : `
                     <div class="bg-white dark:bg-[#121826] rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] overflow-hidden">
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs">
+                            <table class="w-full table-fixed text-left text-xs">
                                 <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200/60 dark:border-[#232B3B]">
                                     <tr>
-                                        <th class="p-3.5">Mã biên bản</th>
-                                        <th class="p-3.5">Ngày lập</th>
-                                        <th class="p-3.5">Hành vi vi phạm</th>
-                                        <th class="p-3.5">Nội dung chi tiết</th>
-                                        <th class="p-3.5">Hình thức xử lý</th>
-                                        <th class="p-3.5 text-right">Tiền phạt</th>
-                                        <th class="p-3.5 text-center">Tình trạng nộp</th>
+                                        <th class="w-[15%] px-5 py-3.5">Mã biên bản</th>
+                                        <th class="w-[13%] px-4 py-3.5">Ngày lập</th>
+                                        <th class="w-[26%] px-4 py-3.5">Hành vi vi phạm</th>
+                                        <th class="w-[30%] px-4 py-3.5">Nội dung chi tiết</th>
+                                        <th class="w-[16%] px-5 py-3.5 text-center">Hình thức xử lý</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -4616,32 +4641,20 @@ window.KtxStudentViews = (function () {
                                         const code = `BB-${year}-${String(v.id).padStart(4, '0')}`;
                                         return `
                                             <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                                                <td class="p-3.5 font-mono font-bold text-[#0B2A5B] dark:text-blue-400">
+                                                <td class="px-5 py-4 font-mono font-bold text-[#0B2A5B] dark:text-blue-400 whitespace-nowrap">
                                                     ${esc(code)}
                                                 </td>
-                                                <td class="p-3.5 text-slate-500 whitespace-nowrap">
+                                                <td class="px-4 py-4 text-slate-500 whitespace-nowrap">
                                                     ${esc(v.ngayViPham)}
                                                 </td>
-                                                <td class="p-3.5 font-bold text-slate-900 dark:text-white">
+                                                <td class="px-4 py-4 font-bold text-slate-900 dark:text-white leading-relaxed">
                                                     ${esc(v.tenLoaiViPham)}
                                                 </td>
-                                                <td class="p-3.5 text-slate-600 dark:text-slate-300 max-w-xs leading-relaxed" title="${esc(v.moTa)}">
+                                                <td class="px-4 py-4 text-slate-600 dark:text-slate-300 leading-relaxed" title="${esc(v.moTa)}">
                                                     ${esc(v.moTa)}
                                                 </td>
-                                                <td class="p-3.5 whitespace-nowrap">
+                                                <td class="px-5 py-4 text-center whitespace-nowrap">
                                                     ${getActionBadge(v.hinhThucXuLy)}
-                                                </td>
-                                                <td class="p-3.5 text-right font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">
-                                                    ${fmtVND(v.tienPhat)}
-                                                </td>
-                                                <td class="p-3.5 text-center whitespace-nowrap">
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                                        v.daNopPhat
-                                                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200'
-                                                            : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200'
-                                                    }">
-                                                        ${v.daNopPhat ? 'Đã nộp phạt' : 'Chưa nộp phạt'}
-                                                    </span>
                                                 </td>
                                             </tr>
                                         `;
@@ -4685,18 +4698,19 @@ window.KtxStudentViews = (function () {
             return { icon: 'timer', color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' };
         }
         if (l.includes('baotri') || l.includes('sửa chữa')) {
-            return { icon: 'build', color: 'text-indigo-700 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40' };
+            return { icon: 'build', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' };
         }
         return { icon: 'notifications', color: 'text-slate-700 dark:text-slate-300', bg: 'bg-slate-50 dark:bg-slate-800' };
     }
 
     async function renderThongBao(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.notifications.length && !studentState.errors['sv-thong-bao']) {
             await loadNotificationsData();
         }
 
         if (studentState.loading['sv-thong-bao']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -4781,17 +4795,16 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    ${renderViewHeader('Hộp thư thông báo', 'Thông báo chính thức từ Ban Quản lý Ký túc xá UTC2')}
-
-                    <!-- Mark all read action -->
-                    ${unreadCount > 0 ? `
-                        <button type="button" onclick="KtxStudentViews.markAllNotifsRead()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors inline-flex items-center gap-1.5 self-start sm:self-auto">
-                            <span class="material-symbols-outlined text-[16px]">done_all</span>
+                ${renderViewHeader(
+                    'Hộp thư thông báo',
+                    'Thông báo chính thức từ Ban Quản lý Ký túc xá UTC2',
+                    unreadCount > 0 ? `
+                        <button type="button" onclick="KtxStudentViews.markAllNotifsRead()" class="h-10 px-4 rounded-xl bg-white text-[#0b2a5b] font-semibold text-sm hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1.5 border border-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                            <span class="material-symbols-outlined text-[20px] text-[#0b2a5b]">done_all</span>
                             <span>Đọc tất cả (${unreadCount})</span>
                         </button>
-                    ` : ''}
-                </div>
+                    ` : ''
+                )}
 
                 <!-- Filter Tabs -->
                 <div class="flex items-center gap-2 border-b border-slate-200/80 dark:border-[#232B3B] pb-3 text-xs">
@@ -4922,12 +4935,13 @@ window.KtxStudentViews = (function () {
     }
 
     async function renderHoTro(container) {
+        container = wrapStudentContainer(container);
         if (!studentState.supportInfo && !studentState.errors['sv-ho-tro']) {
             await loadSupportData();
         }
 
         if (studentState.loading['sv-ho-tro']) {
-            container.innerHTML = renderSkeleton();
+            if (container.dataset.renderedTab !== studentState.activeTab || !container.children.length) { container.innerHTML = renderSkeleton(); }
             return;
         }
 
@@ -4971,12 +4985,7 @@ window.KtxStudentViews = (function () {
 
         container.innerHTML = `
             <div class="space-y-6 page-content-enter">
-                ${renderViewHeader('Nội quy, Hỗ trợ & Liên hệ BQL', 'Cẩm nang quy chế nội trú, quy trình thanh toán VietQR và kênh hỗ trợ trực tiếp KTX UTC2', `
-                    <button type="button" onclick="KtxStudentViews.retryLoadTab('sv-ho-tro')" class="px-3 py-2 rounded-xl bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-[#232B3B] hover:bg-slate-50 text-slate-700 dark:text-slate-300 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs transition-colors">
-                        <span class="material-symbols-outlined text-[17px]">refresh</span>
-                        <span>Làm mới</span>
-                    </button>
-                `)}
+                ${renderViewHeader('Nội quy, Hỗ trợ & Liên hệ BQL', 'Cẩm nang quy chế nội trú, quy trình thanh toán VietQR và kênh hỗ trợ trực tiếp KTX UTC2')}
 
                 <!-- Standard 2-Column Symmetrical Grid matching other views -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -5058,10 +5067,12 @@ window.KtxStudentViews = (function () {
 
     async function renderView(tabId, container, appState) {
         clearTimers();
-        const baseTab = (tabId || '').split('?')[0];
-        const queryStr = tabId.includes('?') ? tabId.substring(tabId.indexOf('?') + 1) : '';
+        const fullTabId = tabId || 'sv-tong-quan';
+        const baseTab = fullTabId.split('?')[0];
+        const queryStr = fullTabId.includes('?') ? fullTabId.substring(fullTabId.indexOf('?') + 1) : '';
         const params = new URLSearchParams(queryStr);
         studentState.activeTab = baseTab;
+        studentState.activeTabFull = fullTabId;
         if (!container) return;
 
         switch (baseTab) {
@@ -5108,16 +5119,31 @@ window.KtxStudentViews = (function () {
     }
 
     // Action Helpers
-    function retryLoadTab(tabId) {
-        delete studentState.errors[tabId];
-        studentState.loading[tabId] = true;
-        if (tabId === 'sv-tong-quan') studentState.dashboard = null;
-        if (tabId === 'sv-ho-so') studentState.profile = null;
-        if (tabId === 'sv-dot-dang-ky') studentState.rounds = [];
+    async function retryLoadTab(tabId) {
+        const targetFullTab = tabId || studentState.activeTabFull || studentState.activeTab || 'sv-tong-quan';
+        const baseTab = targetFullTab.split('?')[0];
+        delete studentState.errors[baseTab];
 
         const container = document.getElementById('mainContent');
+        const refreshIcon = container?.querySelector('.page-title-banner button[aria-label="Làm mới dữ liệu trang"] .material-symbols-outlined');
+        if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+        try {
+            if (baseTab === 'sv-tong-quan') await loadDashboardData();
+            else if (baseTab === 'sv-ho-so') await loadProfileData();
+            else if (baseTab === 'sv-dot-dang-ky') await loadRoundsData();
+            else if (baseTab === 'sv-don-cua-toi') await loadApplicationsData();
+            else if (baseTab === 'sv-hop-dong') await loadContractsData();
+            else if (baseTab === 'sv-hoa-don') await loadInvoicesData();
+            else if (baseTab === 'sv-sua-chua') await loadMaintenanceData();
+            else if (baseTab === 'sv-vi-pham') await loadViolationsData();
+            else if (baseTab === 'sv-thong-bao') await loadNotificationsData();
+        } finally {
+            if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+        }
+
         if (container) {
-            renderView(tabId, container, window.KtxApp ? window.KtxApp.getState() : {});
+            await renderView(targetFullTab, container, window.KtxApp ? window.KtxApp.getState() : {});
         }
     }
 

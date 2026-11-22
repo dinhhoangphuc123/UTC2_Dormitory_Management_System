@@ -46,7 +46,7 @@ namespace Dormitory.Web.Features.Contracts.Api
             return Ok(ApiResponse<ContractListItemDto>.Ok(contract));
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateContractRequestDto req)
         {
@@ -65,7 +65,7 @@ namespace Dormitory.Web.Features.Contracts.Api
             return Ok(ApiResponse<ContractListItemDto>.Ok(created, "Ban hành hợp đồng mới thành công!"));
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("import")]
         public async Task<IActionResult> Import(IFormFile? file, [FromQuery] string? academicYear = null)
         {
@@ -100,7 +100,7 @@ namespace Dormitory.Web.Features.Contracts.Api
             }
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("{id}/renew")]
         public async Task<IActionResult> Renew(string id, [FromQuery] int months = 5)
         {
@@ -118,7 +118,7 @@ namespace Dormitory.Web.Features.Contracts.Api
             public string? Reason { get; set; }
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("{id}/liquidate")]
         public async Task<IActionResult> Liquidate(string id, [FromBody] LiquidateRequest? req)
         {
@@ -136,7 +136,7 @@ namespace Dormitory.Web.Features.Contracts.Api
             public DateTime? CheckInDate { get; set; }
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("{id}/check-in")]
         public async Task<IActionResult> CheckIn(string id, [FromBody] CheckInRequestDto? req)
         {

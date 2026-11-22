@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.Web.Features.Maintenance.DTOs;
@@ -8,7 +9,7 @@ using Dormitory.Web.Shared.Helpers;
 
 namespace Dormitory.Web.Features.Maintenance.Api
 {
-    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+    [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
     [ApiController]
     [Route("api/suachua")]
     public class SuaChuaApiController : ControllerBase
@@ -35,6 +36,82 @@ namespace Dormitory.Web.Features.Maintenance.Api
         {
             var tickets = await _suaChuaService.GetAllTicketsAsync(building, category, priority, status, search, academicYear);
             return Ok(ApiResponse<List<MaintenanceTicketDto>>.Ok(tickets));
+        }
+
+        [HttpGet("export")]
+        public async Task<IActionResult> Export(
+            [FromQuery] string? building,
+            [FromQuery] string? category,
+            [FromQuery] string? priority,
+            [FromQuery] string? status,
+            [FromQuery] string? search,
+            [FromQuery] string? academicYear)
+        {
+            var tickets = await _suaChuaService.GetAllTicketsAsync(building, category, priority, status, search, academicYear);
+            var yearLabel = string.IsNullOrWhiteSpace(academicYear) ? "Tất cả năm học" : academicYear.Trim();
+            var safeYear = string.IsNullOrWhiteSpace(academicYear) ? "KTX" : academicYear.Trim();
+
+            string[] headers =
+            [
+                "STT",
+                "Mã phiếu",
+                "Phòng",
+                "Tòa nhà",
+                "Nội dung sự cố",
+                "Độ ưu tiên",
+                "Người báo",
+                "Điện thoại",
+                "Kỹ thuật viên",
+                "Trạng thái",
+                "Ngày tạo"
+            ];
+
+            XLAlignmentHorizontalValues[] alignments =
+            [
+                XLAlignmentHorizontalValues.Center,
+                XLAlignmentHorizontalValues.Center,
+                XLAlignmentHorizontalValues.Center,
+                XLAlignmentHorizontalValues.Center,
+                XLAlignmentHorizontalValues.Left,
+                XLAlignmentHorizontalValues.Center,
+                XLAlignmentHorizontalValues.Left,
+                XLAlignmentHorizontalValues.Center,
+                XLAlignmentHorizontalValues.Left,
+                XLAlignmentHorizontalValues.Center,
+                XLAlignmentHorizontalValues.Center
+            ];
+
+            static string FormatStatus(string? st) => st switch
+            {
+                "COMPLETED" => "Hoàn tất",
+                "IN_PROGRESS" => "Đang sửa",
+                _ => "Chờ duyệt"
+            };
+
+            var rows = tickets.Select((t, idx) => new object?[]
+            {
+                idx + 1,
+                t.Code,
+                t.Room,
+                t.Building,
+                string.IsNullOrWhiteSpace(t.Description) ? t.Title : t.Description,
+                t.Priority,
+                t.Reporter,
+                t.Phone,
+                string.IsNullOrWhiteSpace(t.Technician) ? "Chưa phân công" : t.Technician,
+                FormatStatus(t.Status),
+                t.CreatedAt
+            });
+
+            var bytes = ExcelExportHelper.BuildStyledTableWorkbook(
+                "YeuCauSuaChua",
+                "DANH SÁCH YÊU CẦU SỬA CHỮA & BẢO TRÌ KÝ TÚC XÁ UTC2",
+                $"Năm học: {yearLabel}   |   Ngày xuất: {DateTime.Now:dd/MM/yyyy HH:mm}   |   Tổng số phiếu: {tickets.Count}",
+                headers,
+                rows,
+                alignments);
+
+            return File(bytes, ExcelExportHelper.ContentType, $"YeuCauSuaChua_{safeYear}.xlsx");
         }
 
         [HttpPost]

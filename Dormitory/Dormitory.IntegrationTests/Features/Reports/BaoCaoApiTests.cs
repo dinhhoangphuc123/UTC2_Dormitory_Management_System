@@ -74,6 +74,35 @@ namespace Dormitory.IntegrationTests.Features.Reports
             using var emptyWb = new XLWorkbook(emptyStream);
             Assert.Equal(4, emptyWb.Worksheets.Count);
         }
+
+        [Fact]
+        public void ExportTable_ReturnsSymmetricalStyledXlsxWorkbook()
+        {
+            using var context = _fixture.CreateDbContext();
+            var controller = new BaoCaoApiController(new BaoCaoService(context));
+
+            var result = controller.ExportTable(new ExportTableRequestDto
+            {
+                Title = "DANH SÁCH LỚP CHUYÊN NGÀNH & KHOA VIỆN KÝ TÚC XÁ UTC2",
+                SheetName = "LopHoc",
+                FileName = "DanhSachLop.xlsx",
+                AcademicYear = SqlServerFixture.AcademicYear,
+                Headers = ["Mã Lớp", "Tên Lớp", "Khoa Viện", "Sĩ Số"],
+                Rows = [["CNTT01_K65", "Công nghệ thông tin 01", "CNTT", "45"]]
+            });
+
+            var fileResult = Assert.IsType<FileContentResult>(result);
+            using var stream = new MemoryStream(fileResult.FileContents);
+            using var wb = new XLWorkbook(stream);
+            var ws = wb.Worksheet("LopHoc");
+            Assert.Equal("Times New Roman", ws.Cell(4, 1).Style.Font.FontName);
+            Assert.Equal(16, ws.Cell(4, 1).Style.Font.FontSize);
+            Assert.Equal("Mã Lớp", ws.Cell(7, 1).GetString());
+            Assert.Equal(13, ws.Cell(8, 1).Style.Font.FontSize);
+
+            var badResult = controller.ExportTable(new ExportTableRequestDto());
+            Assert.IsType<BadRequestObjectResult>(badResult);
+        }
     }
 }
 

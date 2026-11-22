@@ -78,12 +78,15 @@ namespace Dormitory.IntegrationTests.Features.Registrations
                 "Trạng thái đơn"
             ];
 
+            Assert.Equal("Times New Roman", ws.Cell(4, 1).Style.Font.FontName);
+            Assert.Equal(16, ws.Cell(4, 1).Style.Font.FontSize);
+
             for (int col = 1; col <= expectedHeaders.Length; col++)
             {
-                Assert.Equal(expectedHeaders[col - 1], ws.Cell(1, col).GetString());
+                Assert.Equal(expectedHeaders[col - 1], ws.Cell(7, col).GetString());
             }
 
-            var usedRows = ws.RangeUsed()!.RowsUsed().Skip(1).ToList();
+            var usedRows = ws.RangeUsed()!.RowsUsed().Where(r => r.RowNumber() > 7).ToList();
             Assert.NotEmpty(usedRows);
 
             var dk65089Row = usedRows.FirstOrDefault(r => r.Cell(1).GetString() == "DK-65089");
@@ -148,7 +151,7 @@ namespace Dormitory.IntegrationTests.Features.Registrations
                 using var stream = new MemoryStream(fileResult.FileContents);
                 using var workbook = new XLWorkbook(stream);
                 var ws = workbook.Worksheet("DonDangKy");
-                return ws.RangeUsed()!.RowsUsed().Skip(1).Select(r => r.Cell(23).GetString()).ToList();
+                return ws.RangeUsed()!.RowsUsed().Where(r => r.RowNumber() > 7).Select(r => r.Cell(23).GetString()).ToList();
             }
 
             var approvedStatuses = ReadStatuses(await controller.Export("approved", null, null, null, SqlServerFixture.AcademicYear));

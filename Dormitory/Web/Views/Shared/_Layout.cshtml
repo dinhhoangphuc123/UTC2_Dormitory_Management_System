@@ -56,11 +56,18 @@
 
     <!-- Dark mode hydration before render -->
     <script>
-        if (localStorage.getItem('utc2_dorm_theme') === 'dark' || (!('utc2_dorm_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+        (function () {
+            var savedTheme = localStorage.getItem('utc2_dorm_theme');
+            var legacyDark = localStorage.getItem('ktx_dark_mode');
+            var isDark = savedTheme === 'dark' || (savedTheme === null && legacyDark === 'true') || (savedTheme === null && legacyDark === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+                document.documentElement.style.colorScheme = 'dark';
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.style.colorScheme = 'light';
+            }
+        })();
     </script>
 </head>
 <body class="h-full bg-[#F4F5F7] dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] transition-colors duration-200">

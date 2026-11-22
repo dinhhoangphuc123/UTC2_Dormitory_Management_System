@@ -8,6 +8,8 @@ namespace Dormitory.Web.Shared.Constants
         public const string SinhVien = "sinhVien";
 
         public const string AdminOrManagerPolicy = "AdminOrManager";
+        public const string ManagerOnlyPolicy = "ManagerOnly";
+        public const string ManagerOrAccountantPolicy = "ManagerOrAccountant";
         public const string StaffOnlyPolicy = "StaffOnly";
         public const string StudentOnlyPolicy = "StudentOnly";
     }

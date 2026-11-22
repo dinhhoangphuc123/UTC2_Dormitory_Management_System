@@ -181,13 +181,27 @@ namespace Dormitory.Web.Features.Staff.Services
             return candidate;
         }
 
-        public async Task<bool> ToggleAccountAccessAsync(string staffId)
+        public async Task<bool> ToggleAccountAccessAsync(string staffId, string? currentStaffId = null)
         {
+            if (string.IsNullOrWhiteSpace(staffId)) return false;
+            var trimmedId = staffId.Trim();
+            if (!string.IsNullOrWhiteSpace(currentStaffId) &&
+                string.Equals(trimmedId, currentStaffId.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
             var nv = await _context.NhanViens
                 .Include(n => n.TaiKhoan)
-                .FirstOrDefaultAsync(n => n.MaNhanVien == staffId);
+                    .ThenInclude(t => t!.VaiTro)
+                .FirstOrDefaultAsync(n => n.MaNhanVien == trimmedId);
 
             if (nv?.TaiKhoan == null) return false;
+            if (nv.TaiKhoan.LaDangHoat &&
+                (nv.TaiKhoan.MaVaiTro == "admin" || nv.TaiKhoan.VaiTro?.MaVaiTro == "admin"))
+            {
+                return false;
+            }
 
             nv.TaiKhoan.LaDangHoat = !nv.TaiKhoan.LaDangHoat;
             await _context.SaveChangesAsync();

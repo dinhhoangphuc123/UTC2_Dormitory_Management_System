@@ -15,7 +15,7 @@ using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Students.Api
 {
-    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+    [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
     [ApiController]
     [Route("api/sinhvien")]
     public class SinhVienCreateApiController : ControllerBase
@@ -51,7 +51,7 @@ namespace Dormitory.Web.Features.Students.Api
 
             var validationError = await ValidateStudentInputAsync(
                 req.MaSinhVien, req.HoTen, req.Cccd, req.DienThoai, req.Email, req.MaLop,
-                req.NgaySinh, req.GioiTinh);
+                req.NgaySinh, req.GioiTinh, req.DiaChiThuongTru, req.DoiTuongUuTien);
             if (validationError != null)
                 return BadRequest(ApiResponse.Fail(validationError));
 
@@ -133,7 +133,8 @@ namespace Dormitory.Web.Features.Students.Api
                 if (usedRange is null)
                     return BadRequest(ApiResponse.Fail("File Excel không có dữ liệu."));
 
-                var headerRow = usedRange.FirstRow();
+                var headerRow = ExcelImportHelper.FindHeaderRow(usedRange);
+                int headerRowNumber = headerRow.RowNumber();
                 var cols = ExcelImportHelper.BuildColumnMap(headerRow);
                 bool isNamedLayout = cols.ContainsKey("mssv") &&
                                      (cols.ContainsKey("hoTen") || cols.ContainsKey("cccd") || cols.ContainsKey("maLop"));
@@ -159,7 +160,7 @@ namespace Dormitory.Web.Features.Students.Api
 
                 hasContractColumns = cols.ContainsKey("roomCode") || cols.ContainsKey("bedId");
 
-                foreach (var row in usedRange.RowsUsed().Skip(1))
+                foreach (var row in usedRange.RowsUsed().Where(r => r.RowNumber() > headerRowNumber))
                 {
                     int rowNumber = row.RowNumber();
                     string mssv = ExcelImportHelper.ReadCellText(row, cols, "mssv");
@@ -287,16 +288,24 @@ namespace Dormitory.Web.Features.Students.Api
             string? email,
             string? maLop,
             DateTime ngaySinh,
-            string? gioiTinh)
+            string? gioiTinh,
+            string? diaChiThuongTru = null,
+            string? doiTuongUuTien = null)
         {
             if (string.IsNullOrWhiteSpace(mssv))
                 return "MSSV không được để trống.";
+            if (mssv.Trim().Length > 20)
+                return "MSSV không được vượt quá 20 ký tự.";
             if (await _context.SinhViens.AnyAsync(s => s.MaSinhVien == mssv.Trim()))
                 return $"MSSV {mssv.Trim()} đã tồn tại.";
             if (string.IsNullOrWhiteSpace(hoTen))
                 return "Họ tên không được để trống.";
             if (hoTen.Trim().Length > 100)
                 return "Họ tên không được vượt quá 100 ký tự.";
+            if (!string.IsNullOrWhiteSpace(diaChiThuongTru) && diaChiThuongTru.Trim().Length > 255)
+                return "Địa chỉ thường trú không được vượt quá 255 ký tự.";
+            if (!string.IsNullOrWhiteSpace(doiTuongUuTien) && doiTuongUuTien.Trim().Length > 50)
+                return "Đối tượng ưu tiên không được vượt quá 50 ký tự.";
             if (ngaySinh == default || ngaySinh.Date > DateTime.Today)
                 return "Ngày sinh không hợp lệ.";
             if (string.IsNullOrWhiteSpace(maLop))
@@ -315,6 +324,8 @@ namespace Dormitory.Web.Features.Students.Api
             if (!string.IsNullOrWhiteSpace(email))
             {
                 var normalizedEmail = email.Trim().ToLowerInvariant();
+                if (normalizedEmail.Length > 100)
+                    return "Email không được vượt quá 100 ký tự.";
                 if (!EmailRegex.IsMatch(normalizedEmail))
                     return "Email không đúng định dạng.";
                 if (await _context.SinhViens.AnyAsync(s => s.Email != null && s.Email.ToLower() == normalizedEmail))

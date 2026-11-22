@@ -63,7 +63,15 @@ namespace Dormitory.Web.Features.Academic.Services
 
         public async Task<ClassItemDto> CreateClassAsync(CreateClassDto req)
         {
-            int nienKhoa = int.Parse(req.Cohort.Trim()[1..], System.Globalization.CultureInfo.InvariantCulture);
+            var rawCohort = req.Cohort.Trim();
+            var digits = rawCohort.StartsWith("K", StringComparison.OrdinalIgnoreCase)
+                ? rawCohort[1..]
+                : rawCohort;
+            int nienKhoa = int.Parse(digits, System.Globalization.CultureInfo.InvariantCulture);
+            if (nienKhoa < 100)
+            {
+                nienKhoa = (nienKhoa >= 55 && nienKhoa <= 80) ? (1959 + nienKhoa) : (2000 + nienKhoa);
+            }
 
             var entity = new LopHoc
             {

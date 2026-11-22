@@ -4,6 +4,7 @@ using Dormitory.Web.Data;
 using Dormitory.Web.Features.Dashboard.DTOs;
 using Dormitory.Web.Features.Dashboard.Services;
 using Dormitory.Web.Features.Reports.DTOs;
+using Dormitory.Web.Shared.Helpers;
 
 namespace Dormitory.Web.Features.Reports.Services
 {
@@ -132,8 +133,9 @@ namespace Dormitory.Web.Features.Reports.Services
                 : (!string.IsNullOrWhiteSpace(academicYear) ? academicYear.Trim() : "Chưa chọn năm học");
 
             using var workbook = new XLWorkbook();
-            workbook.Style.Font.FontName = "Calibri";
-            workbook.Style.Font.FontSize = 11;
+            workbook.Style.Font.FontName = "Times New Roman";
+            workbook.Style.Font.FontSize = 13;
+            workbook.Style.Font.FontColor = XLColor.FromHtml("#1E293B");
 
             BuildOverviewSheet(workbook, report, dashboard, yearLabel);
             BuildBuildingAndRoomSheet(workbook, report, dashboard, yearLabel);
@@ -820,29 +822,7 @@ namespace Dormitory.Web.Features.Reports.Services
 
         private static int AddReportBanner(IXLWorksheet ws, string title, string subtitle, int totalCols)
         {
-            var titleRange = ws.Range(1, 1, 1, totalCols).Merge();
-            titleRange.Value = title;
-            titleRange.Style.Font.Bold = true;
-            titleRange.Style.Font.FontSize = 14;
-            titleRange.Style.Font.FontColor = XLColor.White;
-            titleRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0B2A5B");
-            titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            titleRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            ws.Row(1).Height = 32;
-
-            var subRange = ws.Range(2, 1, 2, totalCols).Merge();
-            subRange.Value = subtitle;
-            subRange.Style.Font.Italic = true;
-            subRange.Style.Font.FontSize = 10;
-            subRange.Style.Font.FontColor = XLColor.FromHtml("#1E3A8A");
-            subRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#EFF6FF");
-            subRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            subRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            subRange.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
-            subRange.Style.Border.BottomBorderColor = XLColor.FromHtml("#BFDBFE");
-            ws.Row(2).Height = 22;
-
-            return 3;
+            return ExcelExportHelper.AddSymmetricalBanner(ws, title, subtitle, totalCols) - 1;
         }
 
         private static int AddSectionTitle(IXLWorksheet ws, int row, string title, int totalCols)
@@ -850,12 +830,13 @@ namespace Dormitory.Web.Features.Reports.Services
             var range = ws.Range(row, 1, row, totalCols).Merge();
             range.Value = title;
             range.Style.Font.Bold = true;
-            range.Style.Font.FontSize = 11;
+            range.Style.Font.FontName = "Times New Roman";
+            range.Style.Font.FontSize = 13;
             range.Style.Font.FontColor = XLColor.White;
             range.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E3A8A");
             range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
             range.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            ws.Row(row).Height = 24;
+            ws.Row(row).Height = 28;
             return row + 1;
         }
 
@@ -863,6 +844,8 @@ namespace Dormitory.Web.Features.Reports.Services
         {
             var range = ws.Range(row, 1, row, totalCols);
             range.Style.Font.Bold = true;
+            range.Style.Font.FontName = "Times New Roman";
+            range.Style.Font.FontSize = 13;
             range.Style.Font.FontColor = XLColor.White;
             range.Style.Fill.BackgroundColor = XLColor.FromHtml("#0B2A5B");
             range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -872,12 +855,14 @@ namespace Dormitory.Web.Features.Reports.Services
             range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
             range.Style.Border.OutsideBorderColor = XLColor.FromHtml("#0B2A5B");
             range.Style.Border.InsideBorderColor = XLColor.FromHtml("#1E40AF");
-            ws.Row(row).Height = 26;
+            ws.Row(row).Height = 30;
         }
 
         private static void StyleDataRow(IXLWorksheet ws, int row, int totalCols, bool alternate)
         {
             var range = ws.Range(row, 1, row, totalCols);
+            range.Style.Font.FontName = "Times New Roman";
+            range.Style.Font.FontSize = 13;
             range.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
             range.Style.Alignment.WrapText = true;
             if (alternate)
@@ -888,13 +873,15 @@ namespace Dormitory.Web.Features.Reports.Services
             range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
             range.Style.Border.OutsideBorderColor = XLColor.FromHtml("#CBD5E1");
             range.Style.Border.InsideBorderColor = XLColor.FromHtml("#E2E8F0");
-            ws.Row(row).Height = 22;
+            ws.Row(row).Height = 26;
         }
 
         private static void StyleTotalRow(IXLWorksheet ws, int row, int totalCols)
         {
             var range = ws.Range(row, 1, row, totalCols);
             range.Style.Font.Bold = true;
+            range.Style.Font.FontName = "Times New Roman";
+            range.Style.Font.FontSize = 13;
             range.Style.Font.FontColor = XLColor.FromHtml("#0F172A");
             range.Style.Fill.BackgroundColor = XLColor.FromHtml("#F1F5F9");
             range.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
@@ -906,7 +893,7 @@ namespace Dormitory.Web.Features.Reports.Services
             range.Style.Border.TopBorderColor = XLColor.FromHtml("#0B2A5B");
             range.Style.Border.BottomBorderColor = XLColor.FromHtml("#94A3B8");
             range.Style.Border.InsideBorderColor = XLColor.FromHtml("#CBD5E1");
-            ws.Row(row).Height = 24;
+            ws.Row(row).Height = 28;
         }
 
         private static int AddEmptyDataRow(IXLWorksheet ws, int row, int totalCols, string message)
@@ -957,8 +944,11 @@ namespace Dormitory.Web.Features.Reports.Services
             for (int i = 0; i < minWidths.Length; i++)
             {
                 var col = ws.Column(i + 1);
-                col.Width = Math.Max(col.Width + 2.5, minWidths[i]);
+                col.Width = Math.Max(col.Width + 4.0, minWidths[i] * 1.15);
             }
+            ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
+            ws.PageSetup.CenterHorizontally = true;
+            ws.PageSetup.FitToPages(1, 0);
         }
     }
 }

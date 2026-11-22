@@ -127,6 +127,12 @@ namespace Dormitory.Web.Features.Registrations.Services
                 list = list.Where(a => a.PriorityCategory.ToLower().Contains(priority.ToLower())).ToList();
             }
 
+            if (!string.IsNullOrWhiteSpace(cohort) && !cohort.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                string c = cohort.Trim();
+                list = list.Where(a => a.Cohort.Equals(c, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
             if (!string.IsNullOrWhiteSpace(gender) && gender != "all")
             {
                 list = list.Where(a => a.Gender.Equals(gender, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -171,7 +177,13 @@ namespace Dormitory.Web.Features.Registrations.Services
                 var candidates = await _context.Phongs
                     .Include(p => p.ToaNha)
                     .Include(p => p.LoaiPhong)
-                    .Where(p => p.MaLoaiPhong == app.MaLoaiPhong && p.TrangThai == "hoatDong" && p.ToaNha != null && p.ToaNha.TrangThai == "hoatDong")
+                    .Where(p => p.MaLoaiPhong == app.MaLoaiPhong &&
+                                p.TrangThai == "hoatDong" &&
+                                p.ToaNha != null &&
+                                p.ToaNha.TrangThai == "hoatDong" &&
+                                (string.IsNullOrEmpty(p.ToaNha.GioiTinhQuyDinh) ||
+                                 p.ToaNha.GioiTinhQuyDinh == "honHop" ||
+                                 p.ToaNha.GioiTinhQuyDinh == targetGender))
                     .ToListAsync();
                 room = candidates.FirstOrDefault(p => ContractRules.IsGenderCompatible(targetGender, p.ToaNha?.GioiTinhQuyDinh ?? "nam"))
                     ?? candidates.FirstOrDefault();
@@ -389,40 +401,62 @@ namespace Dormitory.Web.Features.Registrations.Services
         public async Task<bool> RejectApplicationAsync(string applicationId, string? staffId, string? reason = null, string? academicYear = null)
         {
             string cleanId = applicationId.Replace("#", "").Trim();
-            await using var tx = _context.Database.IsRelational()
-                ? await _context.Database.BeginTransactionAsync()
-                : null;
-
-            var app = await _context.DonDangKys.FirstOrDefaultAsync(d => d.MaDonDangKy == cleanId && 
-                                                                         (academicYear == null || (d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)));
-            if (app == null || app.TrangThai != "choDuyet")
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                return false;
-            }
+                await using var tx = _context.Database.IsRelational()
+                    ? await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable)
+                    : await _context.Database.BeginTransactionAsync();
 
-            var now = DateTime.Now;
-            app.TrangThai = "tuChoi";
-            app.MaNhanVienDuyet = string.IsNullOrWhiteSpace(staffId) ? null : staffId;
-            app.NgayDuyet = now;
-            app.GhiChu = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+                var app = await _context.DonDangKys.FirstOrDefaultAsync(d => d.MaDonDangKy == cleanId && 
+                                                                             (academicYear == null || (d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)));
+                if (app == null || app.TrangThai != "choDuyet")
+                {
+                    await tx.RollbackAsync();
+                    return false;
+                }
 
-            // Bắt buộc thông báo cho sinh viên biết lý do bị từ chối.
-            _context.ThongBaos.Add(new ThongBao
-            {
-                MaSinhVien = app.MaSinhVien,
-                TieuDe = "Hồ sơ đăng ký nội trú bị từ chối",
-                NoiDung = string.IsNullOrWhiteSpace(reason)
-                    ? $"Đơn đăng ký {app.MaDonDangKy} của bạn đã bị từ chối. Vui lòng liên hệ Ban quản lý KTX để biết thêm chi tiết."
-                    : $"Đơn đăng ký {app.MaDonDangKy} của bạn đã bị từ chối. Lý do: {reason.Trim()}",
-                Loai = "donDangKy",
-                LienKet = "/student/registration",
-                DaDoc = false,
-                NgayTao = now
+                await _context.Entry(app).ReloadAsync();
+                if (app.TrangThai != "choDuyet")
+                {
+                    await tx.RollbackAsync();
+                    return false;
+                }
+
+                string? validStaffId = null;
+                if (!string.IsNullOrWhiteSpace(staffId))
+                {
+                    var trimmedStaff = staffId.Trim();
+                    if (await _context.NhanViens.AnyAsync(n => n.MaNhanVien == trimmedStaff))
+                    {
+                        validStaffId = trimmedStaff;
+                    }
+                }
+
+                var now = DateTime.Now;
+                app.TrangThai = "tuChoi";
+                app.MaNhanVienDuyet = validStaffId;
+                app.NgayDuyet = now;
+                app.GhiChu = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+                // Bắt buộc thông báo cho sinh viên biết lý do bị từ chối.
+                _context.ThongBaos.Add(new ThongBao
+                {
+                    MaSinhVien = app.MaSinhVien,
+                    TieuDe = "Hồ sơ đăng ký nội trú bị từ chối",
+                    NoiDung = string.IsNullOrWhiteSpace(reason)
+                        ? $"Đơn đăng ký {app.MaDonDangKy} của bạn đã bị từ chối. Vui lòng liên hệ Ban quản lý KTX để biết thêm chi tiết."
+                        : $"Đơn đăng ký {app.MaDonDangKy} của bạn đã bị từ chối. Lý do: {reason.Trim()}",
+                    Loai = "donDangKy",
+                    LienKet = "/student/registration",
+                    DaDoc = false,
+                    NgayTao = now
+                });
+
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
             });
-
-            await _context.SaveChangesAsync();
-            if (tx != null) await tx.CommitAsync();
-            return true;
         }
 
         public async Task<byte[]> ExportApplicationsExcelAsync(
@@ -436,6 +470,9 @@ namespace Dormitory.Web.Features.Registrations.Services
             string? search = null)
         {
             using var workbook = new XLWorkbook();
+            workbook.Style.Font.FontName = "Times New Roman";
+            workbook.Style.Font.FontSize = 13;
+            workbook.Style.Font.FontColor = XLColor.FromHtml("#1E293B");
             var ws = workbook.Worksheets.Add("DonDangKy");
 
             string[] headers =
@@ -465,18 +502,29 @@ namespace Dormitory.Web.Features.Registrations.Services
                 "Trạng thái đơn"
             ];
 
+            string yearLabel = string.IsNullOrWhiteSpace(academicYear) ? "KTX UTC2" : academicYear.Trim();
+            int headerRow = ExcelExportHelper.AddSymmetricalBanner(
+                ws,
+                "DANH SÁCH ĐƠN ĐĂNG KÝ NỘI TRÚ KÝ TÚC XÁ UTC2",
+                $"Năm học: {yearLabel}   |   Ngày xuất: {DateTime.Now:dd/MM/yyyy HH:mm}",
+                headers.Length);
+
             for (int col = 1; col <= headers.Length; col++)
             {
-                var cell = ws.Cell(1, col);
+                var cell = ws.Cell(headerRow, col);
                 cell.Value = headers[col - 1];
+                cell.Style.Font.FontName = "Times New Roman";
+                cell.Style.Font.FontSize = 13;
                 cell.Style.Font.Bold = true;
                 cell.Style.Font.FontColor = XLColor.White;
                 cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#0B2A5B");
                 cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                 cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                cell.Style.Alignment.WrapText = true;
                 cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#1E40AF");
             }
-            ws.Row(1).Height = 24;
+            ws.Row(headerRow).Height = 32;
 
             var namHoc = string.IsNullOrWhiteSpace(academicYear)
                 ? null
@@ -563,7 +611,7 @@ namespace Dormitory.Web.Features.Registrations.Services
                     .AsSplitQuery()
                     .ToListAsync();
 
-                int rowIndex = 2;
+                int rowIndex = headerRow + 1;
                 foreach (var app in applications)
                 {
                     var student = app.SinhVien;
@@ -648,20 +696,42 @@ namespace Dormitory.Web.Features.Registrations.Services
                     ws.Cell(rowIndex, 22).Value = ngayKetThuc;
                     ws.Cell(rowIndex, 23).Value = FormatApplicationStatus(app.TrangThai);
 
+                    bool isAlternate = rowIndex % 2 == 1;
                     for (int col = 1; col <= headers.Length; col++)
                     {
                         var cell = ws.Cell(rowIndex, col);
+                        cell.Style.Font.FontName = "Times New Roman";
+                        cell.Style.Font.FontSize = 13;
                         cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                        cell.Style.Alignment.Horizontal = col switch
+                        {
+                            19 or 20 => XLAlignmentHorizontalValues.Right,
+                            1 or 2 or 4 or 5 or 6 or 7 or 10 or 12 or 15 or 16 or 17 or 21 or 22 or 23 => XLAlignmentHorizontalValues.Center,
+                            _ => XLAlignmentHorizontalValues.Left
+                        };
+                        if (isAlternate)
+                        {
+                            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#F8FAFC");
+                        }
                         cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                        cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#E2E8F0");
+                        cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#CBD5E1");
                     }
+                    ws.Row(rowIndex).Height = 26;
 
                     rowIndex++;
                 }
             }
 
-            ws.SheetView.FreezeRows(1);
-            ws.Columns().AdjustToContents();
+            ws.SheetView.FreezeRows(headerRow);
+            ws.Columns(1, headers.Length).AdjustToContents();
+            for (int col = 1; col <= headers.Length; col++)
+            {
+                var column = ws.Column(col);
+                column.Width = Math.Clamp(column.Width + 4.0, 14.0, 42.0);
+            }
+            ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
+            ws.PageSetup.CenterHorizontally = true;
+            ws.PageSetup.FitToPages(1, 0);
 
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
