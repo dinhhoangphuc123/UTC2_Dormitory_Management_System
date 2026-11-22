@@ -69,6 +69,16 @@ namespace Dormitory.Web.Features.Payments.Services
                         return false;
                     }
 
+                    string? validStaffId = null;
+                    if (!string.IsNullOrWhiteSpace(staffId))
+                    {
+                        var trimmedStaff = staffId.Trim();
+                        if (await _context.NhanViens.AnyAsync(n => n.MaNhanVien == trimmedStaff))
+                        {
+                            validStaffId = trimmedStaff;
+                        }
+                    }
+
                     var thanhToan = new ThanhToan
                     {
                         MaThanhToan = Shared.Helpers.IdGenerator.Next("TT"),
@@ -77,7 +87,7 @@ namespace Dormitory.Web.Features.Payments.Services
                         NgayThanhToan = DateTime.Now,
                         PhuongThuc = paymentType,
                         GhiChu = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim(),
-                        MaNhanVienThu = staffId,
+                        MaNhanVienThu = validStaffId,
                         AnhMinhChung = proofFileName
                     };
                     _context.ThanhToans.Add(thanhToan);
@@ -92,9 +102,9 @@ namespace Dormitory.Web.Features.Payments.Services
                         {
                             isContractActivation = true;
                             invoice.HopDong.TrangThai = "hieuLuc";
-                            if (!string.IsNullOrEmpty(staffId))
+                            if (!string.IsNullOrEmpty(validStaffId))
                             {
-                                invoice.HopDong.MaNhanVienLap = staffId;
+                                invoice.HopDong.MaNhanVienLap = validStaffId;
                             }
 
                             _context.ThongBaos.Add(new Features.Students.Entities.ThongBao

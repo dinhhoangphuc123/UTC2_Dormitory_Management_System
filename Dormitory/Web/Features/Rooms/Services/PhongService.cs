@@ -31,7 +31,9 @@ namespace Dormitory.Web.Features.Rooms.Services
                 .Include(p => p.ToaNha)
                 .Include(p => p.LoaiPhong)
                 .Include(p => p.DanhSachGiuong)
-                    .ThenInclude(g => g.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
+                    .ThenInclude(g => g.DanhSachHopDong.Where(h =>
+                        h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear &&
+                        (h.TrangThai == "hieuLuc" || h.TrangThai == "tamNgung")))
                         .ThenInclude(h => h.SinhVien)
                 .AsSplitQuery();
 

@@ -39,9 +39,7 @@ namespace Dormitory.Web.Shared.Middleware
             }
 
             bool isApi = context.Request.Path.StartsWithSegments("/api");
-            var detail = _env.IsDevelopment()
-                ? exception.Message
-                : "Đã xảy ra lỗi hệ thống. Vui lòng liên hệ quản trị viên.";
+            const string detail = "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.";
 
             if (isApi)
             {

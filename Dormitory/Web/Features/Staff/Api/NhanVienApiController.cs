@@ -4,6 +4,7 @@ using Dormitory.Web.Features.Staff.DTOs;
 using Dormitory.Web.Features.Staff.Services;
 using Dormitory.Web.Features.Staff.Validators;
 using Dormitory.Web.Shared.Constants;
+using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Staff.Api
 {
@@ -12,10 +13,12 @@ namespace Dormitory.Web.Features.Staff.Api
     public class NhanVienApiController : ControllerBase
     {
         private readonly INhanVienService _nhanVienService;
+        private readonly ICurrentUser? _currentUser;
 
-        public NhanVienApiController(INhanVienService nhanVienService)
+        public NhanVienApiController(INhanVienService nhanVienService, ICurrentUser? currentUser = null)
         {
             _nhanVienService = nhanVienService;
+            _currentUser = currentUser;
         }
 
         [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
@@ -57,13 +60,13 @@ namespace Dormitory.Web.Features.Staff.Api
         [HttpPost("{id}/toggle-status")]
         public async Task<IActionResult> ToggleAccountAccess(string id)
         {
-            bool success = await _nhanVienService.ToggleAccountAccessAsync(id);
+            bool success = await _nhanVienService.ToggleAccountAccessAsync(id, _currentUser?.StaffId);
             if (success)
             {
                 return Ok(ApiResponse.Ok("Đã thay đổi trạng thái hoạt động tài khoản thành công!"));
             }
 
-            return BadRequest(ApiResponse.Fail("Không tìm thấy nhân viên hoặc nhân viên chưa được cấp tài khoản."));
+            return BadRequest(ApiResponse.Fail("Không thể thay đổi trạng thái tài khoản (nhân viên không tồn tại, chưa có tài khoản hoặc là tài khoản quản trị đang đăng nhập)."));
         }
     }
 }

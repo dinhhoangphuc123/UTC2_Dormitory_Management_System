@@ -34,7 +34,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             return Ok(ApiResponse<List<UtilityItemDto>>.Ok(utilities));
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("record")]
         public async Task<IActionResult> Record([FromBody] RecordUtilityDto req, [FromQuery] string? academicYear)
         {
@@ -61,7 +61,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             return Ok(ApiResponse<UtilityItemDto>.Ok(updated, $"Đã cập nhật chỉ số điện nước phòng {updated.Room} thành công!"));
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("finalize")]
         public async Task<IActionResult> Finalize([FromBody] FinalizeUtilityDto req, [FromQuery] string? academicYear)
         {

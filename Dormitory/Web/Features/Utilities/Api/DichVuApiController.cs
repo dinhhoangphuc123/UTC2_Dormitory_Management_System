@@ -29,7 +29,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             return Ok(ApiResponse<List<ServiceItemDto>>.Ok(services));
         }
 
-        [Authorize(Roles = $"{RoleNames.Admin},{RoleNames.KeToan}")]
+        [Authorize(Roles = RoleNames.KeToan)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] SaveServiceDto req)
         {
@@ -40,7 +40,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             return Ok(ApiResponse<ServiceItemDto>.Ok(data, $"Đã thêm dịch vụ {data.Name}."));
         }
 
-        [Authorize(Roles = $"{RoleNames.Admin},{RoleNames.KeToan}")]
+        [Authorize(Roles = RoleNames.KeToan)]
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(string id, [FromBody] SaveServiceDto req)
         {
@@ -51,7 +51,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             return Ok(ApiResponse<ServiceItemDto>.Ok(data, $"Đã cập nhật dịch vụ {data.Name}."));
         }
 
-        [Authorize(Roles = $"{RoleNames.Admin},{RoleNames.KeToan}")]
+        [Authorize(Roles = RoleNames.KeToan)]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(string id)
         {
@@ -70,7 +70,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             return Ok(ApiResponse<List<ServiceRegistrationDto>>.Ok(registrations));
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("dangky/{id}/approve")]
         public async Task<IActionResult> ApproveRegistration(int id)
         {
@@ -86,7 +86,7 @@ namespace Dormitory.Web.Features.Utilities.Api
             public string? Reason { get; set; }
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("dangky/{id}/reject")]
         public async Task<IActionResult> RejectRegistration(int id, [FromBody] RejectRegistrationRequest req)
         {

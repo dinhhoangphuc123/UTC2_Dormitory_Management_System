@@ -260,6 +260,66 @@ const KtxApp = (function () {
         });
     }
 
+    function stampRawHtml(rootEl, depth = 0) {
+        if (!rootEl || !rootEl.children || depth > 3) return;
+        Array.from(rootEl.children).forEach(child => {
+            child.__ktxRawHtml = child.outerHTML;
+            stampRawHtml(child, depth + 1);
+        });
+    }
+
+    function patchViewSections(oldRoot, newRoot, depth = 0) {
+        if (oldRoot.className !== newRoot.className) {
+            oldRoot.className = newRoot.className;
+        }
+
+        const oldChildren = Array.from(oldRoot.children);
+        const newChildren = Array.from(newRoot.children);
+
+        if (oldChildren.length !== newChildren.length || oldChildren.length === 0) {
+            oldRoot.innerHTML = newRoot.innerHTML;
+            stampRawHtml(oldRoot, depth);
+            return;
+        }
+
+        for (let i = 0; i < newChildren.length; i++) {
+            const oldChild = oldChildren[i];
+            const newChild = newChildren[i];
+            const newRaw = newChild.outerHTML;
+
+            // Giữ nguyên 100% nếu khối này không thay đổi (Banner, KPI, Filter bar, Card...)
+            if ((oldChild.__ktxRawHtml && oldChild.__ktxRawHtml === newRaw) || oldChild.outerHTML === newRaw) {
+                continue;
+            }
+
+            // Nếu người dùng đang gõ trong ô input/textarea thuộc khối này thì giữ nguyên focus
+            const activeEl = document.activeElement;
+            if (activeEl && oldChild.contains(activeEl) && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                oldChild.__ktxRawHtml = newRaw;
+                continue;
+            }
+
+            // Nếu khối chứa cùng cấu trúc con và không chứa <select> đã được custom-wrap thì đệ quy để chỉ thay đúng phần tử con thay đổi
+            if (
+                depth < 3 &&
+                oldChild.tagName === newChild.tagName &&
+                oldChild.className === newChild.className &&
+                oldChild.children.length > 0 &&
+                oldChild.children.length === newChild.children.length &&
+                !oldChild.querySelector('[data-ktx-select-wrapper]')
+            ) {
+                oldChild.__ktxRawHtml = newRaw;
+                patchViewSections(oldChild, newChild, depth + 1);
+                continue;
+            }
+
+            const cloned = newChild.cloneNode(true);
+            cloned.__ktxRawHtml = newRaw;
+            stampRawHtml(cloned, depth + 1);
+            oldRoot.replaceChild(cloned, oldChild);
+        }
+    }
+
     function preserveSearchFocusAndUpdate(container, newHtml) {
         if (!container) return;
         const activeEl = document.activeElement;
@@ -276,7 +336,22 @@ const KtxApp = (function () {
             } catch (_) {}
         }
 
-        container.innerHTML = newHtml;
+        const cleanedHtml = String(newHtml || '').replace(/\bpage-content-enter\b/g, '');
+        const temp = document.createElement('div');
+        temp.innerHTML = cleanedHtml;
+
+        if (
+            container.children.length === 1 &&
+            temp.children.length === 1 &&
+            container.firstElementChild.tagName === temp.firstElementChild.tagName
+        ) {
+            patchViewSections(container.firstElementChild, temp.firstElementChild);
+        } else {
+            container.innerHTML = cleanedHtml;
+            if (container.firstElementChild) {
+                stampRawHtml(container.firstElementChild);
+            }
+        }
 
         if (isSearchInput) {
             let nextInput = inputId ? document.getElementById(inputId) : null;
@@ -337,13 +412,17 @@ const KtxApp = (function () {
             document.documentElement.classList.remove('dark');
             localStorage.setItem('utc2_dorm_theme', 'light');
         }
-        renderTopNav();
+        document.documentElement.style.colorScheme = state.darkMode ? 'dark' : 'light'; localStorage.setItem('ktx_dark_mode', state.darkMode ? 'true' : 'false'); document.querySelectorAll('[data-ktx-theme-toggle]').forEach(btn => { const label = state.darkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'; btn.setAttribute('title', label); btn.setAttribute('aria-label', label); btn.setAttribute('aria-pressed', state.darkMode ? 'true' : 'false'); btn.innerHTML = `<span class="material-symbols-outlined text-[19px]">${state.darkMode ? 'light_mode' : 'dark_mode'}</span>`; });
         renderSidebar();
     }
 
     function initTheme() {
         const saved = localStorage.getItem('utc2_dorm_theme');
-        state.darkMode = saved === 'dark';
+        if (saved === null && localStorage.getItem('ktx_dark_mode') === null) {
+            state.darkMode = Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } else {
+            state.darkMode = saved === 'dark' || localStorage.getItem('ktx_dark_mode') === 'true';
+        }
         if (state.darkMode) {
             document.documentElement.classList.add('dark');
         } else {
@@ -443,7 +522,14 @@ const KtxApp = (function () {
             console.error('Logout error:', e);
         }
         state.currentUser = null;
+        state.students = [];
+        state.contracts = [];
+        state.applications = [];
+        state.rooms = [];
+        state.dashboardSummary = null;
+        state.selectedAcademicYear = '';
         localStorage.removeItem('utc2_current_user');
+        localStorage.removeItem('ktx_user_selected_academic_year');
         Object.keys(localStorage).forEach((k) => {
             if (k.startsWith('ktx_')) localStorage.removeItem(k);
         });
@@ -455,12 +541,18 @@ const KtxApp = (function () {
         }
     }
 
-    // Navigation
+    // Navigation (Chỉ cập nhật vùng nội dung chính & trạng thái active trên sidebar, không tải lại toàn trang)
     function navigate(tab) {
+        const prevTab = state.currentTab;
         state.currentTab = tab;
         state.isMobileMenuOpen = false;
-        renderApp(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (document.getElementById('mainContent') && document.getElementById('sidebarContainer')) {
+            renderSidebar();
+            renderActiveView(false, prevTab === tab);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            renderApp(false);
+        }
     }
 
     async function fetchApiData(url) {
@@ -615,56 +707,62 @@ const KtxApp = (function () {
             return;
         }
 
-        root.innerHTML = `
-            <div class="min-h-screen bg-[#F4F5F7] dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] transition-colors duration-200">
-                <!-- Sidebar -->
-                <div id="sidebarContainer"></div>
+        const existingMain = document.getElementById('mainContent');
+        const existingSidebar = document.getElementById('sidebarContainer');
+        const existingTopNav = document.getElementById('topNavContainer');
 
-                <!-- Main Layout -->
-                <div class="lg:pl-64 flex flex-col min-h-screen">
-                    <!-- TopNav -->
-                    <div id="topNavContainer"></div>
+        if (!existingMain || !existingSidebar || !existingTopNav) {
+            root.innerHTML = `
+                <div class="min-h-screen bg-[#F4F5F7] dark:bg-[#0B0F1A] text-[#0B0F1A] dark:text-[#E8EAF0] transition-colors duration-200">
+                    <!-- Sidebar -->
+                    <div id="sidebarContainer"></div>
 
-                    <!-- Dynamic Main Content -->
-                    <main id="mainContent" class="flex-1 pt-20 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto">
-                        <div class="flex items-center justify-center p-12 text-slate-400">
-                            <span class="inline-block w-6 h-6 border-2 border-[#0B2A5B] border-t-transparent rounded-full animate-spin"></span>
-                        </div>
-                    </main>
+                    <!-- Main Layout -->
+                    <div class="lg:pl-64 flex flex-col min-h-screen">
+                        <!-- TopNav -->
+                        <div id="topNavContainer"></div>
+
+                        <!-- Dynamic Main Content -->
+                        <main id="mainContent" class="flex-1 pt-20 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto">
+                            <div class="flex items-center justify-center p-12 text-slate-400">
+                                <span class="inline-block w-6 h-6 border-2 border-[#0B2A5B] border-t-transparent rounded-full animate-spin"></span>
+                            </div>
+                        </main>
+                    </div>
+
+                    <!-- Global Modals Container -->
+                    <div id="modalsContainer"></div>
+
+                    <!-- Command Palette -->
+                    <div id="commandPaletteContainer"></div>
+
+                    <!-- Toast Container -->
+                    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
                 </div>
-
-                <!-- Global Modals Container -->
-                <div id="modalsContainer"></div>
-
-                <!-- Command Palette -->
-                <div id="commandPaletteContainer"></div>
-
-                <!-- Toast Container -->
-                <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
-            </div>
-        `;
+            `;
+            renderTopNav();
+        }
 
         renderSidebar();
-        renderTopNav();
-        renderActiveView(showPageLoader);
+        renderActiveView(false);
         renderToasts();
     }
 
     // Quyền hiển thị menu theo vai trò. Máy chủ vẫn kiểm tra quyền ở từng API,
     // đây chỉ là lớp bảo vệ giao diện để người dùng không thấy mục mình không dùng được.
     const MENU_ROLES = {
-        'dashboard': ['quanLy', 'keToan'],
+        'dashboard': ['admin', 'quanLy', 'keToan'],
         'don-dang-ky': ['quanLy'],
         'hop-dong': ['quanLy'],
         'sinh-vien': ['quanLy'],
-        'lop-khoa': ['quanLy'],
-        'phong-va-giuong': ['quanLy'],
+        'lop-khoa': ['admin', 'quanLy'],
+        'phong-va-giuong': ['admin', 'quanLy'],
         'dien-nuoc-dich-vu': ['quanLy', 'keToan'],
         'hoa-don': ['quanLy', 'keToan'],
         'sua-chua': ['quanLy'],
         'vi-pham': ['quanLy'],
         'nhan-vien-tai-khoan': ['admin'],
-        'bao-cao': ['quanLy', 'keToan']
+        'bao-cao': ['admin', 'quanLy', 'keToan']
     };
 
     function canAccessMenu(tab) {
@@ -755,6 +853,8 @@ const KtxApp = (function () {
             .map(group => ({ ...group, items: group.items.filter(item => canAccessMenu(item.id)) }))
             .filter(group => group.items.length > 0);
 
+        const prevScrollEl = container.querySelector('.overflow-y-auto');
+        const prevScrollTop = prevScrollEl ? prevScrollEl.scrollTop : 0;
         container.innerHTML = `
             ${state.isMobileMenuOpen ? `
                 <div class="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-xs transition-opacity" onclick="KtxApp.toggleMobileMenu()"></div>
@@ -770,9 +870,8 @@ const KtxApp = (function () {
                             <div class="w-8 h-8 flex items-center justify-center shrink-0">
                                 <img src="/images/utc2-logo.png" alt="Logo Trường Đại học Giao thông Vận tải" class="w-full h-full object-contain" />
                             </div>
-                            <div class="flex flex-col min-w-0">
-                                <span class="font-bold text-base text-white tracking-wide truncate leading-tight">KTX UTC2</span>
-                                <span class="text-xs text-slate-400 font-semibold tracking-wider uppercase truncate mt-0.5">PHÂN HIỆU TP.HCM</span>
+                            <div class="flex items-center min-w-0">
+                                <span class="font-bold text-[19px] text-white tracking-tight truncate leading-none">Quản lý ký túc xá</span>
                             </div>
                         </div>
                         <button onclick="KtxApp.toggleMobileMenu()" class="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg">
@@ -806,6 +905,8 @@ const KtxApp = (function () {
                 </div>
             </aside>
         `;
+        const nextScrollEl = container.querySelector('.overflow-y-auto');
+        if (nextScrollEl && prevScrollTop > 0) nextScrollEl.scrollTop = prevScrollTop;
     }
 
     function renderTopNav() {
@@ -822,13 +923,11 @@ const KtxApp = (function () {
                         <span class="material-symbols-outlined text-[22px]">menu</span>
                     </button>
 
-                    ${!isStudent ? `
-                        <!-- Global Search Bar -->
-                        <div role="button" tabindex="0" aria-label="Tìm kiếm nhanh" onclick="KtxApp.openSearch()" class="flex items-center gap-2.5 flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
-                            <span class="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors">search</span>
-                            <span class="text-sm text-slate-400 dark:text-slate-400 truncate flex-1 select-none">Tìm kiếm (phòng, SV, hợp đồng...)</span>
-                        </div>
-                    ` : '<div class="flex-1"></div>'}
+                    <!-- Global Search Bar -->
+                    <div role="button" tabindex="0" aria-label="Tìm kiếm nhanh" onclick="KtxApp.openSearch()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();KtxApp.openSearch();}" class="flex items-center gap-2.5 flex-1 min-w-0 h-10 px-3.5 rounded-xl bg-slate-100/80 dark:bg-[#0B0F1A] border border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 cursor-pointer hover:border-[#0B2A5B] dark:hover:border-blue-500/50 transition-all shadow-2xs group">
+                        <span class="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-[#0B2A5B] dark:group-hover:text-blue-400 transition-colors">search</span>
+                        <span class="text-sm text-slate-400 dark:text-slate-400 truncate flex-1 select-none">${isStudent ? 'Tìm kiếm nhanh (hóa đơn, hợp đồng, đợt đăng ký, thông báo...)' : 'Tìm kiếm (phòng, SV, hợp đồng...)'}</span>
+                    </div>
                 </div>
 
                 <!-- Right: Academic year, Dark mode, Notifications, Profile -->
@@ -839,12 +938,12 @@ const KtxApp = (function () {
                             <select id="academicYearSelect" onchange="KtxApp.changeAcademicYear(this.value)" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-sm font-semibold max-w-[220px]">
                                 <option value="">Chọn năm học</option>
                             </select>
-                            <button type="button" onclick="KtxApp.toggleAcademicYearMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-sm font-semibold">Quản lý năm học</button>
+                            ${state.currentUser.roleCode === 'admin' ? `<button type="button" onclick="KtxApp.toggleAcademicYearMenu()" class="h-10 px-3 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-700 dark:text-slate-200 text-sm font-semibold">Quản lý năm học</button>` : ''}
                         </div>
                     ` : ''}
 
                     <!-- Dark Mode Button -->
-                    <button type="button" onclick="KtxApp.toggleDarkMode()" class="w-10 h-10 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shadow-2xs" title="Đổi chế độ sáng/tối">
+                    <button type="button" data-ktx-theme-toggle="true" aria-pressed="${state.darkMode ? 'true' : 'false'}" aria-label="${state.darkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}" onclick="KtxApp.toggleDarkMode()" class="w-10 h-10 rounded-xl bg-white dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-slate-600 dark:text-amber-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shadow-2xs" title="${state.darkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}">
                         <span class="material-symbols-outlined text-[19px]">${state.darkMode ? 'light_mode' : 'dark_mode'}</span>
                     </button>
 
@@ -1011,7 +1110,7 @@ const KtxApp = (function () {
                             </div>
                         </div>
 
-                        <button type="button" onclick="KtxApp.toggleDarkMode()" class="relative z-10 w-9 h-9 rounded-lg bg-white/10 border border-white/15 text-white hover:bg-white/20 transition flex items-center justify-center">
+                        <button type="button" data-ktx-theme-toggle="true" aria-pressed="${state.darkMode ? 'true' : 'false'}" aria-label="${state.darkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}" title="${state.darkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}" onclick="KtxApp.toggleDarkMode()" class="relative z-10 w-10 h-10 rounded-xl bg-white/10 border border-white/15 text-white hover:bg-white/20 transition flex items-center justify-center">
                             <span class="material-symbols-outlined text-[18px]">${state.darkMode ? 'light_mode' : 'dark_mode'}</span>
                         </button>
                     </div>
@@ -1034,7 +1133,7 @@ const KtxApp = (function () {
                 </div>
 
                 <!-- CỘT PHẢI (45%): Form Đăng nhập -->
-                <div class="lg:w-[45%] flex flex-col justify-center px-6 sm:px-12 xl:px-16 py-12 ${state.authMode === 'otp' ? 'bg-[#FCFDFE]' : 'bg-white dark:bg-[#121826]'} transition-colors duration-200">
+                <div class="lg:w-[45%] flex flex-col justify-center px-6 sm:px-12 xl:px-16 py-12 bg-white dark:bg-[#121826] transition-colors duration-200">
                     <div class="w-full max-w-md mx-auto">
                         ${state.authMode === 'reset' ? `
                         <div class="mb-8">
@@ -1057,13 +1156,13 @@ const KtxApp = (function () {
                             </div>
                         </form>
                         ` : state.authMode === 'otp' ? `
-                        <div class="w-full max-w-md mx-auto text-[#0B0F1A]">
+                        <div class="w-full max-w-md mx-auto text-[#0B0F1A] dark:text-[#E8EAF0]">
                             <button type="button" onclick="KtxApp.setAuthMode('forgot')" class="inline-flex items-center gap-1.5 mb-7 text-sm font-medium text-[#526783] hover:text-[#0B2A5B] transition">
                                 <span class="material-symbols-outlined text-[18px]">arrow_back</span>
                                 <span>Quay lại</span>
                             </button>
                             <div class="mb-7">
-                                <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B0F1A]">Nhập mã OTP</h2>
+                                <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B0F1A] dark:text-white">Nhập mã OTP</h2>
                                 <p class="mt-2 text-sm leading-6 text-[#667085]">Mã xác nhận 6 số gửi đến: <span class="font-semibold text-[#0B2A5B]">${escapeHtml(state.resetUsername)}</span></p>
                             </div>
                             <form id="verifyForm" class="space-y-6" onsubmit="event.preventDefault(); KtxApp.submitVerifyForm();">
@@ -1071,7 +1170,7 @@ const KtxApp = (function () {
                                     <label class="block text-xs font-semibold uppercase tracking-[0.12em] text-[#526783] mb-2.5">Mã xác thực</label>
                                     <div class="flex items-center justify-between gap-2" onpaste="KtxApp.handleOtpPaste(event)">
                                         ${Array.from({ length: 6 }, (_, index) => `
-                                            <input type="text" inputmode="numeric" maxlength="${index === 0 ? 6 : 1}" pattern="${index === 0 ? '[0-9]{1,6}' : '[0-9]'}" required ${index === 0 ? 'autocomplete="one-time-code"' : 'autocomplete="off"'} aria-label="Chữ số ${index + 1} của mã OTP" data-otp-digit="${index}" oninput="KtxApp.handleOtpInput(${index}, this)" onkeydown="KtxApp.handleOtpKeydown(${index}, event)" placeholder="•" class="flex-1 min-w-0 h-14 rounded-xl border border-[#E3E9F1] bg-white text-center text-lg font-semibold text-[#0B0F1A] placeholder:text-[#CBD5E1] focus:border-[#0B2A5B] focus:outline-none focus:ring-1 focus:ring-[#0B2A5B] transition" />
+                                            <input type="text" inputmode="numeric" maxlength="${index === 0 ? 6 : 1}" pattern="${index === 0 ? '[0-9]{1,6}' : '[0-9]'}" required ${index === 0 ? 'autocomplete="one-time-code"' : 'autocomplete="off"'} aria-label="Chữ số ${index + 1} của mã OTP" data-otp-digit="${index}" oninput="KtxApp.handleOtpInput(${index}, this)" onkeydown="KtxApp.handleOtpKeydown(${index}, event)" placeholder="•" class="flex-1 min-w-0 h-14 rounded-xl border border-[#E3E9F1] dark:border-[#232B3B] bg-white dark:bg-[#0B0F1A] text-center text-lg font-semibold text-[#0B0F1A] dark:text-white placeholder:text-[#CBD5E1] dark:placeholder:text-slate-600 focus:border-[#0B2A5B] dark:focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-[#0B2A5B] transition" />
                                         `).join('')}
                                     </div>
                                 </div>
@@ -1388,19 +1487,16 @@ const KtxApp = (function () {
             `;
         }
 
-        if (showPageLoader) {
-            const remainingLoadTime = 550 - (performance.now() - startedAt);
-            if (remainingLoadTime > 0) {
-                await new Promise(resolve => setTimeout(resolve, remainingLoadTime));
-            }
-        }
-
         if (renderId !== activeViewRenderId || tab !== state.currentTab) return;
-        if (showPageLoader) {
-            content.innerHTML = `<div class="page-content-enter">${viewHtml}</div>`;
-            // Gỡ class sau khi animation chạy xong để không còn transform tồn đọng
+        const isSameTab = content.dataset.renderedTab === tab && content.children.length > 0;
+        content.dataset.renderedTab = tab;
+
+        if (!isSameTab) {
+            content.innerHTML = viewHtml;
             const enteredView = content.firstElementChild;
             if (enteredView) {
+                stampRawHtml(enteredView);
+                enteredView.classList.add('page-content-enter');
                 enteredView.addEventListener('animationend', () => {
                     enteredView.classList.remove('page-content-enter');
                 }, { once: true });
@@ -2111,7 +2207,7 @@ const KtxApp = (function () {
             glow: "#ea580c",
             dot: "#fb923c",
             dotRing: "#f97316",
-            ringClass: "focus-visible:ring-orange-500/40"
+            ringClass: "focus-visible:ring-amber-500/40"
         },
         green: {
             fill: "#4ade80",
@@ -2126,7 +2222,7 @@ const KtxApp = (function () {
             rim: "#eab308",
             dot: "#facc15",
             dotRing: "#eab308",
-            ringClass: "focus-visible:ring-yellow-500/40"
+            ringClass: "focus-visible:ring-amber-500/40"
         },
         blue: {
             fill: "#60a5fa",
@@ -2142,7 +2238,7 @@ const KtxApp = (function () {
             glow: "#9333ea",
             dot: "#c084fc",
             dotRing: "#a855f7",
-            ringClass: "focus-visible:ring-purple-500/40"
+            ringClass: "focus-visible:ring-blue-500/40"
         }
     };
 
@@ -3291,7 +3387,7 @@ const KtxApp = (function () {
                                 </div>
                                 <p class="text-[11px] text-slate-400 dark:text-slate-400 truncate">Tổng tiền thu được năm nay so với cùng kỳ năm trước</p>
                             </div>
-                            <button type="button" onclick="KtxApp.navigate('hoa-don')" class="size-7 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors shrink-0" title="Tùy chọn">
+                            ${canAccessMenu('hoa-don') ? `<button type="button" onclick="KtxApp.navigate('hoa-don')" class="size-7 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors shrink-0" title="Tùy chọn">` : `<button type="button" onclick="KtxApp.navigate('bao-cao')" class="size-7 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors shrink-0" title="Tùy chọn">`}
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                     <circle cx="3.5" cy="8" r="1.2" />
                                     <circle cx="8" cy="8" r="1.2" />
@@ -3726,11 +3822,11 @@ const KtxApp = (function () {
 
                                         <!-- Rest / Hatched bars section -->
                                         <g id="exp-rest-group" class="transition-opacity duration-200">
-                                            <g clip-path="url(#exp-rest-clip)" fill="#ffedd5" class="dark:fill-orange-950/40">
+                                            <g clip-path="url(#exp-rest-clip)" fill="#ffedd5" class="dark:fill-amber-950/40">
                                                 ${EXP_TICKS.map(t => `<path data-slot="expenses-chart-bar" data-end="${t.end}" d="${t.d}" />`).join('')}
                                             </g>
-                                            <path data-slot="expenses-chart-outline" data-rest="outerLine" d="${initialRestShape.outerLine}" fill="none" stroke="#fdba74" class="dark:stroke-orange-500/40" />
-                                            <path data-slot="expenses-chart-outline" data-rest="innerLine" d="${initialRestShape.innerLine}" fill="none" stroke="#fdba74" class="dark:stroke-orange-500/40" />
+                                            <path data-slot="expenses-chart-outline" data-rest="outerLine" d="${initialRestShape.outerLine}" fill="none" stroke="#fdba74" class="dark:stroke-amber-500/40" />
+                                            <path data-slot="expenses-chart-outline" data-rest="innerLine" d="${initialRestShape.innerLine}" fill="none" stroke="#fdba74" class="dark:stroke-amber-500/40" />
                                         </g>
 
                                         <!-- Cored Segments Base: Rim, Fill, Inner Light -->
@@ -3931,7 +4027,7 @@ const KtxApp = (function () {
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỪ CHỐI / HỦY</span>
-                            <div class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                            <div class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-red-600 dark:text-red-400">
                                 <span class="material-symbols-outlined text-[18px]">cancel</span>
                             </div>
                         </div>
@@ -4165,13 +4261,7 @@ const KtxApp = (function () {
 
         // Tính tổng tiền cọc của tập hợp đồng đang lọc (nếu cọc là số thì cộng dồn, format VND)
         const totalFilteredDeposit = contextualContracts.reduce((sum, c) => sum + (Number(c.depositAmount) || 0), 0);
-        const formattedDeposit = totalFilteredDeposit > 0
-            ? (totalFilteredDeposit >= 1000000000
-                ? (totalFilteredDeposit / 1000000000).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' tỷ đồng'
-                : (totalFilteredDeposit >= 1000000
-                    ? (totalFilteredDeposit / 1000000).toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' triệu đồng'
-                    : formatVND(totalFilteredDeposit)))
-            : '0 đ';
+        const formattedDeposit = totalFilteredDeposit > 0 ? formatVND(totalFilteredDeposit) : '0 đ';
 
         // 3. Sau đó mới lọc theo trạng thái đang chọn để hiển thị bảng
         let filtered = contextualContracts;
@@ -4565,7 +4655,7 @@ const KtxApp = (function () {
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG NỮ SINH</span>
-                            <div class="w-8 h-8 rounded-lg bg-pink-50 dark:bg-pink-950/40 flex items-center justify-center text-pink-600 dark:text-pink-400">
+                            <div class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-red-600 dark:text-red-400">
                                 <span class="material-symbols-outlined text-[18px]">female</span>
                             </div>
                         </div>
@@ -4575,7 +4665,7 @@ const KtxApp = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-pink-600 dark:text-pink-400 font-semibold">Tổng nữ sinh đang ở toàn KTX</span>
+                            <span class="text-red-600 dark:text-red-400 font-semibold">Tổng nữ sinh đang ở toàn KTX</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -4730,11 +4820,14 @@ const KtxApp = (function () {
         const filteredByGender = (!state.roomsGender || state.roomsGender === 'all')
             ? filteredByBuilding
             : filteredByBuilding.filter(room => room.gender === state.roomsGender);
-        const roomNumbers = [...new Set(filteredByGender.map(room => room.roomNumber).filter(Boolean))]
+        const filteredByFloor = (!state.roomsFloor || state.roomsFloor === 'all')
+            ? filteredByGender
+            : filteredByGender.filter(r => String(r.floor) === String(state.roomsFloor));
+        const roomNumbers = [...new Set(filteredByFloor.map(room => room.roomNumber).filter(Boolean))]
             .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
         const filteredByRoomNum = state.roomsRoomNumber === 'all'
-            ? filteredByGender
-            : filteredByGender.filter(room => room.roomNumber === state.roomsRoomNumber);
+            ? filteredByFloor
+            : filteredByFloor.filter(room => room.roomNumber === state.roomsRoomNumber);
         const contextualRooms = (state.roomsSearch && state.roomsSearch.trim())
             ? filteredByRoomNum.filter(room =>
                 fuzzyMatch(
@@ -4783,7 +4876,7 @@ const KtxApp = (function () {
                             <span class="material-symbols-outlined text-[18px] text-[#375ba9] dark:text-blue-400">table_view</span>
                             <span>Xuất file Excel</span>
                         </button>
-                        <button type="button" onclick="KtxApp.openCreateRoomModal()" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white shadow-sm transition-all text-xs font-semibold">
+                        ${state.currentUser?.roleCode === 'admin' ? `<button type="button" onclick="KtxApp.openCreateRoomModal()" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-[#1E293B] text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 transition-all text-xs font-semibold border border-slate-200 dark:border-slate-700">` : `<button type="button" onclick="KtxApp.openCreateRoomModal()" class="hidden" style="display:none !important;">`}
                             <span class="material-symbols-outlined text-[16px]">add</span>
                             <span>Thêm phòng mới</span>
                         </button>
@@ -4938,10 +5031,10 @@ const KtxApp = (function () {
         const getRoomTypeStyle = (roomType) => {
             const isClc = (roomType || '').includes('Chất lượng cao');
             const isFemale = (roomType || '').includes('Nữ');
-            if (isClc && isFemale) return { short: 'CLC Nữ', chip: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900/60' };
-            if (isClc) return { short: 'CLC Nam', chip: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/60' };
-            if (isFemale) return { short: 'TC Nữ', chip: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60' };
-            return { short: 'TC Nam', chip: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900/60' };
+            if (isClc && isFemale) return { short: 'CLC Nữ', chip: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60' };
+            if (isClc) return { short: 'CLC Nam', chip: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60' };
+            if (isFemale) return { short: 'TC Nữ', chip: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60' };
+            return { short: 'TC Nam', chip: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60' };
         };
         return `
             <div class="space-y-6">
@@ -5083,7 +5176,7 @@ const KtxApp = (function () {
                                     </td>
                                     <td class="py-3.5 px-3 align-middle font-medium whitespace-nowrap">${s.buildingId ? 'Tòa ' + escapeHtml(s.buildingId) : '—'}</td>
                                     <td class="py-3.5 px-3 align-middle whitespace-nowrap">
-                                        <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${s.gender === 'Nam' ? 'bg-blue-100 text-[#0B2A5B]' : 'bg-pink-100 text-pink-700'}">${escapeHtml(s.gender || '—')}</span>
+                                        <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${s.gender === 'Nam' ? 'bg-blue-100 text-[#0B2A5B]' : 'bg-red-100 text-red-700'}">${escapeHtml(s.gender || '—')}</span>
                                         <span class="text-[11px] text-slate-500 font-medium ml-1">${escapeHtml(s.cohort || '')}</span>
                                     </td>
                                     <td class="py-3.5 pl-3 pr-6 text-center align-middle whitespace-nowrap" onclick="event.stopPropagation();">
@@ -5605,8 +5698,8 @@ const KtxApp = (function () {
                             <div class="flex items-center gap-3">
                                 <span class="w-14 h-14 rounded-full ring-2 ring-[#0B2A5B]/30 bg-blue-100 text-[#0B2A5B] flex items-center justify-center text-xl font-bold">${getUserInitial(s.name)}</span>
                                 <div>
-                                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">${s.name}</h3>
-                                    <p class="text-xs text-slate-500 font-mono">MSSV: ${s.mssv} • ${s.className}</p>
+                                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">${escapeHtml(s.name)}</h3>
+                                    <p class="text-xs text-slate-500 font-mono">MSSV: ${escapeHtml(s.mssv)} • ${escapeHtml(s.className)}</p>
                                 </div>
                             </div>
                             <button onclick="KtxApp.closeModal()" class="text-slate-400 hover:text-slate-600">
@@ -5617,23 +5710,23 @@ const KtxApp = (function () {
                         <div class="py-4 space-y-4 text-xs text-slate-700 dark:text-slate-300">
                             <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-1">
                                 <span class="text-slate-400 font-semibold text-[10px] uppercase">Chỗ ở hiện tại</span>
-                                <p class="font-bold text-sm text-[#0B2A5B] dark:text-blue-400">Phòng ${s.roomNumber} · Giường ${s.bedNumber}</p>
-                                <p class="text-slate-500">Tòa ${s.buildingId} - Tầng ${s.floor}</p>
-                                <p class="text-slate-500">Nhập KTX từ: ${s.admissionDate}</p>
+                                <p class="font-bold text-sm text-[#0B2A5B] dark:text-blue-400">Phòng ${escapeHtml(s.roomNumber)} · Giường ${escapeHtml(s.bedNumber)}</p>
+                                <p class="text-slate-500">Tòa ${escapeHtml(s.buildingId)} - Tầng ${escapeHtml(s.floor)}</p>
+                                <p class="text-slate-500">Nhập KTX từ: ${escapeHtml(s.admissionDate)}</p>
                             </div>
 
                             <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-2">
                                 <div class="flex justify-between">
                                     <span class="text-slate-400">Số CCCD / Định danh:</span>
-                                    <span class="font-mono font-semibold">${s.cccd}</span>
+                                    <span class="font-mono font-semibold">${escapeHtml(s.cccd)}</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-slate-400">Số điện thoại liên lạc:</span>
-                                    <span class="font-mono font-semibold">${s.phone}</span>
+                                    <span class="font-mono font-semibold">${escapeHtml(s.phone)}</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-slate-400">Quê quán thường trú:</span>
-                                    <span class="font-semibold">${s.hometown}</span>
+                                    <span class="font-semibold">${escapeHtml(s.hometown)}</span>
                                 </div>
                             </div>
                         </div>
@@ -5870,10 +5963,10 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                                     b.status === 'Bảo trì' ? 'border-amber-200 bg-amber-50/40' : 'border-emerald-200 bg-emerald-50/40'
                                 }">
                                     <div class="flex items-center gap-2.5">
-                                        <span class="w-7 h-7 rounded-lg bg-white shadow-2xs flex items-center justify-center font-mono font-bold text-[#0B2A5B]">${b.bedNumber}</span>
+                                        <span class="w-7 h-7 rounded-lg bg-white dark:bg-[#0B0F1A] shadow-2xs flex items-center justify-center font-mono font-bold text-[#0B2A5B] dark:text-blue-400">${escapeHtml(b.bedNumber)}</span>
                                         <div>
-                                            <div class="font-semibold text-slate-900">${b.studentName || b.status}</div>
-                                            ${b.mssv ? `<div class="text-[10px] text-slate-400 font-mono">MSSV: ${b.mssv}</div>` : ''}
+                                            <div class="font-semibold text-slate-900 dark:text-white">${escapeHtml(b.studentName || b.status)}</div>
+                                            ${b.mssv ? `<div class="text-[10px] text-slate-400 font-mono">MSSV: ${escapeHtml(b.mssv)}</div>` : ''}
                                         </div>
                                     </div>
 
@@ -5890,7 +5983,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                     </div>
 
                     <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
-                        <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-xs font-semibold text-slate-700">Đóng</button>
+                        <button type="button" onclick="KtxApp.closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200">Đóng</button>
                     </div>
                 </div>
             </div>
@@ -5989,31 +6082,35 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                         ` : ''}
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2.5">
-                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Thông tin sinh viên</h4>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Giới tính:</span><span class="font-semibold text-right">${escapeHtml(app.gender || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Ngày sinh:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.dateOfBirth || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Số CCCD:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.cccd || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Lớp / Khóa:</span><span class="font-semibold text-right">${escapeHtml(classCohort)}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Khoa / Ngành:</span><span class="font-semibold text-right">${escapeHtml(app.major || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Điện thoại:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.phone || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Email:</span><span class="font-semibold text-right break-all">${escapeHtml(app.email || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Thường trú:</span><span class="font-semibold text-right">${escapeHtml(app.hometown || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Diện ưu tiên:</span><span class="font-semibold text-[#1d4ed8] dark:text-blue-400 text-right">${escapeHtml(app.priorityCategory || 'Không')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Lịch sử lưu trú:</span><span class="font-semibold text-right ${app.hasStayedBefore ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}">${app.hasStayedBefore ? 'Đã từng ở KTX' : 'Chưa từng ở KTX'}</span></div>
+                            <div class="p-5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/70">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-[#0B2A5B] dark:text-blue-300 pb-2.5 mb-2 border-b border-slate-200/80 dark:border-slate-700/70">Thông tin sinh viên</h4>
+                                <div class="divide-y divide-slate-200/60 dark:divide-slate-700/50">
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Giới tính</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.gender || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Ngày sinh</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.dateOfBirth || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Số CCCD</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.cccd || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Lớp / Khóa</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(classCohort)}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Khoa / Ngành</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.major || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Điện thoại</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.phone || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Email</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right break-all">${escapeHtml(app.email || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Thường trú</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.hometown || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Diện ưu tiên</span><span class="font-semibold text-[#0B2A5B] dark:text-blue-300 text-right">${escapeHtml(app.priorityCategory || 'Không')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Lịch sử lưu trú</span><span class="font-semibold text-right ${app.hasStayedBefore ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}">${app.hasStayedBefore ? 'Đã từng ở KTX' : 'Chưa từng ở KTX'}</span></div>
+                                </div>
                             </div>
 
-                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2.5">
-                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Chi tiết đơn đăng ký</h4>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Mã hồ sơ:</span><span class="font-mono font-bold text-slate-900 dark:text-white text-right">${escapeHtml(app.applicationCode)}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Đợt đăng ký:</span><span class="font-semibold text-right">${escapeHtml(app.roundName || app.roundCode || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Nguyện vọng phòng:</span><span class="font-semibold text-[#0B2A5B] dark:text-blue-400 text-right">${escapeHtml(app.roomPreference || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Tòa nhà:</span><span class="font-semibold text-right">${escapeHtml(app.buildingName || '—')}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Đơn giá dự kiến:</span><span class="font-semibold text-right">${escapeHtml(feeText)}</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Thời gian nộp:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.submittedAt || '—')}</span></div>
-                                ${app.approvedAt ? `<div class="flex justify-between gap-3"><span class="text-slate-400">Ngày xử lý:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.approvedAt)}</span></div>` : ''}
-                                ${app.approvedBy ? `<div class="flex justify-between gap-3"><span class="text-slate-400">Người xử lý:</span><span class="font-semibold font-mono text-right">${escapeHtml(app.approvedBy)}</span></div>` : ''}
-                                ${app.note && !isRejected ? `<div class="pt-1 border-t border-slate-200/70 dark:border-slate-700/60"><span class="text-slate-400 block mb-0.5">Ghi chú hồ sơ:</span><p class="font-medium text-slate-700 dark:text-slate-200">${escapeHtml(app.note)}</p></div>` : ''}
+                            <div class="p-5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/70">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-[#0B2A5B] dark:text-blue-300 pb-2.5 mb-2 border-b border-slate-200/80 dark:border-slate-700/70">Chi tiết đơn đăng ký</h4>
+                                <div class="divide-y divide-slate-200/60 dark:divide-slate-700/50">
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Mã hồ sơ</span><span class="font-bold text-slate-900 dark:text-white text-right">${escapeHtml(app.applicationCode)}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Đợt đăng ký</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.roundName || app.roundCode || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Nguyện vọng phòng</span><span class="font-semibold text-[#0B2A5B] dark:text-blue-300 text-right">${escapeHtml(app.roomPreference || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Tòa nhà</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.buildingName || '—')}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Đơn giá dự kiến</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(feeText)}</span></div>
+                                    <div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Thời gian nộp</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.submittedAt || '—')}</span></div>
+                                    ${app.approvedAt ? `<div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Ngày xử lý</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.approvedAt)}</span></div>` : ''}
+                                    ${app.approvedBy ? `<div class="py-2 flex justify-between gap-4"><span class="text-slate-500 dark:text-slate-400 font-medium shrink-0">Người xử lý</span><span class="font-semibold text-slate-800 dark:text-slate-100 text-right">${escapeHtml(app.approvedBy)}</span></div>` : ''}
+                                    ${app.note && !isRejected ? `<div class="pt-3"><span class="text-slate-500 dark:text-slate-400 font-medium block mb-1">Ghi chú hồ sơ</span><p class="font-medium text-slate-700 dark:text-slate-200 leading-relaxed">${escapeHtml(app.note)}</p></div>` : ''}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -6071,7 +6168,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         try {
             const res = await fetch(`/api/dondangky/${encodeURIComponent(appId)}/approve`, { method: 'POST' });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 showToast(`Đã duyệt: ${studentName}! Đã tự động tạo hợp đồng giữ chỗ 24h.`, 'success');
                 await loadApplications();
                 if (state.currentTab === 'don-dang-ky') renderActiveView();
@@ -6188,7 +6285,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         try {
             const res = await fetch(url, { method: 'POST', body: fd });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 closeModal();
                 showToast(json.message || 'Đã xác nhận thanh toán và hoàn tất đăng ký phòng.', 'success');
                 await loadApplications();
@@ -6278,7 +6375,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 body: JSON.stringify({ reason })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 closeModal();
                 showToast(json.message || 'Đã từ chối minh chứng. Sinh viên có thể nộp lại trong thời hạn giữ chỗ.', 'success');
                 await loadApplications();
@@ -6908,7 +7005,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
             body: JSON.stringify(body)
         });
         const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
+        if (!res.ok || json.success === false) {
             const msg = typeof json === 'string' ? json : (json?.message || json?.title || 'Tạo đợt thất bại.');
             showToast(msg, 'error');
             return;
@@ -7364,8 +7461,9 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         };
         const res = await fetch('/api/sinhvien', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const json = await res.json().catch(() => ({}));
-        KtxApp.showToast(res.ok ? 'Đã tiếp nhận sinh viên.' : (json?.message || json?.title || 'Tiếp nhận thất bại.'), res.ok ? 'success' : 'error');
-        if (res.ok) {
+        const ok = res.ok && json.success !== false;
+        KtxApp.showToast(ok ? (json?.message || 'Đã tiếp nhận sinh viên.') : (json?.message || json?.title || 'Tiếp nhận thất bại.'), ok ? 'success' : 'error');
+        if (ok) {
             KtxApp.closeModal();
             await loadStudents();
             if (state.currentTab === 'sinh-vien') renderActiveView();
@@ -7484,11 +7582,12 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         };
         const res = await fetch('/api/phong', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const json = await res.json().catch(() => ({}));
-        KtxApp.showToast(res.ok ? 'Đã thêm phòng.' : (json?.message || json?.title || 'Thêm phòng thất bại.'), res.ok ? 'success' : 'error');
-        if (res.ok) {
+        const ok = res.ok && json.success !== false;
+        KtxApp.showToast(ok ? (json?.message || 'Đã thêm phòng.') : (json?.message || json?.title || 'Thêm phòng thất bại.'), ok ? 'success' : 'error');
+        if (ok) {
             KtxApp.closeModal();
             await loadRooms();
-            if (state.currentTab === 'phong') renderActiveView();
+            if (state.currentTab === 'phong-va-giuong' || state.currentTab === 'phong') renderActiveView();
         }
     }
     function openForgotModal() {
@@ -7913,7 +8012,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 `;
             } catch (err) {
                 console.error('Error loading student notifications:', err);
-                list.innerHTML = '<div class="text-center text-rose-500 py-4">Lỗi tải thông báo.</div>';
+                list.innerHTML = '<div class="text-center text-red-500 py-4">Lỗi tải thông báo.</div>';
             }
             return;
         }
@@ -7938,7 +8037,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
             const badge = document.getElementById('notifBadge');
             if (badge) badge.classList.add('hidden');
         } else {
-            list.innerHTML = items.map(i => `<button type="button" onclick="KtxApp.closeNotifications(); KtxApp.navigate('${i.tab}');" class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">${i.text}</button>`).join('');
+            list.innerHTML = items.map(i => `<button type="button" onclick="KtxApp.closeNotifications(); KtxApp.navigate('${escapeHtml(i.tab)}');" class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">${escapeHtml(i.text)}</button>`).join('');
         }
     }
 
@@ -8273,9 +8372,65 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         showToast(taskCount ? `Có ${taskCount} đầu việc cần xử lý` : 'Hiện không có đầu việc cần xử lý', 'info');
     }
 
+    const STUDENT_SEARCH_SHORTCUTS = [
+        { id: 'sv-tong-quan', icon: 'dashboard', label: 'Tổng quan Sinh viên', keywords: 'tong quan dashboard trang chu noi tru' },
+        { id: 'sv-ho-so', icon: 'badge', label: 'Hồ sơ của tôi', keywords: 'ho so ca nhan thong tin lien he nguoi than doi mat khau' },
+        { id: 'sv-dot-dang-ky', icon: 'event_available', label: 'Đợt đăng ký Nội trú', keywords: 'dot dang ky phong trong xet duyet' },
+        { id: 'sv-don-cua-toi', icon: 'assignment', label: 'Đơn đăng ký của tôi', keywords: 'don dang ky trang thai giu cho' },
+        { id: 'sv-hop-dong', icon: 'edit_document', label: 'Hợp đồng & Chỗ ở', keywords: 'hop dong phong o giuong ban giao' },
+        { id: 'sv-hoa-don', icon: 'receipt_long', label: 'Hóa đơn & Biên nhận', keywords: 'hoa don tien phong dien nuoc thanh toan vietqr' },
+        { id: 'sv-sua-chua', icon: 'build', label: 'Yêu cầu Sửa chữa & Báo hỏng', keywords: 'sua chua bao hong thiet bi su co' },
+        { id: 'sv-vi-pham', icon: 'gavel', label: 'Vi phạm & Kỷ luật', keywords: 'vi pham ky luat bien ban noi quy' },
+        { id: 'sv-thong-bao', icon: 'notifications', label: 'Hộp thư thông báo', keywords: 'thong bao hop thu bql tin nhan' },
+        { id: 'sv-ho-tro', icon: 'help', label: 'Nội quy, Hỗ trợ & Liên hệ BQL', keywords: 'ho tro lien he noi quy huong dan bql' }
+    ];
+
+    function isStudentSession() {
+        const u = state.currentUser;
+        if (u && (u.roleCode === 'sinhVien' || String(u.role || '').toLowerCase().includes('sinh viên'))) {
+            return true;
+        }
+        if (String(state.currentTab || '').startsWith('sv-')) {
+            return true;
+        }
+        return Boolean(document.querySelector('#sidebarContainer button[onclick*="sv-"]'));
+    }
+
+    function renderStudentShortcutButtons(items) {
+        return items.map(item => `
+            <button type="button" onclick="KtxApp.navigate('${item.id}'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors">
+                <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">${item.icon}</span>
+                <span class="truncate">${item.label}</span>
+            </button>
+        `).join('');
+    }
+
     function openSearch() {
         const palette = document.getElementById('commandPaletteContainer');
         if (!palette) return;
+
+        const isStudent = isStudentSession();
+        if (isStudent) {
+            palette.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/60 backdrop-blur-xs" onclick="KtxApp.closeSearch()">
+                    <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden animate-fade-in" onclick="event.stopPropagation()">
+                        <div class="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200 dark:border-[#232B3B]">
+                            <span class="material-symbols-outlined text-[20px] text-slate-400">search</span>
+                            <input id="paletteInput" autofocus type="text" placeholder="Tìm nhanh chức năng (hóa đơn, hợp đồng, đợt đăng ký, thông báo...)" class="w-full bg-transparent text-sm text-slate-800 dark:text-white focus:outline-none" oninput="KtxApp.handlePaletteInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.handlePaletteInput(this.value);}" />
+                            <kbd onclick="KtxApp.closeSearch()" class="cursor-pointer text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">ESC</kbd>
+                        </div>
+                        <div id="paletteResults" class="max-h-96 overflow-y-auto p-2 space-y-3">
+                            <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lối tắt thao tác nhanh</div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                ${renderStudentShortcutButtons(STUDENT_SEARCH_SHORTCUTS)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => document.getElementById('paletteInput')?.focus(), 0);
+            return;
+        }
 
         // Preload data in background if not yet loaded so global search has full records
         if (canAccessMenu('sinh-vien') && (!state.students || !state.students.length)) loadStudents();
@@ -8288,12 +8443,12 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 <div class="w-full max-w-2xl bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] overflow-hidden animate-fade-in" onclick="event.stopPropagation()">
                     <div class="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200 dark:border-[#232B3B]">
                         <span class="material-symbols-outlined text-[20px] text-slate-400">search</span>
-                        <input id="paletteInput" autoFocus type="text" placeholder="Tìm sinh viên, hợp đồng, phòng ốc hoặc gõ lệnh... (Nhấn Enter)" class="w-full bg-transparent text-sm text-slate-800 dark:text-white focus:outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.handlePaletteInput(this.value);}" />
-                        <kbd onclick="KtxApp.closeSearch()" class="cursor-pointer text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">ESC</kbd>
+                        <input id="paletteInput" autoFocus type="text" placeholder="Tìm sinh viên, hợp đồng, phòng ốc hoặc gõ lệnh... (Nhấn Enter)" class="w-full bg-transparent text-sm text-slate-800 dark:text-white focus:outline-none" oninput="KtxApp.handlePaletteInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();KtxApp.handlePaletteInput(this.value);}" />
+                        <kbd onclick="KtxApp.closeSearch()" class="cursor-pointer text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">ESC</kbd>
                     </div>
                     <div id="paletteResults" class="max-h-96 overflow-y-auto p-2 space-y-3">
                         <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lối tắt thao tác nhanh</div>
-                        <div class="grid grid-cols-2 gap-1.5">
+                        <div id="paletteShortcutsGrid" class="grid grid-cols-2 gap-1.5">
                             <button data-menu="dashboard" onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                                 <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">dashboard</span>
                                 <span>Về Dashboard Tổng quan</span>
@@ -8352,6 +8507,10 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         palette.querySelectorAll('[data-menu]').forEach(element => {
             if (!canAccessMenu(element.dataset.menu)) element.remove();
         });
+        const grid = document.getElementById('paletteShortcutsGrid');
+        if (grid && grid.children.length === 0) {
+            grid.innerHTML = renderStudentShortcutButtons(STUDENT_SEARCH_SHORTCUTS);
+        }
     }
 
     function closeSearch() {
@@ -8362,15 +8521,32 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
     function handlePaletteInput(query) {
         const results = document.getElementById('paletteResults');
         if (!results) return;
+
+        if (isStudentSession()) {
+            const q = (query || '').trim();
+            const matched = !q
+                ? STUDENT_SEARCH_SHORTCUTS
+                : STUDENT_SEARCH_SHORTCUTS.filter(item => fuzzyMatch(q, item.label, item.keywords));
+            results.innerHTML = matched.length > 0
+                ? `
+                    <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">${q ? 'Kết quả tìm kiếm' : 'Lối tắt thao tác nhanh'}</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        ${renderStudentShortcutButtons(matched)}
+                    </div>
+                `
+                : `<div class="px-4 py-8 text-center text-xs text-slate-400">Không tìm thấy mục nào phù hợp với "${escapeHtml(q)}"</div>`;
+            return;
+        }
+
         if (!query.trim()) {
             results.innerHTML = `
                 <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lối tắt thao tác nhanh</div>
                 <div class="grid grid-cols-2 gap-1.5">
-                    <button data-menu="dashboard" onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    <button data-menu="dashboard" onclick="KtxApp.navigate('dashboard'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">dashboard</span>
                         <span>Về Dashboard Tổng quan</span>
                     </button>
-                    <button data-menu="sinh-vien" onclick="KtxApp.navigate('sinh-vien'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    <button data-menu="sinh-vien" onclick="KtxApp.navigate('sinh-vien'); KtxApp.closeSearch();" class="flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
                         <span class="material-symbols-outlined text-[18px] text-[#0B2A5B]">badge</span>
                         <span>Tra cứu hồ sơ sinh viên</span>
                     </button>
@@ -8401,9 +8577,9 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Sinh viên</div>
                 <div class="space-y-1">
                     ${matchStudents.map(s => `
-                        <div onclick="KtxApp.openStudentModal('${s.mssv}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
-                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${s.name} (${s.mssv})</span>
-                            <span class="text-xs text-slate-400">Phòng ${s.roomNumber}</span>
+                        <div onclick="KtxApp.openStudentModal('${escapeHtml(s.mssv)}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${escapeHtml(s.name)} (${escapeHtml(s.mssv)})</span>
+                            <span class="text-xs text-slate-400">Phòng ${escapeHtml(s.roomNumber)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -8413,9 +8589,9 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-2">Hợp đồng</div>
                 <div class="space-y-1">
                     ${matchContracts.map(c => `
-                        <div onclick="KtxApp.openPrintModal('${c.contractNumber}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
-                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${c.contractNumber} - ${c.studentName}</span>
-                            <span class="text-xs text-blue-600 font-mono">${c.status}</span>
+                        <div onclick="KtxApp.openPrintModal('${escapeHtml(c.contractNumber)}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${escapeHtml(c.contractNumber)} - ${escapeHtml(c.studentName)}</span>
+                            <span class="text-xs text-blue-600 font-mono">${escapeHtml(c.status)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -8425,9 +8601,9 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-2">Đơn đăng ký</div>
                 <div class="space-y-1">
                     ${matchApps.map(a => `
-                        <div onclick="KtxApp.inspectCandidate('${a.id}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
-                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${a.applicationCode} - ${a.studentName}</span>
-                            <span class="text-xs text-slate-500">${a.status}</span>
+                        <div onclick="KtxApp.inspectCandidate('${escapeHtml(a.id)}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${escapeHtml(a.applicationCode)} - ${escapeHtml(a.studentName)}</span>
+                            <span class="text-xs text-slate-500">${escapeHtml(a.status)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -8437,9 +8613,9 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-2">Buồng phòng</div>
                 <div class="space-y-1">
                     ${matchRooms.map(r => `
-                        <div onclick="KtxApp.inspectRoom('${r.id}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
-                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">Phòng ${r.roomNumber} (${r.buildingName || r.buildingId})</span>
-                            <span class="text-xs text-emerald-600 font-semibold">${r.occupied}/${r.capacity} chỗ</span>
+                        <div onclick="KtxApp.inspectRoom('${escapeHtml(r.id)}'); KtxApp.closeSearch();" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer">
+                            <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">Phòng ${escapeHtml(r.roomNumber)} (${escapeHtml(r.buildingName || r.buildingId)})</span>
+                            <span class="text-xs text-emerald-600 font-semibold">${escapeHtml(r.occupied)}/${escapeHtml(r.capacity)} chỗ</span>
                         </div>
                     `).join('')}
                 </div>
@@ -8596,12 +8772,28 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
             }
         }
 
+        let exportTitle = title || 'BÁO CÁO DỮ LIỆU KÝ TÚC XÁ UTC2';
+        let exportFileName = `BaoCao_${state.selectedAcademicYear}.xlsx`;
+        let exportSheetName = 'BaoCao';
+
         if (tab === 'sinh-vien' && Array.isArray(state.students) && state.students.length) {
-            headers = ['MSSV', 'Họ tên', 'Giới tính', 'Lớp', 'Trạng thái', 'Điện thoại'];
-            rows = state.students.map(s => [s.mssv || s.id, s.name, s.gender, s.className || s.major, s.residenceStatus, s.phone]);
+            exportTitle = 'DANH SÁCH HỒ SƠ SINH VIÊN NỘI TRÚ KÝ TÚC XÁ UTC2';
+            exportFileName = `DanhSachSinhVien_${state.selectedAcademicYear}.xlsx`;
+            exportSheetName = 'SinhVien';
+            headers = ['STT', 'MSSV', 'Họ và tên', 'Giới tính', 'Lớp / Khóa', 'Khoa / Ngành', 'Phòng đang ở', 'Điện thoại'];
+            rows = state.students.map((s, idx) => [String(idx + 1), s.mssv || s.id || '', s.name || '', s.gender || '', s.className || '', s.major || '', s.roomNumber || 'Chưa xếp', s.phone || '']);
         } else if (tab === 'hop-dong' && Array.isArray(state.contracts) && state.contracts.length) {
-            headers = ['Mã HĐ', 'Sinh viên', 'MSSV', 'Phòng', 'Trạng thái'];
-            rows = state.contracts.map(c => [c.contractNumber || c.id, c.studentName, c.studentId, c.room, c.status]);
+            exportTitle = 'DANH SÁCH HỢP ĐỒNG NỘI TRÚ KÝ TÚC XÁ UTC2';
+            exportFileName = `DanhSachHopDong_${state.selectedAcademicYear}.xlsx`;
+            exportSheetName = 'HopDong';
+            headers = ['STT', 'Số hợp đồng', 'MSSV', 'Họ và tên', 'Phòng / Giường', 'Ngày bắt đầu', 'Ngày kết thúc', 'Tiền phòng/tháng', 'Trạng thái'];
+            rows = state.contracts.map((c, idx) => [String(idx + 1), c.contractNumber || c.id || '', c.mssv || c.studentId || '', c.studentName || '', c.roomNumber || c.room || '', c.startDate || '', c.endDate || '', String(c.monthlyFee || ''), c.status || '']);
+        } else if (tab === 'phong-va-giuong' && Array.isArray(state.rooms) && state.rooms.length) {
+            exportTitle = 'DANH SÁCH SƠ ĐỒ PHÒNG & GIƯỜNG KÝ TÚC XÁ UTC2';
+            exportFileName = `SoDoPhongGiuong_${state.selectedAcademicYear}.xlsx`;
+            exportSheetName = 'SoDoPhong';
+            headers = ['STT', 'Mã phòng', 'Tòa nhà', 'Tầng', 'Loại phòng', 'Đang ở / Sức chứa', 'Giá thuê/tháng', 'Trạng thái'];
+            rows = state.rooms.map((r, idx) => [String(idx + 1), r.roomNumber || r.id || '', r.buildingName || r.buildingId || '', String(r.floor || ''), r.roomType || r.type || '', `${r.occupied || 0}/${r.capacity || 0}`, String(r.pricePerMonth ?? r.price ?? ''), r.status || '']);
         } else {
             try {
                 const academicYear = state.selectedAcademicYear
@@ -8618,7 +8810,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
                 a.click();
                 a.remove();
                 window.URL.revokeObjectURL(url);
-                showToast(`Đã xuất ${title} ra file Excel.`, 'success');
+                showToast(`Đã xuất ${title} ra file Excel (.xlsx).`, 'success');
                 return;
             } catch (e) {
                 showToast('Xuất báo cáo thất bại.', 'error');
@@ -8627,28 +8819,31 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         }
 
         try {
-            // CSV tương thích Excel: BOM UTF-8 để Excel đọc đúng tiếng Việt, phân tách bằng dấu chấm phẩy (locale VN).
-            const sep = ';';
-            const escapeCell = (v) => {
-                const s = String(v ?? '');
-                if (/[;"\n\r]/.test(s)) {
-                    return `"${s.replace(/"/g, '""')}"`;
-                }
-                return s;
-            };
-            const csv = [headers.map(escapeCell).join(sep), ...rows.map(r => r.map(escapeCell).join(sep))].join('\r\n');
-            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const res = await fetch('/api/baocao/export-table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: exportTitle,
+                    sheetName: exportSheetName,
+                    fileName: exportFileName,
+                    academicYear: state.selectedAcademicYear,
+                    headers,
+                    rows: rows.map(r => r.map(c => String(c ?? '')))
+                })
+            });
+            if (!res.ok) throw new Error('fail');
+            const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${title || 'DanhSach'}.csv`;
+            a.download = exportFileName;
             document.body.appendChild(a);
             a.click();
             a.remove();
             window.URL.revokeObjectURL(url);
-            showToast(`Đã xuất ${title} ra file CSV (mở được bằng Excel).`, 'success');
+            showToast(`Đã xuất ${title} ra file Excel (.xlsx).`, 'success');
         } catch (e) {
-            showToast('Xuất danh sách thất bại.', 'error');
+            showToast('Xuất file Excel thất bại.', 'error');
         }
     }
 
@@ -8663,6 +8858,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
             closeAdmissionsActionMenus();
             closeContractsActionMenus();
             closeStudentsActionMenus();
+            if (typeof closeAcademicYearMenu === 'function') closeAcademicYearMenu();
             if (typeof closeAcademicYearActionMenus === 'function') closeAcademicYearActionMenus();
             if (typeof closeRoundsActionMenus === 'function') closeRoundsActionMenus();
         }
@@ -8678,8 +8874,9 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         if (!e.target?.closest?.('[data-students-menu="true"]')) {
             closeStudentsActionMenus();
         }
-        if (!e.target?.closest?.('[data-academic-year-menu="true"]') && typeof closeAcademicYearActionMenus === 'function') {
-            closeAcademicYearActionMenus();
+        if (!e.target?.closest?.('[data-academic-year-menu="true"]')) {
+            if (typeof closeAcademicYearMenu === 'function') closeAcademicYearMenu();
+            if (typeof closeAcademicYearActionMenus === 'function') closeAcademicYearActionMenus();
         }
         if (!e.target?.closest?.('[data-rounds-menu="true"]') && typeof closeRoundsActionMenus === 'function') {
             closeRoundsActionMenus();
@@ -8689,6 +8886,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         closeAdmissionsActionMenus();
         closeContractsActionMenus();
         closeStudentsActionMenus();
+        if (typeof closeAcademicYearMenu === 'function') closeAcademicYearMenu();
         if (typeof closeAcademicYearActionMenus === 'function') closeAcademicYearActionMenus();
         if (typeof closeRoundsActionMenus === 'function') closeRoundsActionMenus();
     }, true);
@@ -8696,9 +8894,9 @@ html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; page-br
         closeAdmissionsActionMenus();
         closeContractsActionMenus();
         closeStudentsActionMenus();
+        if (typeof closeAcademicYearMenu === 'function') closeAcademicYearMenu();
         if (typeof closeAcademicYearActionMenus === 'function') closeAcademicYearActionMenus();
         if (typeof closeRoundsActionMenus === 'function') closeRoundsActionMenus();
-        closeStudentsActionMenus();
     });
 
     // Public API
@@ -8877,3 +9075,225 @@ window.escapeCsv = function (value) {
   if (/[",\n\r;]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 };
+
+
+// =========================================================================
+// GLOBAL CUSTOM DROPDOWN ENHANCER (Đồng bộ toàn bộ bộ lọc <select> trên mọi trang & mọi role)
+// =========================================================================
+(function initKtxCustomSelects() {
+    let activePortal = null;
+    let activeTrigger = null;
+    let scheduled = false;
+
+    function closeActivePortal() {
+        if (activePortal) {
+            activePortal.remove();
+            activePortal = null;
+        }
+        if (activeTrigger) {
+            const icon = activeTrigger.querySelector('[data-ktx-select-arrow]');
+            if (icon) icon.classList.remove('rotate-180');
+            activeTrigger.setAttribute('aria-expanded', 'false');
+            activeTrigger = null;
+        }
+    }
+
+    function getSelectedLabel(select) {
+        const opt = select.options[select.selectedIndex];
+        return opt ? opt.textContent.trim() : '';
+    }
+
+    function syncTriggerLabel(select, wrapper) {
+        const labelEl = wrapper.querySelector('[data-ktx-select-label]');
+        if (labelEl) {
+            labelEl.textContent = getSelectedLabel(select);
+        }
+        const trigger = wrapper.querySelector('button[data-ktx-select-trigger]');
+        if (trigger) {
+            trigger.disabled = !!select.disabled;
+            trigger.classList.toggle('opacity-60', !!select.disabled);
+            trigger.classList.toggle('cursor-not-allowed', !!select.disabled);
+        }
+    }
+
+    function openPortal(select, wrapper, trigger) {
+        if (activeTrigger === trigger) {
+            closeActivePortal();
+            return;
+        }
+        closeActivePortal();
+
+        const rect = trigger.getBoundingClientRect();
+        const menu = document.createElement('div');
+        menu.setAttribute('role', 'listbox');
+        menu.className = 'fixed rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-xl py-1 max-h-60 overflow-y-auto custom-scrollbar animate-fade-in';
+        menu.style.zIndex = '9999';
+        menu.style.minWidth = Math.max(rect.width, 192) + 'px';
+        menu.style.maxWidth = '320px';
+
+        Array.from(select.options).forEach((opt) => {
+            const isSelected = opt.value === select.value;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('role', 'option');
+            btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+            btn.disabled = !!opt.disabled;
+            btn.className = 'w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between gap-2 ' + (
+                isSelected
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-400 font-bold'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+            ) + (opt.disabled ? ' opacity-50 cursor-not-allowed' : '');
+
+            const span = document.createElement('span');
+            span.className = 'truncate';
+            span.textContent = opt.textContent.trim();
+            btn.appendChild(span);
+
+            if (isSelected) {
+                const check = document.createElement('span');
+                check.className = 'material-symbols-outlined text-[16px] shrink-0';
+                check.textContent = 'check';
+                btn.appendChild(check);
+            }
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (opt.disabled) return;
+                const changed = select.value !== opt.value;
+                select.value = opt.value;
+                syncTriggerLabel(select, wrapper);
+                closeActivePortal();
+                if (changed) {
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            menu.appendChild(btn);
+        });
+
+        document.body.appendChild(menu);
+
+        const menuRect = menu.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const top = (spaceBelow < menuRect.height + 12 && rect.top > menuRect.height + 12)
+            ? Math.max(8, rect.top - menuRect.height - 6)
+            : rect.bottom + 6;
+        const left = Math.min(rect.left, Math.max(8, window.innerWidth - menuRect.width - 8));
+
+        menu.style.top = top + 'px';
+        menu.style.left = left + 'px';
+
+        const icon = trigger.querySelector('[data-ktx-select-arrow]');
+        if (icon) icon.classList.add('rotate-180');
+        trigger.setAttribute('aria-expanded', 'true');
+
+        activePortal = menu;
+        activeTrigger = trigger;
+    }
+
+    function enhanceSelect(select) {
+        if (!select || select.dataset.ktxEnhanced === 'true' || select.dataset.nativeSelect === 'true' || select.multiple) {
+            return;
+        }
+        if (select.classList.contains('hidden')) return;
+
+        select.dataset.ktxEnhanced = 'true';
+        const isFullWidth = select.classList.contains('w-full') || select.classList.contains('flex-1');
+
+        const wrapper = document.createElement('div');
+        wrapper.className = isFullWidth ? 'relative block w-full' : 'relative inline-block';
+        wrapper.dataset.ktxSelectWrapper = 'true';
+
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.dataset.ktxSelectTrigger = 'true';
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        if (select.getAttribute('aria-label')) {
+            trigger.setAttribute('aria-label', select.getAttribute('aria-label'));
+        }
+        trigger.className = (isFullWidth ? 'w-full ' : '') +
+            'h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B0F1A] border border-slate-200 dark:border-[#232B3B] text-xs font-medium text-slate-800 dark:text-white hover:border-[#0B2A5B]/50 dark:hover:border-blue-500/50 transition-colors flex items-center justify-between gap-2 text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0B2A5B]/15';
+
+        const labelSpan = document.createElement('span');
+        labelSpan.dataset.ktxSelectLabel = 'true';
+        labelSpan.className = 'truncate';
+        labelSpan.textContent = getSelectedLabel(select);
+
+        const arrowSpan = document.createElement('span');
+        arrowSpan.dataset.ktxSelectArrow = 'true';
+        arrowSpan.className = 'material-symbols-outlined text-[18px] text-slate-400 transition-transform shrink-0';
+        arrowSpan.textContent = 'expand_more';
+
+        trigger.appendChild(labelSpan);
+        trigger.appendChild(arrowSpan);
+
+        select.parentNode.insertBefore(wrapper, select);
+        wrapper.appendChild(select);
+        wrapper.appendChild(trigger);
+        select.style.position = 'absolute';
+        select.style.width = '1px';
+        select.style.height = '1px';
+        select.style.opacity = '0';
+        select.style.pointerEvents = 'none';
+        select.tabIndex = -1;
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (select.disabled) return;
+            openPortal(select, wrapper, trigger);
+        });
+
+        select.addEventListener('change', () => syncTriggerLabel(select, wrapper));
+
+        const optObserver = new MutationObserver(() => syncTriggerLabel(select, wrapper));
+        optObserver.observe(select, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+
+        syncTriggerLabel(select, wrapper);
+    }
+
+    function scanAllSelects() {
+        scheduled = false;
+        const roots = [
+            document.getElementById('mainContent'),
+            document.getElementById('topNavContainer'),
+            document.getElementById('modalsContainer')
+        ].filter(Boolean);
+        roots.forEach((root) => {
+            root.querySelectorAll('select:not([data-ktx-enhanced="true"])').forEach(enhanceSelect);
+        });
+    }
+
+    function scheduleScan() {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(scanAllSelects);
+    }
+
+    function boot() {
+        scanAllSelects();
+        if (document.body) {
+            const bodyObserver = new MutationObserver(scheduleScan);
+            bodyObserver.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    document.addEventListener('click', (e) => {
+        if (activePortal && !activePortal.contains(e.target) && (!activeTrigger || !activeTrigger.contains(e.target))) {
+            closeActivePortal();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeActivePortal();
+    });
+
+    window.addEventListener('scroll', (e) => { if (activePortal && (e.target === activePortal || activePortal.contains(e.target))) return; closeActivePortal(); }, true);
+    window.addEventListener('resize', closeActivePortal);
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
+})();

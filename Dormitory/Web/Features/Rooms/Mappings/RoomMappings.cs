@@ -14,7 +14,8 @@ namespace Dormitory.Web.Features.Rooms.Mappings
             var beds = p.DanhSachGiuong.OrderBy(g => g.SoThuTu).Select(g =>
             {
                 var activeContract = g.DanhSachHopDong?
-                    .Where(h => h.NgayBatDau <= yearEnd && (h.NgayTraPhongThucTe ?? h.NgayKetThuc) >= yearStart)
+                    .Where(h => (h.TrangThai == "hieuLuc" || h.TrangThai == "tamNgung") &&
+                                h.NgayBatDau <= yearEnd && (h.NgayTraPhongThucTe ?? h.NgayKetThuc) >= yearStart)
                     .OrderByDescending(h => h.NgayBatDau)
                     .FirstOrDefault();
                 string bedStatus = !g.LaDangHoat

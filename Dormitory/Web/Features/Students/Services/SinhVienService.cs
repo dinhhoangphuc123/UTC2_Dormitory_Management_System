@@ -95,8 +95,36 @@ namespace Dormitory.Web.Features.Students.Services
 
         public async Task<SinhVienListItemDto?> GetStudentByIdAsync(string id, string? academicYear = null)
         {
-            var students = await GetAllStudentsAsync(search: id, academicYear: academicYear, page: 1, pageSize: 500);
-            return students.FirstOrDefault(s => s.Mssv == id || s.Id == id);
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            var trimmedId = id.Trim();
+
+            var year = string.IsNullOrWhiteSpace(academicYear)
+                ? null
+                : await _context.NamHocs.FirstOrDefaultAsync(n => n.MaNamHoc == academicYear);
+            if (year == null) return null;
+
+            var yearStart = year.NgayBatDau.Year;
+            var yearEnd = year.NgayKetThuc.Year;
+            var entity = await _context.SinhViens
+                .Where(s => s.MaSinhVien == trimmedId &&
+                    ((s.NamNhapHoc >= yearStart && s.NamNhapHoc <= yearEnd) ||
+                     s.DanhSachHopDong.Any(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear) ||
+                     s.DanhSachDonDangKy.Any(d => d.DotDangKy != null && d.DotDangKy.KyHoc != null && d.DotDangKy.KyHoc.MaNamHoc == academicYear)))
+                .Include(s => s.LopHoc)
+                .Include(s => s.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
+                    .ThenInclude(h => h.Giuong)
+                        .ThenInclude(g => g!.Phong)
+                            .ThenInclude(p => p!.ToaNha)
+                .Include(s => s.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
+                    .ThenInclude(h => h.DanhSachHoaDon)
+                        .ThenInclude(i => i.DanhSachThanhToan)
+                .Include(s => s.DanhSachHopDong.Where(h => h.KyHoc != null && h.KyHoc.MaNamHoc == academicYear))
+                    .ThenInclude(h => h.DanhSachHoaDon)
+                        .ThenInclude(i => i.DanhSachChiTietHoaDon)
+                .AsSplitQuery()
+                .FirstOrDefaultAsync();
+
+            return entity?.ToSinhVienListItemDto();
         }
 
     }

@@ -8,8 +8,8 @@ namespace Dormitory.Web.Shared.Helpers
         {
             if (string.IsNullOrWhiteSpace(fullName)) return "SV";
             var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 1) return parts[0][..1].ToUpper();
-            return (parts[0][..1] + parts[^1][..1]).ToUpper();
+            if (parts.Length == 1) return StringInfo.GetNextTextElement(parts[0]).ToUpper();
+            return (StringInfo.GetNextTextElement(parts[0]) + StringInfo.GetNextTextElement(parts[^1])).ToUpper();
         }
 
         public static string ToTitleCase(string input)

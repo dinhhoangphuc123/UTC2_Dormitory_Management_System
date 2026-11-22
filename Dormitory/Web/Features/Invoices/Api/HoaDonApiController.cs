@@ -40,8 +40,8 @@ namespace Dormitory.Web.Features.Invoices.Api
             return Ok(ApiResponse<List<InvoiceItemDto>>.Ok(invoices));
         }
 
-        // BQL (admin/quản lý) và kế toán đều được lập hóa đơn; khớp nút hiển thị ở trang Hóa đơn.
-        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
+        // BQL và kế toán được lập, sửa nháp, gửi và đối soát thanh toán hóa đơn theo DFD 6.0.
+        [Authorize(Policy = RoleNames.ManagerOrAccountantPolicy)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateInvoiceDto req)
         {
@@ -61,7 +61,7 @@ namespace Dormitory.Web.Features.Invoices.Api
                 $"Đã lưu nháp hóa đơn {invoice.Code}. Kiểm tra lại rồi bấm Gửi cho sinh viên để phát hành kèm mã VietQR."));
         }
 
-        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOrAccountantPolicy)]
         [HttpPut("{invoiceId}")]
         public async Task<IActionResult> UpdateDraft(string invoiceId, [FromBody] UpdateInvoiceDraftDto req,
             [FromQuery] string? academicYear)
@@ -86,7 +86,7 @@ namespace Dormitory.Web.Features.Invoices.Api
             public string InvoiceId { get; set; } = string.Empty;
         }
 
-        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOrAccountantPolicy)]
         [HttpPost("send")]
         public async Task<IActionResult> Send([FromBody] SendInvoiceRequest req, [FromQuery] string? academicYear)
         {
@@ -110,7 +110,7 @@ namespace Dormitory.Web.Features.Invoices.Api
             public string PaymentMethod { get; set; } = "Chuyển khoản";
         }
 
-        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOrAccountantPolicy)]
         [HttpPost("confirm-payment")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> ConfirmPayment([FromForm] ConfirmPaymentRequest req, IFormFile? proof, [FromQuery] string? academicYear)
@@ -136,7 +136,7 @@ namespace Dormitory.Web.Features.Invoices.Api
             public string Reason { get; set; } = string.Empty;
         }
 
-        [Authorize(Policy = RoleNames.StaffOnlyPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOrAccountantPolicy)]
         [HttpPost("{invoiceId}/reject-payment-proof")]
         public async Task<IActionResult> RejectPaymentProof(string invoiceId, [FromBody] RejectPaymentProofRequest req,
             [FromQuery] string? academicYear)
@@ -168,7 +168,7 @@ namespace Dormitory.Web.Features.Invoices.Api
         [HttpGet("{invoiceId}/payments/{paymentId}/proof")]
         public async Task<IActionResult> GetPaymentProof(string invoiceId, string paymentId)
         {
-            var (bytes, contentType) = await _hoaDonService.GetPaymentProofAsync(paymentId, _env != null ? GetAppDataPath() : null);
+            var (bytes, contentType) = await _hoaDonService.GetPaymentProofAsync(paymentId, _env != null ? GetAppDataPath() : null, invoiceId);
             if (bytes == null || contentType == null)
             {
                 return NotFound();

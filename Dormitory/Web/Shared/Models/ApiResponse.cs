@@ -23,6 +23,8 @@ namespace Dormitory.Web.Shared.Models
 
         public static ApiResponse Fail(string message) =>
             new() { Success = false, Message = message };
+
+        public override string ToString() => Message;
     }
 }
 

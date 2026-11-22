@@ -82,7 +82,7 @@ namespace Dormitory.Web.Features.Invoices.Services
         public async Task<InvoiceItemDto?> CreateInvoiceAsync(CreateInvoiceDto req, string? academicYear = null)
         {
             if (string.IsNullOrWhiteSpace(academicYear)) return null;
-            if (req.Amount <= 0) return null;
+            if (req.Amount <= 0 || req.Amount > 1_000_000_000m) return null;
             if (!DateTime.TryParseExact(
                     req.DueDate,
                     new[] { "dd/MM/yyyy", "yyyy-MM-dd" },
@@ -142,7 +142,7 @@ namespace Dormitory.Web.Features.Invoices.Services
                 .Include(h => h.DanhSachChiTietHoaDon)
                 .FirstOrDefaultAsync(h =>
                     h.MaHopDong == contract.MaHopDong &&
-                    h.Thang == invoiceMonth && h.Nam == invoiceYear &&
+                    h.Thang == invoiceMonth && h.Nam == invoiceYear && h.TrangThai != "daHuy" &&
                     h.DanhSachChiTietHoaDon.Any(d => d.LoaiKhoan == loaiKhoan && d.NoiDung == req.Title.Trim()));
             if (existing != null)
             {
@@ -225,7 +225,8 @@ namespace Dormitory.Web.Features.Invoices.Services
                 .FirstOrDefaultAsync(h => h.MaHoaDon == invoiceId &&
                     (academicYear == null || (h.HopDong != null && h.HopDong.KyHoc != null && h.HopDong.KyHoc.MaNamHoc == academicYear)));
 
-            if (invoice == null || invoice.NgayGui != null) return false;
+            if (invoice == null || invoice.NgayGui != null || invoice.TrangThai == "daHuy" || invoice.TrangThai == "daThanhToan")
+                return false;
 
             var total = invoice.DanhSachChiTietHoaDon.Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia);
             var outstanding = PaymentRules.CalculateOutstanding(total, invoice.DanhSachThanhToan.Sum(t => t.SoTien));
@@ -343,7 +344,7 @@ namespace Dormitory.Web.Features.Invoices.Services
                         SoTien = outstanding,
                         NgayThanhToan = DateTime.Now,
                         PhuongThuc = paymentType,
-                        MaNhanVienThu = staffId,
+                        MaNhanVienThu = !string.IsNullOrWhiteSpace(staffId) && await _context.NhanViens.AnyAsync(n => n.MaNhanVien == staffId) ? staffId : null,
                         AnhMinhChung = proofFileName ?? (!string.IsNullOrEmpty(invoice.AnhMinhChung) ? invoice.AnhMinhChung : null)
                     });
                     invoice.TrangThai = "daThanhToan";
@@ -353,7 +354,7 @@ namespace Dormitory.Web.Features.Invoices.Services
                         invoice.HopDong.TrangThai = "hieuLuc";
                         if (!string.IsNullOrEmpty(staffId))
                         {
-                            invoice.HopDong.MaNhanVienLap = staffId;
+                            invoice.HopDong.MaNhanVienLap = await _context.NhanViens.AnyAsync(n => n.MaNhanVien == staffId) ? staffId : invoice.HopDong.MaNhanVienLap;
                         }
 
                         _context.ThongBaos.Add(new Features.Students.Entities.ThongBao
@@ -452,7 +453,9 @@ namespace Dormitory.Web.Features.Invoices.Services
                 {
                     MaSinhVien = invoice.HopDong.MaSinhVien,
                     TieuDe = "Minh chứng thanh toán bị từ chối",
-                    NoiDung = $"Minh chứng cho hóa đơn {invoice.MaHoaDon} chưa hợp lệ. Lý do: {reason.Trim()}. Vui lòng nộp lại minh chứng {deadlineText}.",
+                    NoiDung = ($"Minh chứng cho hóa đơn {invoice.MaHoaDon} chưa hợp lệ. Lý do: {reason.Trim()}. Vui lòng nộp lại minh chứng {deadlineText}.").Length > 490
+                        ? ($"Minh chứng cho hóa đơn {invoice.MaHoaDon} chưa hợp lệ. Lý do: {reason.Trim()}. Vui lòng nộp lại minh chứng {deadlineText}.")[..490]
+                        : $"Minh chứng cho hóa đơn {invoice.MaHoaDon} chưa hợp lệ. Lý do: {reason.Trim()}. Vui lòng nộp lại minh chứng {deadlineText}.",
                     Loai = "thanhToan",
                     LienKet = "/student/invoice",
                     DaDoc = false,
@@ -478,11 +481,11 @@ namespace Dormitory.Web.Features.Invoices.Services
             return await PaymentProofStorage.ReadAsync(invoice.AnhMinhChung, appDataPath);
         }
 
-        public async Task<(byte[]? FileBytes, string? ContentType)> GetPaymentProofAsync(string paymentId, string? appDataPath = null)
+        public async Task<(byte[]? FileBytes, string? ContentType)> GetPaymentProofAsync(string paymentId, string? appDataPath = null, string? invoiceId = null)
         {
             if (string.IsNullOrWhiteSpace(appDataPath)) return (null, null);
 
-            var payment = await _context.ThanhToans.FirstOrDefaultAsync(t => t.MaThanhToan == paymentId);
+            var payment = await _context.ThanhToans.FirstOrDefaultAsync(t => t.MaThanhToan == paymentId && (string.IsNullOrWhiteSpace(invoiceId) || t.MaHoaDon == invoiceId.Trim()));
             if (payment == null || string.IsNullOrEmpty(payment.AnhMinhChung)) return (null, null);
 
             return await PaymentProofStorage.ReadAsync(payment.AnhMinhChung, appDataPath);

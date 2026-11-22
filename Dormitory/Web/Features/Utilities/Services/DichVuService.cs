@@ -43,10 +43,16 @@ namespace Dormitory.Web.Features.Utilities.Services
         {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return (false, "Tên dịch vụ không được để trống.", null);
+            if (req.Name.Trim().Length > 100)
+                return (false, "Tên dịch vụ không được vượt quá 100 ký tự.", null);
             if (string.IsNullOrWhiteSpace(req.Unit))
                 return (false, "Đơn vị tính không được để trống.", null);
+            if (req.Unit.Trim().Length > 30)
+                return (false, "Đơn vị tính không được vượt quá 30 ký tự.", null);
             if (req.Price < 0)
                 return (false, "Đơn giá dịch vụ không được âm.", null);
+            if (req.Price == 0 || req.Price > 100_000_000m)
+                return (false, "Đơn giá dịch vụ phải lớn hơn 0 và không vượt quá 100.000.000 đ.", null);
 
             string id = $"DV_{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
             var service = new DichVu
@@ -69,10 +75,16 @@ namespace Dormitory.Web.Features.Utilities.Services
                 return (false, "Không tìm thấy dịch vụ.", null);
             if (string.IsNullOrWhiteSpace(req.Name))
                 return (false, "Tên dịch vụ không được để trống.", null);
+            if (req.Name.Trim().Length > 100)
+                return (false, "Tên dịch vụ không được vượt quá 100 ký tự.", null);
             if (string.IsNullOrWhiteSpace(req.Unit))
                 return (false, "Đơn vị tính không được để trống.", null);
+            if (req.Unit.Trim().Length > 30)
+                return (false, "Đơn vị tính không được vượt quá 30 ký tự.", null);
             if (req.Price < 0)
                 return (false, "Đơn giá dịch vụ không được âm.", null);
+            if (req.Price == 0 || req.Price > 100_000_000m)
+                return (false, "Đơn giá dịch vụ phải lớn hơn 0 và không vượt quá 100.000.000 đ.", null);
 
             service.TenDichVu = req.Name.Trim();
             service.DonViTinh = req.Unit.Trim();
@@ -116,7 +128,7 @@ namespace Dormitory.Web.Features.Utilities.Services
                 .AsSplitQuery()
                 .AsQueryable();
 
-            if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+            if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase))
                 query = query.Where(r => r.TrangThai == status);
             if (!string.IsNullOrWhiteSpace(academicYear))
                 query = query.Where(r => r.HopDong != null && r.HopDong.KyHoc != null && r.HopDong.KyHoc.MaNamHoc == academicYear);
@@ -141,8 +153,18 @@ namespace Dormitory.Web.Features.Utilities.Services
             if (registration.TrangThai != AppDefaults.ServicePending)
                 return (false, "Đơn này không còn ở trạng thái chờ duyệt.");
 
+            string? validStaffId = null;
+            if (!string.IsNullOrWhiteSpace(staffId))
+            {
+                var trimmedStaff = staffId.Trim();
+                if (await _context.NhanViens.AnyAsync(n => n.MaNhanVien == trimmedStaff))
+                {
+                    validStaffId = trimmedStaff;
+                }
+            }
+
             registration.TrangThai = AppDefaults.ServiceActive;
-            registration.MaNhanVienDuyet = staffId;
+            registration.MaNhanVienDuyet = validStaffId;
             registration.NgayDuyet = DateTime.Now;
             AddServiceNotification(registration.HopDong?.MaSinhVien,
                 $"Đăng ký dịch vụ {registration.DichVu?.TenDichVu} đã được duyệt",
@@ -166,8 +188,18 @@ namespace Dormitory.Web.Features.Utilities.Services
             if (registration.TrangThai != AppDefaults.ServicePending)
                 return (false, "Đơn này không còn ở trạng thái chờ duyệt.");
 
+            string? validStaffId = null;
+            if (!string.IsNullOrWhiteSpace(staffId))
+            {
+                var trimmedStaff = staffId.Trim();
+                if (await _context.NhanViens.AnyAsync(n => n.MaNhanVien == trimmedStaff))
+                {
+                    validStaffId = trimmedStaff;
+                }
+            }
+
             registration.TrangThai = AppDefaults.ServiceRejected;
-            registration.MaNhanVienDuyet = staffId;
+            registration.MaNhanVienDuyet = validStaffId;
             registration.NgayDuyet = DateTime.Now;
             registration.LyDoTuChoi = reason.Trim();
             AddServiceNotification(registration.HopDong?.MaSinhVien,

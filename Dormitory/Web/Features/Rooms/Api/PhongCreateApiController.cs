@@ -7,7 +7,7 @@ using Dormitory.Web.Shared.Constants;
 
 namespace Dormitory.Web.Features.Rooms.Api
 {
-    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+    [Authorize(Roles = RoleNames.Admin)]
     [ApiController]
     [Route("api/phong")]
     public class PhongCreateApiController : ControllerBase
@@ -23,22 +23,30 @@ namespace Dormitory.Web.Features.Rooms.Api
         public async Task<IActionResult> Create([FromBody] CreateRoomRequest req)
         {
             if (string.IsNullOrWhiteSpace(req.MaPhong))
-                return BadRequest("Mã phòng không được để trống.");
+                return BadRequest(ApiResponse.Fail("Mã phòng không được để trống."));
+            if (req.MaPhong.Trim().Length > 20)
+                return BadRequest(ApiResponse.Fail("Mã phòng không được vượt quá 20 ký tự."));
             if (string.IsNullOrWhiteSpace(req.MaToaNha))
-                return BadRequest("Vui lòng chọn tòa nhà.");
+                return BadRequest(ApiResponse.Fail("Vui lòng chọn tòa nhà."));
             if (string.IsNullOrWhiteSpace(req.MaLoaiPhong))
-                return BadRequest("Vui lòng chọn loại phòng.");
+                return BadRequest(ApiResponse.Fail("Vui lòng chọn loại phòng."));
+            if (req.SoTang < 1 || req.SoTang > 50)
+                return BadRequest(ApiResponse.Fail("Số tầng phải nằm trong khoảng từ 1 đến 50."));
             if (req.SoGiuong < 1)
-                return BadRequest("Số giường phải lớn hơn 0.");
-            if (await _context.Phongs.AnyAsync(p => p.MaPhong == req.MaPhong))
-                return BadRequest("Mã phòng đã tồn tại.");
+                return BadRequest(ApiResponse.Fail("Số giường phải lớn hơn 0."));
+            if (await _context.Phongs.AnyAsync(p => p.MaPhong == req.MaPhong.Trim()))
+                return BadRequest(ApiResponse.Fail("Mã phòng đã tồn tại."));
             if (!await _context.ToaNhas.AnyAsync(t => t.MaToaNha == req.MaToaNha))
-                return BadRequest("Tòa nhà không tồn tại.");
+                return BadRequest(ApiResponse.Fail("Tòa nhà không tồn tại."));
             var roomType = await _context.LoaiPhongs.FirstOrDefaultAsync(l => l.MaLoaiPhong == req.MaLoaiPhong);
             if (roomType == null)
-                return BadRequest("Loại phòng không tồn tại.");
+                return BadRequest(ApiResponse.Fail("Loại phòng không tồn tại."));
             if (roomType.SoNguoiToiDa > 0 && req.SoGiuong > roomType.SoNguoiToiDa)
-                return BadRequest($"Số giường ({req.SoGiuong}) vượt quá sức chứa tối đa của loại phòng ({roomType.SoNguoiToiDa}).");
+                return BadRequest(ApiResponse.Fail($"Số giường ({req.SoGiuong}) vượt quá sức chứa tối đa của loại phòng ({roomType.SoNguoiToiDa})."));
+
+            var status = string.IsNullOrWhiteSpace(req.TrangThai) ? "hoatDong" : req.TrangThai.Trim();
+            if (status is not ("hoatDong" or "baoTri" or "ngungHoatDong"))
+                return BadRequest(ApiResponse.Fail("Trạng thái phòng không hợp lệ."));
 
             var room = new Phong
             {
@@ -46,7 +54,7 @@ namespace Dormitory.Web.Features.Rooms.Api
                 MaToaNha = req.MaToaNha,
                 MaLoaiPhong = req.MaLoaiPhong,
                 SoTang = req.SoTang,
-                TrangThai = string.IsNullOrWhiteSpace(req.TrangThai) ? "hoatDong" : req.TrangThai
+                TrangThai = status
             };
             _context.Phongs.Add(room);
 

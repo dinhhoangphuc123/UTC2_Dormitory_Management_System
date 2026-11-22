@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -48,6 +49,25 @@ namespace Dormitory.IntegrationTests.Features.Maintenance
             var res = Assert.IsType<ApiResponse<List<MaintenanceTicketDto>>>(ok.Value);
             Assert.True(res.Success);
             Assert.NotEmpty(res.Data!);
+        }
+
+        [Fact]
+        public async Task Export_ReturnsStyledXlsxWorkbook()
+        {
+            using var context = _fixture.CreateDbContext();
+            var controller = CreateController(new YeuCauSuaChuaService(context));
+
+            var result = await controller.Export(null, null, null, null, null, SqlServerFixture.AcademicYear);
+            var fileResult = Assert.IsType<FileContentResult>(result);
+            Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileResult.ContentType);
+            Assert.EndsWith(".xlsx", fileResult.FileDownloadName, StringComparison.OrdinalIgnoreCase);
+
+            using var stream = new MemoryStream(fileResult.FileContents);
+            using var wb = new XLWorkbook(stream);
+            var ws = wb.Worksheet("YeuCauSuaChua");
+            Assert.Equal("Times New Roman", ws.Cell(4, 1).Style.Font.FontName);
+            Assert.Equal(16, ws.Cell(4, 1).Style.Font.FontSize);
+            Assert.Equal("Mã phiếu", ws.Cell(7, 2).GetString());
         }
 
         [Fact]

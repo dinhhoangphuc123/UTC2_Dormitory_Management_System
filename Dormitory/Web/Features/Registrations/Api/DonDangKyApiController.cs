@@ -8,7 +8,7 @@ using Dormitory.Web.Shared.Security;
 
 namespace Dormitory.Web.Features.Registrations.Api
 {
-    [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+    [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
     [ApiController]
     [Route("api/dondangky")]
     public class DonDangKyApiController : ControllerBase

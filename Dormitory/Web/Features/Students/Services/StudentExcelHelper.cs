@@ -109,6 +109,8 @@ public static class StudentExcelHelper
             : input.Email.Trim().ToLowerInvariant();
         if (normalizedEmail != null)
         {
+            if (normalizedEmail.Length > 100)
+                return StudentUpsertResult.Fail("Email không được vượt quá 100 ký tự.");
             if (!EmailRegex.IsMatch(normalizedEmail))
                 return StudentUpsertResult.Fail("Email không đúng định dạng.");
             if (await context.SinhViens.AnyAsync(s =>
@@ -117,6 +119,8 @@ public static class StudentExcelHelper
         }
 
         string? diaChi = string.IsNullOrWhiteSpace(input.DiaChiThuongTru) ? null : input.DiaChiThuongTru.Trim();
+        if (diaChi is { Length: > 255 })
+            return StudentUpsertResult.Fail("Địa chỉ thường trú không được vượt quá 255 ký tự.");
         string? uuTien = string.IsNullOrWhiteSpace(input.DoiTuongUuTien) ? null : input.DoiTuongUuTien.Trim();
         if (uuTien is { Length: > 50 })
         {
@@ -186,10 +190,10 @@ public static class StudentExcelHelper
                 Student = existing
             };
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException)
         {
             context.ChangeTracker.Clear();
-            return StudentUpsertResult.Fail("Không thể lưu dòng này: " + (ex.InnerException?.Message ?? ex.Message));
+            return StudentUpsertResult.Fail("Dữ liệu dòng không hợp lệ hoặc vi phạm ràng buộc lưu trữ.");
         }
     }
 }

@@ -10,6 +10,19 @@ namespace Dormitory.Web.Shared.Helpers;
 /// </summary>
 public static class ExcelImportHelper
 {
+    public static IXLRangeRow FindHeaderRow(IXLRange usedRange)
+    {
+        foreach (var row in usedRange.RowsUsed().Take(12))
+        {
+            var map = BuildColumnMap(row);
+            if (map.ContainsKey("mssv"))
+            {
+                return row;
+            }
+        }
+        return usedRange.FirstRow();
+    }
+
     public static Dictionary<string, int> BuildColumnMap(IXLRangeRow headerRow)
     {
         var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -161,7 +174,7 @@ public static class ExcelImportHelper
 
         if (cell.DataType == XLDataType.Number && cell.TryGetValue<double>(out var num))
         {
-            value = Convert.ToDecimal(num);
+            value = Math.Round((decimal)num, 2, MidpointRounding.AwayFromZero);
             return true;
         }
 
@@ -170,16 +183,16 @@ public static class ExcelImportHelper
             .Replace("VND", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace(" ", string.Empty);
 
-        if (Regex.IsMatch(text, @"^\d{1,3}(\.\d{3})+$"))
+        if (Regex.IsMatch(text, @"^-?\d{1,3}(\.\d{3})+(,\d+)?$"))
         {
-            text = text.Replace(".", string.Empty);
+            text = text.Replace(".", string.Empty).Replace(",", ".");
         }
-        else if (Regex.IsMatch(text, @"^\d{1,3}(,\d{3})+$"))
+        else if (Regex.IsMatch(text, @"^-?\d{1,3}(,\d{3})+(\.\d+)?$"))
         {
             text = text.Replace(",", string.Empty);
         }
 
-        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+        if (decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed))
         {
             value = parsed;
             return true;

@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Dormitory.IntegrationTests.Support;
 using Dormitory.Web.Features.Violations.Api;
@@ -28,6 +29,25 @@ namespace Dormitory.IntegrationTests.Features.Violations
             var res = Assert.IsType<ApiResponse<List<ViolationRecordDto>>>(ok.Value);
             Assert.True(res.Success);
             Assert.NotNull(res.Data);
+        }
+
+        [Fact]
+        public async Task Export_ReturnsStyledXlsxWorkbook()
+        {
+            using var context = _fixture.CreateDbContext();
+            var controller = new ViPhamApiController(new ViPhamService(context));
+
+            var result = await controller.Export(null, null, null, null, SqlServerFixture.AcademicYear);
+            var fileResult = Assert.IsType<FileContentResult>(result);
+            Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileResult.ContentType);
+            Assert.EndsWith(".xlsx", fileResult.FileDownloadName, StringComparison.OrdinalIgnoreCase);
+
+            using var stream = new MemoryStream(fileResult.FileContents);
+            using var wb = new XLWorkbook(stream);
+            var ws = wb.Worksheet("ViPhamKyLuat");
+            Assert.Equal("Times New Roman", ws.Cell(4, 1).Style.Font.FontName);
+            Assert.Equal(16, ws.Cell(4, 1).Style.Font.FontSize);
+            Assert.Equal("Mã biên bản", ws.Cell(7, 2).GetString());
         }
     }
 }

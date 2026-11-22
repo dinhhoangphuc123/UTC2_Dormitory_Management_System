@@ -261,6 +261,14 @@ namespace Dormitory.Web.Features.Contracts.Services
             decimal unpaidDebt = unpaidInvoices.Sum(h => Math.Max(0m,
                 h.DanhSachChiTietHoaDon.Sum(d => d.ThanhTien ?? d.SoLuong * d.DonGia) - h.DanhSachThanhToan.Sum(t => t.SoTien)));
 
+            var draftInvoices = await _context.HoaDons
+                .Where(h => h.MaHopDong == contract.MaHopDong && h.TrangThai == "nhap")
+                .ToListAsync();
+            foreach (var draft in draftInvoices)
+            {
+                draft.TrangThai = "daHuy";
+            }
+
             var today = DateTime.Today;
             contract.TrangThai = "daKetThuc";
             contract.NgayThanhLy = today;
@@ -372,7 +380,8 @@ namespace Dormitory.Web.Features.Contracts.Services
                 };
             }
 
-            var headerRow = usedRange.FirstRow();
+            var headerRow = ExcelImportHelper.FindHeaderRow(usedRange);
+            int headerRowNumber = headerRow.RowNumber();
             var cols = ExcelImportHelper.BuildColumnMap(headerRow);
             if (!cols.TryGetValue("mssv", out int mssvCol))
             {
@@ -417,7 +426,7 @@ namespace Dormitory.Web.Features.Contracts.Services
                 }
             }
 
-            foreach (var row in usedRange.RowsUsed().Skip(1))
+            foreach (var row in usedRange.RowsUsed().Where(r => r.RowNumber() > headerRowNumber))
             {
                 int rowNumber = row.RowNumber();
                 string mssv = row.Cell(mssvCol).GetString().Trim();
@@ -611,7 +620,7 @@ namespace Dormitory.Web.Features.Contracts.Services
                         catch (DbUpdateException)
                         {
                             _context.ChangeTracker.Clear();
-                            result.Errors.Add(new ImportContractRowErrorDto(rowNumber, mssv, "Không thể kích hoạt hợp đồng do xung đột dữ liệu."));
+                            result.Errors.Add(new ImportContractRowErrorDto(rowNumber, mssv, "Dữ liệu dòng không hợp lệ hoặc vi phạm ràng buộc lưu trữ."));
                         }
                         continue;
                     }
@@ -705,7 +714,7 @@ namespace Dormitory.Web.Features.Contracts.Services
                 catch (DbUpdateException)
                 {
                     _context.ChangeTracker.Clear();
-                    result.Errors.Add(new ImportContractRowErrorDto(rowNumber, mssv, "Không thể tạo hợp đồng do xung đột dữ liệu."));
+                    result.Errors.Add(new ImportContractRowErrorDto(rowNumber, mssv, "Dữ liệu dòng không hợp lệ hoặc vi phạm ràng buộc lưu trữ."));
                 }
             }
 

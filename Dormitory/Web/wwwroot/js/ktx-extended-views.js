@@ -261,9 +261,9 @@ window.KtxExtendedViews = (function () {
                     <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.exportClassesCsv()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">
                             <span class="material-symbols-outlined text-[16px]">download</span>
-                            <span>Xuất CSV</span>
+                            <span>Xuất Excel</span>
                         </button>
-                        <button type="button" onclick="KtxExtendedViews.openAddClassModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition-all">
+                        ${(window.KtxApp && KtxApp.getCurrentUser()?.roleCode === 'admin') ? `<button type="button" onclick="KtxExtendedViews.openAddClassModal()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">` : `<button type="button" onclick="KtxExtendedViews.openAddClassModal()" class="hidden" style="display:none !important;">`}
                             <span class="material-symbols-outlined text-[16px]">add</span>
                             <span>Thêm Lớp Mới</span>
                         </button>
@@ -311,7 +311,7 @@ window.KtxExtendedViews = (function () {
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">TỔNG SĨ SỐ LỚP</span>
-                            <div class="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
                                 <span class="material-symbols-outlined text-[18px]">school</span>
                             </div>
                         </div>
@@ -321,7 +321,7 @@ window.KtxExtendedViews = (function () {
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-purple-600 dark:text-purple-400 font-semibold">Theo danh sách sinh viên đã lưu</span>
+                            <span class="text-blue-600 dark:text-blue-400 font-semibold">Theo danh sách sinh viên đã lưu</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -546,7 +546,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ code, name, faculty, cohort })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 KtxApp.showToast(json.message || 'Đã thêm lớp mới thành công!');
                 closeModal();
                 await loadClasses();
@@ -749,7 +749,7 @@ window.KtxExtendedViews = (function () {
     function renderUtilitiesView() {
         const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
         const role = user && user.roleCode;
-        const canManageService = role === 'admin' || role === 'keToan';
+        const canManageService = role === 'keToan';
         const subTab = ['utilities', 'catalog', 'requests'].includes(extState.utilitySubTab)
             ? extState.utilitySubTab
             : 'utilities';
@@ -850,17 +850,17 @@ window.KtxExtendedViews = (function () {
                     <div class="bg-white dark:bg-[#121826] p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-[#232B3B] flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group">
                         <div class="flex items-center justify-between">
                             <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-wider uppercase">VƯỢT ĐỊNH MỨC</span>
-                            <div class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                            <div class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-red-600 dark:text-red-400">
                                 <span class="material-symbols-outlined text-[18px]">warning</span>
                             </div>
                         </div>
                         <div class="my-3">
-                            <div class="text-3xl lg:text-4xl font-bold text-rose-600 dark:text-rose-400 tracking-tight">
+                            <div class="text-3xl lg:text-4xl font-bold text-red-600 dark:text-red-400 tracking-tight">
                                 ${totalExceeded} <span class="text-sm font-normal text-slate-500">phòng</span>
                             </div>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                            <span class="text-rose-600 dark:text-rose-400 font-semibold">&gt; 250 kWh/tháng · Kiểm tra thiết bị</span>
+                            <span class="text-red-600 dark:text-red-400 font-semibold">&gt; 250 kWh/tháng · Kiểm tra thiết bị</span>
                             <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -963,7 +963,7 @@ window.KtxExtendedViews = (function () {
                                     const safeRoom = escapeHtmlValue(u.room);
                                     const safeCapacity = escapeHtmlValue(u.capacity);
                                     const stBadge = u.status === 'EXCEEDED'
-                                        ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Vượt định mức</span>'
+                                        ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">Vượt định mức</span>'
                                         : (u.status === 'RECORDED'
                                             ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">Đã ghi số</span>'
                                             : '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">Chờ chốt số</span>');
@@ -982,7 +982,7 @@ window.KtxExtendedViews = (function () {
                                         ${u.billStatus === 'chuaChot' ? `
                                             <button type="button" role="menuitem"
                                                 onclick="KtxExtendedViews.closeUtilitiesActionMenus(); KtxExtendedViews.openFinalizeUtilityModal('${safeUtilJs}');"
-                                                class="w-full px-3 py-2 text-xs text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 flex items-center gap-2 transition-colors">
+                                                class="w-full px-3 py-2 text-xs text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-2 transition-colors">
                                                 <span class="material-symbols-outlined text-[16px]">attach_money</span>
                                                 <span>Chốt hóa đơn phòng</span>
                                             </button>
@@ -1009,7 +1009,7 @@ window.KtxExtendedViews = (function () {
                                                     <span class="material-symbols-outlined text-[14px] text-slate-400">arrow_forward</span>
                                                     <span class="font-bold text-slate-900 dark:text-white font-mono">${u.newWater !== null ? u.newWater : '--'}</span>
                                                 </div>
-                                                ${u.usageWater !== null ? `<div class="text-[11px] font-semibold text-cyan-600 mt-0.5">Tiêu thụ: ${u.usageWater} m³</div>` : ''}
+                                                ${u.usageWater !== null ? `<div class="text-[11px] font-semibold text-blue-600 mt-0.5">Tiêu thụ: ${u.usageWater} m³</div>` : ''}
                                             </td>
                                             <td class="py-3.5 px-3 align-middle">
                                                 <div class="flex flex-wrap gap-1">
@@ -1019,7 +1019,7 @@ window.KtxExtendedViews = (function () {
                                             <td class="py-3.5 px-3 text-center align-middle whitespace-nowrap">
                                                 ${stBadge}
                                                 ${u.billStatus === 'chuaChot'
-                                                    ? `<div class="mt-1"><span class="inline-flex min-w-max items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">Chờ chốt HĐ T${String(u.billThang).padStart(2, '0')}/${u.billNam}</span></div>`
+                                                    ? `<div class="mt-1"><span class="inline-flex min-w-max items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">Chờ chốt HĐ T${String(u.billThang).padStart(2, '0')}/${u.billNam}</span></div>`
                                                     : (u.billStatus === 'daChot'
                                                         ? `<div class="mt-1 text-[10px] text-slate-400">HĐ T${String(u.billThang).padStart(2, '0')}/${u.billNam} đã chốt</div>`
                                                         : '')}
@@ -1059,7 +1059,7 @@ window.KtxExtendedViews = (function () {
         const label = SERVICE_STATUS_LABELS[status] || status || '—';
         if (status === 'dangDung') return `<span class="inline-flex min-w-max items-center px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">${label}</span>`;
         if (status === 'choDuyet') return `<span class="inline-flex min-w-max items-center px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">${label}</span>`;
-        if (status === 'daTuChoi') return `<span class="inline-flex min-w-max items-center px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">${label}</span>`;
+        if (status === 'daTuChoi') return `<span class="inline-flex min-w-max items-center px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">${label}</span>`;
         return `<span class="inline-flex min-w-max items-center px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">${label}</span>`;
     }
 
@@ -1067,7 +1067,7 @@ window.KtxExtendedViews = (function () {
         const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
         const role = user && user.roleCode;
         // Đồng quyền với DichVuApiController: chỉ admin/keToan sửa được danh mục
-        const canManage = role === 'admin' || role === 'keToan';
+        const canManage = role === 'keToan';
         const esc = escapeHtmlValue;
         const fmt = v => Number(v || 0).toLocaleString('vi-VN');
         const filtered = extState.services.filter(s => matchesSearch(extState.utilitySearch, s.id, s.name, s.unit));
@@ -1106,7 +1106,7 @@ window.KtxExtendedViews = (function () {
                                     </button>
                                     <button type="button" role="menuitem"
                                         onclick="KtxExtendedViews.closeUtilitiesActionMenus(); KtxExtendedViews.deleteService('${safeSvcJs}');"
-                                        class="w-full px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 transition-colors">
+                                        class="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 transition-colors">
                                         <span class="material-symbols-outlined text-[16px]">delete</span>
                                         <span>Xóa dịch vụ</span>
                                     </button>
@@ -1157,7 +1157,7 @@ window.KtxExtendedViews = (function () {
         const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
         const role = user && user.roleCode;
         // Đồng quyền với DichVuApiController: chỉ admin/quanLy duyệt đơn
-        const canApprove = role === 'admin' || role === 'quanLy';
+        const canApprove = role === 'quanLy';
         const esc = escapeHtmlValue;
         const fmt = v => Number(v || 0).toLocaleString('vi-VN');
         // API đã trả ngày dạng chuỗi dd/MM/yyyy, hiển thị trực tiếp không parse Date
@@ -1212,7 +1212,7 @@ window.KtxExtendedViews = (function () {
                                         </button>
                                         <button type="button" role="menuitem"
                                             onclick="KtxExtendedViews.closeUtilitiesActionMenus(); KtxExtendedViews.openRejectServiceModal(${regIdNum});"
-                                            class="w-full px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 transition-colors">
+                                            class="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 transition-colors">
                                             <span class="material-symbols-outlined text-[16px]">close</span>
                                             <span>Từ chối đăng ký</span>
                                         </button>
@@ -1231,7 +1231,7 @@ window.KtxExtendedViews = (function () {
                                                 <span class="font-semibold text-slate-800 dark:text-slate-100">${safeRoom}</span>
                                                 ${serviceStatusBadge(r.trangThai)}
                                             </div>
-                                            ${r.trangThai === 'daTuChoi' && r.rejectReason ? `<div class="mt-1 text-[10px] text-rose-500 truncate" title="${esc(r.rejectReason)}">Lý do: ${esc(r.rejectReason)}</div>` : ''}
+                                            ${r.trangThai === 'daTuChoi' && r.rejectReason ? `<div class="mt-1 text-[10px] text-red-500 truncate" title="${esc(r.rejectReason)}">Lý do: ${esc(r.rejectReason)}</div>` : ''}
                                             ${r.trangThai === 'dangDung' && r.ngayDuyet ? `<div class="mt-1 text-[10px] text-slate-400 truncate">Duyệt ${esc(fmtDate(r.ngayDuyet))}${r.staffApprovedBy ? ` · ${esc(r.staffApprovedBy)}` : ''}</div>` : ''}
                                         </td>
                                         <td class="py-3.5 px-3 align-middle">
@@ -1283,7 +1283,7 @@ window.KtxExtendedViews = (function () {
 
         const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
         const role = user && user.roleCode;
-        const canApprove = role === 'admin' || role === 'quanLy';
+        const canApprove = role === 'quanLy';
         const svc = extState.services.find(s => s.id === reg.serviceId);
         const esc = escapeHtmlValue;
         const fmt = v => Number(v || 0).toLocaleString('vi-VN');
@@ -1340,7 +1340,7 @@ window.KtxExtendedViews = (function () {
                             </div>
                         ` : ''}
                         ${reg.trangThai === 'daTuChoi' && reg.rejectReason ? `
-                            <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-900/50 text-rose-700 dark:text-rose-300">
+                            <div class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/80 dark:border-red-900/50 text-red-700 dark:text-red-300">
                                 <div class="font-bold text-[11px] uppercase tracking-wider mb-0.5">Lý do từ chối</div>
                                 <div>${esc(reg.rejectReason)}</div>
                             </div>
@@ -1349,7 +1349,7 @@ window.KtxExtendedViews = (function () {
                     <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                         <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold text-xs transition-colors">Đóng</button>
                         ${canApprove && reg.trangThai === 'choDuyet' ? `
-                            <button type="button" onclick="KtxExtendedViews.closeModal(); KtxExtendedViews.openRejectServiceModal(${regIdNum});" class="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 font-semibold text-xs transition-colors">Từ chối</button>
+                            <button type="button" onclick="KtxExtendedViews.closeModal(); KtxExtendedViews.openRejectServiceModal(${regIdNum});" class="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/60 text-red-600 dark:text-red-400 font-semibold text-xs transition-colors">Từ chối</button>
                             <button type="button" onclick="KtxExtendedViews.closeModal(); KtxExtendedViews.approveServiceRegistration(${regIdNum});" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition-colors">Duyệt đăng ký</button>
                         ` : ''}
                     </div>
@@ -1418,7 +1418,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify(body)
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 KtxApp.showToast(json.message || 'Đã lưu dịch vụ!');
                 closeModal();
                 await loadServices();
@@ -1438,8 +1438,9 @@ window.KtxExtendedViews = (function () {
         try {
             const res = await fetch(`/api/dichvu/${encodeURIComponent(serviceId)}`, { method: 'DELETE' });
             const json = await res.json();
-            KtxApp.showToast(json.message || (json.success ? 'Đã xóa dịch vụ.' : 'Không xóa được dịch vụ.'), json.success ? 'success' : 'error');
-            if (json.success) {
+            const ok = res.ok && json.success;
+            KtxApp.showToast(json.message || (ok ? 'Đã xóa dịch vụ.' : 'Không xóa được dịch vụ.'), ok ? 'success' : 'error');
+            if (ok) {
                 await loadServices();
                 reRender();
             }
@@ -1452,8 +1453,9 @@ window.KtxExtendedViews = (function () {
         try {
             const res = await fetch(`/api/dichvu/dangky/${id}/approve`, { method: 'POST' });
             const json = await res.json();
-            KtxApp.showToast(json.message || (json.success ? 'Đã duyệt đơn dịch vụ.' : 'Không duyệt được đơn.'), json.success ? 'success' : 'error');
-            if (json.success) {
+            const ok = res.ok && json.success;
+            KtxApp.showToast(json.message || (ok ? 'Đã duyệt đơn dịch vụ.' : 'Không duyệt được đơn.'), ok ? 'success' : 'error');
+            if (ok) {
                 await loadServices();
                 reRender();
             }
@@ -1481,7 +1483,7 @@ window.KtxExtendedViews = (function () {
                         </div>
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                             <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
-                            <button type="submit" class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-xs">Từ chối đơn</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-xs">Từ chối đơn</button>
                         </div>
                     </form>
                 </div>
@@ -1500,8 +1502,9 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ reason })
             });
             const json = await res.json();
-            KtxApp.showToast(json.message || (json.success ? 'Đã từ chối đơn dịch vụ.' : 'Không từ chối được đơn.'), json.success ? 'success' : 'error');
-            if (json.success) {
+            const ok = res.ok && json.success;
+            KtxApp.showToast(json.message || (ok ? 'Đã từ chối đơn dịch vụ.' : 'Không từ chối được đơn.'), ok ? 'success' : 'error');
+            if (ok) {
                 closeModal();
                 await loadServices();
                 reRender();
@@ -1573,9 +1576,9 @@ window.KtxExtendedViews = (function () {
                         </div>
 
                         <!-- Nước -->
-                        <div class="p-3 bg-cyan-50/60 dark:bg-cyan-950/20 rounded-xl border border-cyan-200/60 dark:border-cyan-900/40">
+                        <div class="p-3 bg-blue-50/60 dark:bg-blue-950/20 rounded-xl border border-blue-200/60 dark:border-blue-900/40">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="font-bold text-cyan-900 dark:text-cyan-300">Chỉ số Đồng hồ Nước</span>
+                                <span class="font-bold text-blue-900 dark:text-blue-300">Chỉ số Đồng hồ Nước</span>
                                 <span class="text-[11px] text-slate-500">Số cũ: <strong>${item.oldWater}</strong> m³</span>
                             </div>
                             <div class="flex items-center gap-2">
@@ -1622,7 +1625,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ roomId, newElectric: newElec, newWater, hasInternet: hasNet, hasTrash })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 KtxApp.showToast(json.message || 'Đã ghi nhận chỉ số thành công!');
                 closeModal();
                 await loadUtilities();
@@ -1665,7 +1668,7 @@ window.KtxExtendedViews = (function () {
                     </div>
                     <div class="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-100 dark:border-slate-800">
                         <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Hủy</button>
-                        <button type="button" onclick="KtxExtendedViews.submitFinalizeUtility('${roomId}')" class="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-xs">Chốt hóa đơn</button>
+                        <button type="button" onclick="KtxExtendedViews.submitFinalizeUtility('${roomId}')" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs">Chốt hóa đơn</button>
                     </div>
                 </div>
             </div>
@@ -1681,8 +1684,9 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ roomId, sendNow })
             });
             const json = await res.json();
-            KtxApp.showToast(json.message || (json.success ? 'Đã chốt hóa đơn điện nước!' : 'Không chốt được hóa đơn'), json.success ? 'success' : 'error');
-            if (json.success) {
+            const ok = res.ok && json.success;
+            KtxApp.showToast(json.message || (ok ? 'Đã chốt hóa đơn điện nước!' : 'Không chốt được hóa đơn'), ok ? 'success' : 'error');
+            if (ok) {
                 closeModal();
                 await Promise.all([loadUtilities(), loadInvoices()]);
                 reRender();
@@ -1732,13 +1736,13 @@ window.KtxExtendedViews = (function () {
             return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">Đã nhận thanh toán</span>';
         }
         if (isInvoiceAwaitingConfirm(inv)) {
-            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">Chờ xác nhận thanh toán</span>';
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">Chờ xác nhận thanh toán</span>';
         }
         if (inv.isProofRejected) {
-            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Đã từ chối minh chứng</span>';
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">Đã từ chối minh chứng</span>';
         }
         if (inv.status === 'overdue') {
-            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Quá hạn</span>';
+            return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">Quá hạn</span>';
         }
         return '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">Chưa thanh toán</span>';
     }
@@ -1747,8 +1751,8 @@ window.KtxExtendedViews = (function () {
         // Lập/sửa/gửi hóa đơn và đối soát thanh toán dành cho vai trò nghiệp vụ (admin, quản lý, kế toán).
         const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
         const role = user && user.roleCode;
-        const canManageInvoices = role === 'admin' || role === 'quanLy' || role === 'keToan';
-        const canConfirmPayment = role === 'admin' || role === 'quanLy' || role === 'keToan';
+        const canManageInvoices = role === 'quanLy' || role === 'keToan';
+        const canConfirmPayment = role === 'quanLy' || role === 'keToan';
 
         // 1. Áp dụng trước các bộ lọc ngữ cảnh: Tìm kiếm và Khoản thu
         const contextualInvoices = extState.invoices.filter(i => {
@@ -1869,10 +1873,10 @@ window.KtxExtendedViews = (function () {
                                         : '<span class="text-slate-400">Chưa gửi</span>';
                                     const proofLine = inv.hasStudentProof
                                         ? (inv.isProofRejected
-                                            ? `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-rose-600 dark:text-rose-400 font-semibold" title="${escapeHtmlValue(inv.proofRejectReason || '')}">Đã từ chối · chờ nộp lại</span></div>`
+                                            ? `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-red-600 dark:text-red-400 font-semibold" title="${escapeHtmlValue(inv.proofRejectReason || '')}">Đã từ chối · chờ nộp lại</span></div>`
                                             : (inv.status === 'paid'
                                                 ? `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-emerald-700 dark:text-emerald-300 font-semibold" title="Sinh viên nộp ${escapeHtmlValue(inv.proofSubmittedAt || '')}">Đã đối soát hợp lệ</span></div>`
-                                                : `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-sky-700 dark:text-sky-300 font-semibold" title="Sinh viên nộp ${escapeHtmlValue(inv.proofSubmittedAt || '')}">Chờ xác nhận</span></div>`))
+                                                : `<div class="flex items-center justify-between gap-2"><span class="text-slate-400">Minh chứng</span><span class="text-blue-700 dark:text-blue-300 font-semibold" title="Sinh viên nộp ${escapeHtmlValue(inv.proofSubmittedAt || '')}">Chờ xác nhận</span></div>`))
                                         : '';
 
                                     return `
@@ -1890,13 +1894,13 @@ window.KtxExtendedViews = (function () {
                                                 <div class="mt-1 flex items-center gap-1.5 flex-wrap">
                                                     ${stBadge}
                                                     ${isAwaitingConfirm && inv.proofSubmittedAt ? `<span class="text-[10px] text-slate-400 font-mono">Nộp ${escapeHtmlValue(inv.proofSubmittedAt)}</span>` : ''}
-                                                    ${inv.isProofRejected && inv.status !== 'paid' && inv.proofRejectReason ? `<span class="text-[10px] text-rose-500 truncate max-w-[200px]" title="${escapeHtmlValue(inv.proofRejectReason)}">Chờ SV nộp lại</span>` : ''}
+                                                    ${inv.isProofRejected && inv.status !== 'paid' && inv.proofRejectReason ? `<span class="text-[10px] text-red-500 truncate max-w-[200px]" title="${escapeHtmlValue(inv.proofRejectReason)}">Chờ SV nộp lại</span>` : ''}
                                                 </div>
                                             </td>
                                             <td class="py-3 px-3 font-bold text-[#0B2A5B] dark:text-white whitespace-nowrap">${inv.amount.toLocaleString('vi-VN')} đ</td>
                                             <td class="py-3 px-3 whitespace-nowrap">
                                                 <div class="text-slate-700 dark:text-slate-300">${escapeHtmlValue(inv.dueDate)}</div>
-                                                ${inv.overdueText ? `<div class="text-[10px] font-bold text-rose-600">${escapeHtmlValue(inv.overdueText)}</div>` : ''}
+                                                ${inv.overdueText ? `<div class="text-[10px] font-bold text-red-600">${escapeHtmlValue(inv.overdueText)}</div>` : ''}
                                             </td>
                                             <td class="py-3 pl-3 pr-4 text-center whitespace-nowrap" onclick="event.stopPropagation(); KtxExtendedViews.closeInvoicesActionMenus();">
                                                 <div class="relative inline-flex items-center justify-center">
@@ -1996,8 +2000,8 @@ window.KtxExtendedViews = (function () {
 
         const user = (window.KtxApp && typeof KtxApp.getCurrentUser === 'function') ? KtxApp.getCurrentUser() : null;
         const role = user && user.roleCode;
-        const canManageInvoices = role === 'admin' || role === 'quanLy' || role === 'keToan';
-        const canConfirmPayment = role === 'admin' || role === 'quanLy' || role === 'keToan';
+        const canManageInvoices = role === 'quanLy' || role === 'keToan';
+        const canConfirmPayment = role === 'quanLy' || role === 'keToan';
         const isAwaitingConfirm = isInvoiceAwaitingConfirm(inv);
         const stBadge = getInvoiceStatusBadge(inv);
         const safeJs = escapeJsSingleQuote(inv.code);
@@ -2028,7 +2032,7 @@ window.KtxExtendedViews = (function () {
 
                     <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-slate-700 dark:text-slate-300">
                         ${inv.isProofRejected && inv.status !== 'paid' ? `
-                            <div class="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 space-y-1">
+                            <div class="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 space-y-1">
                                 <div class="font-bold flex items-center gap-1.5">
                                     <span class="material-symbols-outlined text-[16px]">cancel</span>
                                     <span>Minh chứng thanh toán đã bị từ chối${inv.proofRejectedAt ? ` lúc ${escapeHtmlValue(inv.proofRejectedAt)}` : ''}</span>
@@ -2051,7 +2055,7 @@ window.KtxExtendedViews = (function () {
                                 <div class="flex justify-between gap-3"><span class="text-slate-400">Mã hóa đơn:</span><span class="font-mono font-bold text-slate-900 dark:text-white text-right">${escapeHtmlValue(inv.code)}</span></div>
                                 <div class="flex justify-between gap-3"><span class="text-slate-400 shrink-0">Nội dung thu:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.title || '—')}</span></div>
                                 <div class="flex justify-between gap-3"><span class="text-slate-400">Số tiền:</span><span class="font-bold text-[#0B2A5B] dark:text-white text-right">${Number(inv.amount || 0).toLocaleString('vi-VN')} đ</span></div>
-                                <div class="flex justify-between gap-3"><span class="text-slate-400">Hạn đóng:</span><span class="font-semibold font-mono text-right ${inv.isOverdue ? 'text-rose-600' : ''}">${escapeHtmlValue(inv.dueDate || '—')}${inv.overdueText ? ` (${escapeHtmlValue(inv.overdueText)})` : ''}</span></div>
+                                <div class="flex justify-between gap-3"><span class="text-slate-400">Hạn đóng:</span><span class="font-semibold font-mono text-right ${inv.isOverdue ? 'text-red-600' : ''}">${escapeHtmlValue(inv.dueDate || '—')}${inv.overdueText ? ` (${escapeHtmlValue(inv.overdueText)})` : ''}</span></div>
                                 <div class="flex justify-between gap-3"><span class="text-slate-400">Gửi sinh viên:</span><span class="font-semibold font-mono text-right">${inv.isSent ? escapeHtmlValue(inv.dateSent || 'Đã gửi') : 'Chưa gửi'}</span></div>
                                 <div class="flex justify-between gap-3"><span class="text-slate-400">Hình thức thu:</span><span class="font-semibold text-right">${escapeHtmlValue(inv.method || 'Chưa có')}</span></div>
                             </div>
@@ -2128,7 +2132,7 @@ window.KtxExtendedViews = (function () {
                         </div>
 
                         ${inv.isProofRejected ? `
-                            <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300">
+                            <div class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300">
                                 <div class="font-semibold">Minh chứng đã bị từ chối${inv.proofRejectedAt ? ` lúc ${escapeHtmlValue(inv.proofRejectedAt)}` : ''}</div>
                                 <p class="mt-1 leading-relaxed">Lý do: ${escapeHtmlValue(inv.proofRejectReason || '—')}. Sinh viên cần nộp lại minh chứng mới.</p>
                             </div>
@@ -2198,7 +2202,7 @@ window.KtxExtendedViews = (function () {
         try {
             const res = await fetch('/api/hoadon/confirm-payment', { method: 'POST', body: fd });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 closeModal();
                 KtxApp.showToast(json.message || 'Đã xác nhận thanh toán hóa đơn.', 'success');
                 await loadInvoices();
@@ -2285,7 +2289,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ reason })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 closeModal();
                 KtxApp.showToast(json.message || 'Đã từ chối minh chứng.', 'success');
                 await loadInvoices();
@@ -2307,8 +2311,9 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ invoiceId: code })
             });
             const json = await res.json();
-            KtxApp.showToast(json.message || (json.success ? 'Đã gửi hóa đơn!' : 'Không gửi được hóa đơn'), json.success ? 'success' : 'error');
-            if (json.success) {
+            const ok = res.ok && json.success;
+            KtxApp.showToast(json.message || (ok ? 'Đã gửi hóa đơn!' : 'Không gửi được hóa đơn'), ok ? 'success' : 'error');
+            if (ok) {
                 await loadInvoices();
                 reRender();
             }
@@ -2326,18 +2331,18 @@ window.KtxExtendedViews = (function () {
 
         modalContainer.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="KtxExtendedViews.closeModal()">
-                <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 text-slate-800" onclick="event.stopPropagation()">
+                <div class="w-full max-w-md bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] rounded-2xl shadow-2xl p-6 text-slate-800 dark:text-slate-200" onclick="event.stopPropagation()">
                     <div class="text-center pb-4 border-b border-slate-200">
                         <div class="text-xs font-bold uppercase text-slate-500">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI - PHÂN HIỆU TP.HCM</div>
                         <div class="text-sm font-bold text-[#0B2A5B] mt-0.5">BAN QUẢN LÝ KÝ TÚC XÁ</div>
                         <h3 class="text-base font-extrabold uppercase mt-3">BIÊN LAI THU PHÍ NỘI TRÚ</h3>
-                        <div class="text-xs font-mono text-slate-500">Mã phiếu: ${escapeHtml(inv.code)}</div>
+                        <div class="text-xs font-mono text-slate-500">Mã phiếu: ${escapeHtmlValue(inv.code)}</div>
                     </div>
                     <div class="py-4 space-y-2 text-xs">
-                        <div class="flex justify-between"><span>Sinh viên:</span><strong>${escapeHtml(inv.studentName)}</strong></div>
-                        <div class="flex justify-between"><span>MSSV:</span><span class="font-mono">${escapeHtml(inv.studentId)}</span></div>
-                        <div class="flex justify-between"><span>Phòng lưu trú:</span><span>${escapeHtml(inv.room)}</span></div>
-                        <div class="flex justify-between"><span>Khoản thu:</span><span>${escapeHtml(inv.title)}</span></div>
+                        <div class="flex justify-between"><span>Sinh viên:</span><strong>${escapeHtmlValue(inv.studentName)}</strong></div>
+                        <div class="flex justify-between"><span>MSSV:</span><span class="font-mono">${escapeHtmlValue(inv.studentId)}</span></div>
+                        <div class="flex justify-between"><span>Phòng lưu trú:</span><span>${escapeHtmlValue(inv.room)}</span></div>
+                        <div class="flex justify-between"><span>Khoản thu:</span><span>${escapeHtmlValue(inv.title)}</span></div>
                         <div class="flex justify-between pt-2 border-t border-slate-200 text-sm font-bold text-[#0B2A5B]">
                             <span>Tổng tiền:</span>
                             <span>${inv.amount.toLocaleString('vi-VN')} đ</span>
@@ -2345,7 +2350,7 @@ window.KtxExtendedViews = (function () {
                     </div>
                     <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
                         <button onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold">Đóng</button>
-                        <button onclick="KtxExtendedViews.printInvoiceDirect('${code}')" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-xs font-semibold">In biên lai</button>
+                        <button onclick="KtxExtendedViews.printInvoiceDirect('${escapeJsSingleQuote(inv.code)}')" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-xs font-semibold">In biên lai</button>
                     </div>
                 </div>
             </div>
@@ -2358,7 +2363,7 @@ window.KtxExtendedViews = (function () {
         const w = window.open('', '_blank', 'width=800,height=900');
         if (!w) return;
         w.document.write(`
-            <html><head><title>Biên lai ${inv.code}</title>
+            <html><head><title>Biên lai ${escapeHtmlValue(inv.code)}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com" />
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -2374,12 +2379,12 @@ window.KtxExtendedViews = (function () {
             <div class="title">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI - PHÂN HIỆU TP.HCM</div>
             <div class="sub">BAN QUẢN LÝ KÝ TÚC XÁ</div>
             <h3 style="text-align:center;text-transform:uppercase;margin:12px 0 4px;">Biên lai thu phí nội trú</h3>
-            <div class="sub">Mã phiếu: ${inv.code}</div>
+            <div class="sub">Mã phiếu: ${escapeHtmlValue(inv.code)}</div>
             <div style="margin-top:12px;">
-                <div class="row"><span>Sinh viên:</span><strong>${inv.studentName}</strong></div>
-                <div class="row"><span>MSSV:</span><span>${inv.studentId}</span></div>
-                <div class="row"><span>Phòng lưu trú:</span><span>${inv.room}</span></div>
-                <div class="row"><span>Khoản thu:</span><span>${inv.title}</span></div>
+                <div class="row"><span>Sinh viên:</span><strong>${escapeHtmlValue(inv.studentName)}</strong></div>
+                <div class="row"><span>MSSV:</span><span>${escapeHtmlValue(inv.studentId)}</span></div>
+                <div class="row"><span>Phòng lưu trú:</span><span>${escapeHtmlValue(inv.room)}</span></div>
+                <div class="row"><span>Khoản thu:</span><span>${escapeHtmlValue(inv.title)}</span></div>
                 <div class="row total"><span>Tổng tiền:</span><span>${inv.amount.toLocaleString('vi-VN')} đ</span></div>
             </div>
             <script>window.onload = function(){ window.print(); };</script>
@@ -2402,7 +2407,7 @@ window.KtxExtendedViews = (function () {
         const doc = iframe.contentWindow.document;
         doc.open();
         doc.write(`
-            <html><head><title>Biên lai ${inv.code}</title>
+            <html><head><title>Biên lai ${escapeHtmlValue(inv.code)}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com" />
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -2418,12 +2423,12 @@ window.KtxExtendedViews = (function () {
             <div class="title">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI - PHÂN HIỆU TP.HCM</div>
             <div class="sub">BAN QUẢN LÝ KÝ TÚC XÁ</div>
             <h3 style="text-align:center;text-transform:uppercase;margin:12px 0 4px;">Biên lai thu phí nội trú</h3>
-            <div class="sub">Mã phiếu: ${inv.code}</div>
+            <div class="sub">Mã phiếu: ${escapeHtmlValue(inv.code)}</div>
             <div style="margin-top:12px;">
-                <div class="row"><span>Sinh viên:</span><strong>${inv.studentName}</strong></div>
-                <div class="row"><span>MSSV:</span><span>${inv.studentId}</span></div>
-                <div class="row"><span>Phòng lưu trú:</span><span>${inv.room}</span></div>
-                <div class="row"><span>Khoản thu:</span><span>${inv.title}</span></div>
+                <div class="row"><span>Sinh viên:</span><strong>${escapeHtmlValue(inv.studentName)}</strong></div>
+                <div class="row"><span>MSSV:</span><span>${escapeHtmlValue(inv.studentId)}</span></div>
+                <div class="row"><span>Phòng lưu trú:</span><span>${escapeHtmlValue(inv.room)}</span></div>
+                <div class="row"><span>Khoản thu:</span><span>${escapeHtmlValue(inv.title)}</span></div>
                 <div class="row total"><span>Tổng tiền:</span><span>${inv.amount.toLocaleString('vi-VN')} đ</span></div>
             </div>
             </body></html>
@@ -2499,7 +2504,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ building: bld, room: `${bld}-${room}`, studentId: sId, title, amount, dueDate: due, category: 'tonghop' })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 KtxApp.showToast(json.message || 'Đã tạo hóa đơn thành công!');
                 closeModal();
                 await loadInvoices();
@@ -2568,6 +2573,10 @@ window.KtxExtendedViews = (function () {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tiếp nhận, phân công và theo dõi tiến độ yêu cầu sửa chữa</p>
                     </div>
                     <div class="page-title-actions flex items-center gap-2.5">
+                        <button type="button" onclick="KtxExtendedViews.exportTicketsExcel()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-blue-50 text-[#0B2A5B] text-xs font-semibold shadow-xs border border-white transition">
+                            <span class="material-symbols-outlined text-[18px]">download</span>
+                            <span>Xuất Excel</span>
+                        </button>
                         <button type="button" onclick="KtxExtendedViews.openCreateTicketModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">add_task</span>
                             <span>Tạo phiếu báo hỏng</span>
@@ -2594,10 +2603,6 @@ window.KtxExtendedViews = (function () {
                             <option value="ALL">Tòa: Tất cả</option>
                             ${ticketBuildings.map(building => `<option value="${escapeHtmlValue(building)}" ${extState.ticketBuilding === building ? 'selected' : ''}>Tòa ${escapeHtmlValue(building)}</option>`).join('')}
                         </select>
-                        <select aria-label="Lọc theo hạng mục" onchange="KtxExtendedViews.filterTicketCategory(this.value)" class="${selectClass} max-w-[160px]">
-                            <option value="ALL">Hạng mục: Tất cả</option>
-                            ${ticketCategories.map(category => `<option value="${escapeHtmlValue(category)}" ${extState.ticketCategory === category ? 'selected' : ''}>${escapeHtmlValue(category)}</option>`).join('')}
-                        </select>
                         <select aria-label="Lọc theo độ ưu tiên" onchange="KtxExtendedViews.filterTicketPriority(this.value)" class="${selectClass}">
                             <option value="ALL" ${extState.ticketPriority === 'ALL' ? 'selected' : ''}>Ưu tiên: Tất cả</option>
                             <option value="Khẩn cấp" ${extState.ticketPriority === 'Khẩn cấp' ? 'selected' : ''}>Khẩn cấp</option>
@@ -2621,18 +2626,17 @@ window.KtxExtendedViews = (function () {
                         <table class="w-full table-fixed min-w-[840px] text-left border-collapse text-xs">
                             <thead>
                                 <tr class="bg-slate-50 dark:bg-[#0B0F1A] border-b border-slate-200/80 dark:border-[#232B3B] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px] whitespace-nowrap">
-                                    <th class="w-[12%] py-3.5 pl-6 pr-3">Mã phiếu</th>
-                                    <th class="w-[11%] py-3.5 px-3">Phòng & Tòa</th>
-                                    <th class="w-[13%] py-3.5 px-3">Hạng mục</th>
-                                    <th class="w-[24%] py-3.5 px-3">Nội dung sự cố</th>
-                                    <th class="w-[15%] py-3.5 px-3">Người báo</th>
+                                    <th class="w-[13%] py-3.5 pl-6 pr-3">Mã phiếu</th>
+                                    <th class="w-[13%] py-3.5 px-3">Phòng & Tòa</th>
+                                    <th class="w-[32%] py-3.5 px-3">Nội dung sự cố</th>
+                                    <th class="w-[17%] py-3.5 px-3">Người báo</th>
                                     <th class="w-[17%] py-3.5 px-3">Kỹ thuật viên</th>
                                     <th class="w-[8%] py-3.5 pl-3 pr-6 text-center">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                                 ${filtered.length === 0 ? `
-                                    <tr><td colspan="7" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu phù hợp.</td></tr>
+                                    <tr><td colspan="6" class="py-10 text-center text-slate-400 text-xs">Không có dữ liệu phù hợp.</td></tr>
                                 ` : filtered.map(t => {
                                     const safeTicketDomId = String(t.id ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
                                     const safeTicketJs = escapeJsSingleQuote(t.id);
@@ -2646,7 +2650,7 @@ window.KtxExtendedViews = (function () {
                                     const safeTechnician = t.technician ? escapeHtmlValue(t.technician) : '';
 
                                     const priBadge = t.priority === 'Khẩn cấp'
-                                        ? '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-xl text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Khẩn cấp</span>'
+                                        ? '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-xl text-[11px] font-semibold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">Khẩn cấp</span>'
                                         : '<span class="inline-flex min-w-max items-center justify-center px-2.5 py-0.5 rounded-xl text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Bình thường</span>';
 
                                     const stBadge = t.status === 'COMPLETED'
@@ -2660,9 +2664,6 @@ window.KtxExtendedViews = (function () {
                                             <td class="py-3.5 pl-6 pr-3 font-bold text-[#0B2A5B] dark:text-blue-400 font-mono align-middle whitespace-nowrap truncate">${safeCode}</td>
                                             <td class="py-3.5 px-3 align-middle whitespace-nowrap">
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-[#0B2A5B] dark:text-blue-400">${safeRoom}</span>
-                                            </td>
-                                            <td class="py-3.5 px-3 align-middle">
-                                                <span class="inline-flex max-w-full px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-xs truncate" title="${safeCategory}">${safeCategory}</span>
                                             </td>
                                             <td class="py-3.5 px-3 align-middle">
                                                 <div class="font-semibold text-slate-800 dark:text-slate-200 truncate" title="${safeDesc}">${safeTitle}</div>
@@ -2758,7 +2759,11 @@ window.KtxExtendedViews = (function () {
         if (!t) return;
         const modalContainer = document.getElementById('modalsContainer');
         if (!modalContainer) return;
-        const stColor = t.status === 'COMPLETED' ? 'emerald' : t.status === 'IN_PROGRESS' ? 'blue' : 'amber';
+        const stClass = t.status === 'COMPLETED'
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
+            : (t.status === 'IN_PROGRESS'
+                ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-900/60'
+                : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-900/60');
         const stLabel = t.status === 'COMPLETED' ? 'Hoàn tất' : t.status === 'IN_PROGRESS' ? 'Đang sửa' : 'Chờ duyệt';
         modalContainer.innerHTML = `
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in" onclick="KtxExtendedViews.closeModal()">
@@ -2766,19 +2771,19 @@ window.KtxExtendedViews = (function () {
                     <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined text-[20px] text-blue-600">build_circle</span>
-                            <h3 class="text-sm font-bold text-slate-800 dark:text-white">Chi Tiết Phiếu ${t.code}</h3>
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white">Chi Tiết Phiếu ${escapeHtmlValue(t.code)}</h3>
                         </div>
                         <button onclick="KtxExtendedViews.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
                     </div>
                     <div class="py-4 space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
-                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Phòng:</span><span class="font-bold text-blue-600">${t.room}</span></div>
-                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Hạng mục:</span><span class="font-semibold">${t.category}</span></div>
-                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Ưu tiên:</span><span class="font-semibold ${t.priority === 'Khẩn cấp' ? 'text-rose-600' : ''}">${t.priority}</span></div>
-                        <div class="py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400 block mb-1">Mô tả sự cố:</span><span class="font-semibold">${t.description || t.title}</span></div>
-                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Người báo:</span><span class="font-semibold">${t.reporter} — ${t.phone}</span></div>
-                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Kỹ thuật viên:</span><span class="font-semibold text-blue-600">${t.technician || 'Chưa phân công'}</span></div>
-                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Ngày tạo:</span><span class="font-semibold">${t.createdAt}</span></div>
-                        <div class="flex justify-between py-1"><span class="text-slate-400">Trạng thái:</span><span class="px-2 py-0.5 rounded-full font-bold bg-${stColor}-50 text-${stColor}-700 border border-${stColor}-200">${stLabel}</span></div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Phòng:</span><span class="font-bold text-blue-600">${escapeHtmlValue(t.room)}</span></div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Hạng mục:</span><span class="font-semibold">${escapeHtmlValue(t.category)}</span></div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Ưu tiên:</span><span class="font-semibold ${t.priority === 'Khẩn cấp' ? 'text-red-600' : ''}">${escapeHtmlValue(t.priority)}</span></div>
+                        <div class="py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400 block mb-1">Mô tả sự cố:</span><span class="font-semibold">${escapeHtmlValue(t.description || t.title)}</span></div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Người báo:</span><span class="font-semibold">${escapeHtmlValue(t.reporter)} — ${escapeHtmlValue(t.phone)}</span></div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Kỹ thuật viên:</span><span class="font-semibold text-blue-600">${escapeHtmlValue(t.technician || 'Chưa phân công')}</span></div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800"><span class="text-slate-400">Ngày tạo:</span><span class="font-semibold">${escapeHtmlValue(t.createdAt)}</span></div>
+                        <div class="flex justify-between py-1"><span class="text-slate-400">Trạng thái:</span><span class="px-2 py-0.5 rounded-full font-bold border ${stClass}">${stLabel}</span></div>
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <button onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white font-semibold text-xs">Đóng</button>
@@ -2839,7 +2844,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ studentId, description: desc })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 KtxApp.showToast(json.message || 'Đã tạo phiếu sửa chữa thành công!');
                 closeModal();
                 await loadTickets();
@@ -2949,7 +2954,11 @@ window.KtxExtendedViews = (function () {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý biên bản, hình thức xử lý và tình trạng kỷ luật</p>
                     </div>
                     <div class="page-title-actions flex items-center gap-2.5">
-                        <button type="button" onclick="KtxExtendedViews.openCreateViolationModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold shadow-xs transition">
+                        <button type="button" onclick="KtxExtendedViews.exportViolationsExcel()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-blue-50 text-[#0B2A5B] text-xs font-semibold shadow-xs border border-white transition">
+                            <span class="material-symbols-outlined text-[18px]">download</span>
+                            <span>Xuất Excel</span>
+                        </button>
+                        <button type="button" onclick="KtxExtendedViews.openCreateViolationModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-700 hover:bg-red-800 text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">report_problem</span>
                             <span>Lập Biên Bản Vi Phạm</span>
                         </button>
@@ -3006,7 +3015,7 @@ window.KtxExtendedViews = (function () {
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                                 ${filtered.map(v => {
                                     const pBadge = v.penaltyType === 'expel'
-                                        ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Buộc rời KTX</span>'
+                                        ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">Buộc rời KTX</span>'
                                         : (v.penaltyType === 'warning'
                                             ? '<span class="inline-flex min-w-max items-center justify-center px-3 py-1 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">Cảnh cáo</span>'
                                             : (v.penaltyType === 'reprimand'
@@ -3015,7 +3024,7 @@ window.KtxExtendedViews = (function () {
 
                                     return `
                                         <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
-                                            <td class="py-3 pl-4 pr-3 font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">${v.code}</td>
+                                            <td class="py-3 pl-4 pr-3 font-mono font-bold text-red-600 dark:text-red-400 whitespace-nowrap">${v.code}</td>
                                             <td class="py-3 px-3 whitespace-nowrap">
                                                 <div class="font-bold text-slate-800 dark:text-white">${v.studentName}</div>
                                                 <div class="text-[11px] text-slate-400">${v.studentId} · ${v.room}</div>
@@ -3086,7 +3095,7 @@ window.KtxExtendedViews = (function () {
                 <div class="w-full max-w-lg bg-white dark:bg-[#121826] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#232B3B] p-6" onclick="event.stopPropagation()">
                     <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-[20px] text-rose-600">gavel</span>
+                            <span class="material-symbols-outlined text-[20px] text-red-600">gavel</span>
                             <h3 class="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Lập Biên Bản Vi Phạm Kỷ Luật</h3>
                         </div>
                         <button onclick="KtxExtendedViews.closeModal()" class="text-slate-400 hover:text-slate-600"><span class="material-symbols-outlined text-[20px]">close</span></button>
@@ -3102,7 +3111,7 @@ window.KtxExtendedViews = (function () {
                                 <option value="">Chọn loại vi phạm</option>
                                 ${extState.violationTypes.map(type => `<option value="${type.id}">${type.name}</option>`).join('')}
                             </select>
-                            ${extState.violationTypes.length ? '' : '<p class="mt-1 text-rose-600">Không có loại vi phạm khả dụng.</p>'}
+                            ${extState.violationTypes.length ? '' : '<p class="mt-1 text-red-600">Không có loại vi phạm khả dụng.</p>'}
                         </div>
                         <div>
                             <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Hình Thức Xử Lý Đề Xuất</label>
@@ -3119,7 +3128,7 @@ window.KtxExtendedViews = (function () {
                         </div>
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                             <button type="button" onclick="KtxExtendedViews.closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 font-semibold">Hủy</button>
-                            <button type="submit" class="px-5 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-semibold shadow-xs">Lập Biên Bản</button>
+                            <button type="submit" class="px-5 py-2 rounded-xl bg-red-700 hover:bg-red-800 text-white font-semibold shadow-xs">Lập Biên Bản</button>
                         </div>
                     </form>
                 </div>
@@ -3140,7 +3149,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ studentId: sId, violationTypeId, penaltyType, notes })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 KtxApp.showToast(json.message || 'Đã lập biên bản thành công!');
                 closeModal();
                 await loadViolations();
@@ -3295,7 +3304,7 @@ window.KtxExtendedViews = (function () {
                                             <td class="py-3 pl-3 pr-4 text-center whitespace-nowrap">
                                                 <button type="button" onclick="KtxExtendedViews.toggleStaffStatus('${s.id}', this)" class="inline-flex items-center justify-center px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                                                     s.status === 'active'
-                                                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 dark:bg-rose-950/40 dark:text-rose-300'
+                                                        ? 'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200/60 dark:bg-red-950/40 dark:text-red-300'
                                                         : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300'
                                                 }">
                                                     ${s.status === 'active' ? 'Khóa TK' : s.status === 'locked' ? 'Mở khóa' : 'Tạo TK'}
@@ -3435,7 +3444,7 @@ window.KtxExtendedViews = (function () {
                 body: JSON.stringify({ name, position: pos, phone, email, role })
             });
             const json = await res.json();
-            if (json.success) {
+            if (res.ok && json.success) {
                 KtxApp.showToast(json.message || 'Đã thêm nhân viên thành công!');
                 closeModal();
                 await loadStaff();
@@ -3492,7 +3501,7 @@ window.KtxExtendedViews = (function () {
                     <div class="page-title-actions flex items-center gap-2.5">
                         <button type="button" onclick="KtxExtendedViews.exportReportsCsv()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121826] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-all">
                             <span class="material-symbols-outlined text-[16px]">table_view</span>
-                            <span>Xuất Excel CSV</span>
+                            <span>Xuất Excel</span>
                         </button>
                         <button type="button" onclick="KtxExtendedViews.printReportsPdf()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold shadow-xs transition">
                             <span class="material-symbols-outlined text-[16px]">print</span>
@@ -3570,139 +3579,120 @@ window.KtxExtendedViews = (function () {
             ? (KtxApp.getSelectedAcademicYear() || 'Hiện tại')
             : 'Hiện tại';
         const now = new Date();
-        const dateStr = `Ngày ${String(now.getDate()).padStart(2, '0')} tháng ${String(now.getMonth() + 1).padStart(2, '0')} năm ${now.getFullYear()}`;
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const fullYear = now.getFullYear();
         const esc = escapeHtmlValue;
+
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
 
         const rowsHtml = buildings.map((b, idx) => `
             <tr>
-                <td style="text-align:center;">${idx + 1}</td>
-                <td><strong>${esc(b.name || '')}</strong></td>
-                <td style="text-align:center;">${Number(b.rooms || 0)}</td>
-                <td style="text-align:center;">${Number(b.beds || 0)}</td>
-                <td style="text-align:center;">${Number(b.occupied || 0)}</td>
-                <td style="text-align:center;">${Number(b.vacant || 0)}</td>
-                <td style="text-align:center;">${esc(b.rate ?? 0)}%</td>
-                <td style="text-align:right;">${esc(b.revenue || '0 đ')}</td>
+                <td style="border: 1px solid #000000; padding: 5px 8px; text-align: center;">${idx + 1}</td>
+                <td style="border: 1px solid #000000; padding: 5px 8px;"><strong>${esc(b.name || '')}</strong></td>
+                <td style="border: 1px solid #000000; padding: 5px 8px; text-align: center;">${Number(b.rooms || 0)}</td>
+                <td style="border: 1px solid #000000; padding: 5px 8px; text-align: center;">${Number(b.beds || 0)}</td>
+                <td style="border: 1px solid #000000; padding: 5px 8px; text-align: center;">${Number(b.occupied || 0)}</td>
+                <td style="border: 1px solid #000000; padding: 5px 8px; text-align: center;">${Number(b.vacant || 0)}</td>
+                <td style="border: 1px solid #000000; padding: 5px 8px; text-align: center;">${esc(b.rate ?? 0)}%</td>
+                <td style="border: 1px solid #000000; padding: 5px 8px; text-align: right;"><strong>${esc(b.revenue || '0 đ')}</strong></td>
             </tr>
         `).join('');
 
-        const html = `<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="utf-8" />
-    <title>Báo cáo thống kê KTX UTC2 - ${esc(year)}</title>
-    <style>
-        @page { size: A4; margin: 16mm 14mm; }
-        body { font-family: "Times New Roman", Times, serif; color: #111827; font-size: 13px; line-height: 1.45; margin: 0; }
-        .header-grid { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
-        .org { text-align: center; width: 48%; }
-        .org-title { font-weight: bold; font-size: 12px; text-transform: uppercase; }
-        .org-sub { font-weight: bold; font-size: 12px; margin-top: 2px; }
-        .motto { text-align: center; width: 48%; }
-        .motto-top { font-weight: bold; font-size: 12px; text-transform: uppercase; }
-        .motto-sub { font-weight: bold; font-size: 12px; text-decoration: underline; margin-top: 2px; }
-        h1 { text-align: center; font-size: 17px; text-transform: uppercase; margin: 16px 0 4px; }
-        .subtitle { text-align: center; font-style: italic; font-size: 13px; margin-bottom: 16px; }
-        h2 { font-size: 14px; text-transform: uppercase; margin: 14px 0 8px; }
-        .summary-grid { display: table; width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-        .summary-row { display: table-row; }
-        .summary-cell { display: table-cell; width: 25%; border: 1px solid #334155; padding: 8px 10px; }
-        .summary-label { font-size: 11px; color: #475569; text-transform: uppercase; }
-        .summary-val { font-size: 15px; font-weight: bold; margin-top: 3px; }
-        table.data { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12.5px; }
-        table.data th, table.data td { border: 1px solid #334155; padding: 6px 8px; }
-        table.data th { background: #f1f5f9; font-weight: bold; text-align: center; }
-        .signatures { display: flex; justify-content: space-between; margin-top: 28px; text-align: center; }
-        .sig-box { width: 42%; }
-        .sig-title { font-weight: bold; text-transform: uppercase; font-size: 12.5px; }
-        .sig-note { font-style: italic; font-size: 11.5px; margin-top: 2px; }
-        .sig-space { height: 64px; }
-    </style>
-</head>
-<body>
-    <div class="header-grid">
-        <div class="org">
-            <div class="org-title">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI PHÂN HIỆU TP.HCM</div>
-            <div class="org-sub">BAN QUẢN LÝ KÝ TÚC XÁ</div>
-        </div>
-        <div class="motto">
-            <div class="motto-top">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
-            <div class="motto-sub">Độc lập - Tự do - Hạnh phúc</div>
-        </div>
-    </div>
+        const sheetHtml = `
+            <div style="font-family: 'Times New Roman', Times, serif; color: #000000; background: #ffffff; font-size: 11.5pt; line-height: 1.45; page-break-inside: avoid; break-inside: avoid;">
+                <div style="text-align: center; margin-bottom: 12px;">
+                    <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.3px;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                    <div style="font-size: 11.5pt; font-weight: bold; margin-top: 1px;">Độc lập - Tự do - Hạnh phúc</div>
+                    <div style="width: 140px; height: 1px; background: #000000; margin: 3px auto 10px;"></div>
+                    <div style="font-size: 14pt; font-weight: bold; text-transform: uppercase; margin-top: 4px;">BÁO CÁO THỐNG KÊ VẬN HÀNH &amp; DOANH THU KÝ TÚC XÁ</div>
+                    <div style="font-size: 11pt; font-style: italic; margin-top: 2px;">Năm học: ${esc(year)} &nbsp;·&nbsp; Số: BC-${fullYear}/KTX-UTC2</div>
+                </div>
 
-    <h1>Báo cáo thống kê vận hành &amp; doanh thu ký túc xá</h1>
-    <div class="subtitle">Năm học: ${esc(year)} &nbsp;·&nbsp; ${dateStr}</div>
+                <p style="margin: 0 0 10px; text-align: justify; text-indent: 22px;">
+                    Hôm nay, ngày ${day} tháng ${month} năm ${fullYear}, Ban Quản lý Ký túc xá Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh tổng hợp báo cáo số liệu vận hành, công suất lưu trú và doanh thu nội trú như sau:
+                </p>
 
-    <h2>I. Tổng hợp chỉ số vận hành</h2>
-    <div class="summary-grid">
-        <div class="summary-row">
-            <div class="summary-cell">
-                <div class="summary-label">Tổng chỗ ở quy hoạch</div>
-                <div class="summary-val">${Number(r.totalBeds || 0).toLocaleString('vi-VN')} giường (${Number(r.totalRooms || 0)} phòng)</div>
+                <div style="margin-bottom: 10px;">
+                    <p style="margin: 0 0 4px; font-weight: bold;">I. ĐƠN VỊ QUẢN LÝ &amp; PHẠM VI BÁO CÁO</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">Đơn vị lập báo cáo: <strong>Ban Quản lý Ký túc xá Phân hiệu UTC2 TP. Hồ Chí Minh</strong></p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">Địa chỉ: Số 450–451 Lê Văn Việt, Phường Tăng Nhơn Phú A, TP. Thủ Đức, TP. Hồ Chí Minh</p>
+                    <p style="margin: 0; padding-left: 14px;">Kỳ dữ liệu thống kê: Năm học <strong>${esc(year)}</strong> &nbsp;—&nbsp; Điện thoại: (028) 3896 6780</p>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <p style="margin: 0 0 4px; font-weight: bold;">II. TỔNG HỢP CHỈ SỐ VẬN HÀNH TOÀN KÝ TÚC XÁ</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">1. Tổng quy mô chỗ ở quy hoạch: <strong>${Number(r.totalBeds || 0).toLocaleString('vi-VN')} giường</strong> (trên tổng số <strong>${Number(r.totalRooms || 0)} phòng</strong> nội trú).</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">2. Số lượng sinh viên đang lưu trú thực tế: <strong>${Number(r.occupiedBeds || 0).toLocaleString('vi-VN')} sinh viên</strong> &nbsp;—&nbsp; Số chỗ còn trống: <strong>${Number(r.vacantBeds || 0)} giường</strong>.</p>
+                    <p style="margin: 0 0 2px; padding-left: 14px;">3. Tỷ lệ lấp đầy bình quân toàn khu: <strong>${esc(r.occupancyRate ?? 0)}%</strong>.</p>
+                    <p style="margin: 0; padding-left: 14px;">4. Tổng doanh thu dự kiến trong kỳ: <strong>${Number(r.totalRevenue || 0).toLocaleString('vi-VN')} đ</strong>.</p>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <p style="margin: 0 0 6px; font-weight: bold;">III. BẢNG THỐNG KÊ CHI TIẾT CÔNG SUẤT &amp; DOANH THU THEO TÒA NHÀ</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11pt;">
+                        <thead>
+                            <tr style="background: #f8fafc;">
+                                <th style="border: 1px solid #000000; padding: 5px 6px; width: 38px; text-align: center;">STT</th>
+                                <th style="border: 1px solid #000000; padding: 5px 8px; text-align: left;">Tòa nhà</th>
+                                <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center;">Số phòng</th>
+                                <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center;">Tổng giường</th>
+                                <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center;">Đang ở</th>
+                                <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center;">Còn trống</th>
+                                <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center;">Lấp đầy</th>
+                                <th style="border: 1px solid #000000; padding: 5px 8px; text-align: right;">Doanh thu kỳ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml || '<tr><td colspan="8" style="border: 1px solid #000000; padding: 10px; text-align: center; font-style: italic;">Không có dữ liệu tòa nhà trong năm học này.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+
+                <p style="margin: 6px 0 12px; text-align: justify;">
+                    Báo cáo được trích xuất trực tiếp từ Hệ thống Quản lý Ký túc xá Phân hiệu Trường Đại học Giao thông Vận tải tại TP. Hồ Chí Minh và là căn cứ đối soát vận hành định kỳ.
+                </p>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; text-align: center; margin-top: 16px; page-break-inside: avoid; break-inside: avoid;">
+                    <div>
+                        <div style="font-weight: bold; text-transform: uppercase;">NGƯỜI LẬP BIỂU</div>
+                        <div style="font-size: 10.5pt; font-style: italic;">(Ký và ghi rõ họ tên)</div>
+                        <div style="height: 48px;"></div>
+                        <div style="font-weight: bold;">Cán bộ Quản lý KTX</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: bold; text-transform: uppercase;">TRƯỞNG BAN QUẢN LÝ KÝ TÚC XÁ</div>
+                        <div style="font-size: 10.5pt; font-style: italic;">(Ký tên và đóng dấu)</div>
+                        <div style="height: 48px;"></div>
+                        <div style="font-weight: bold;">Nguyễn Văn An</div>
+                    </div>
+                </div>
             </div>
-            <div class="summary-cell">
-                <div class="summary-label">Sinh viên đang ở</div>
-                <div class="summary-val">${Number(r.occupiedBeds || 0).toLocaleString('vi-VN')} SV</div>
-            </div>
-            <div class="summary-cell">
-                <div class="summary-label">Tỷ lệ lấp đầy</div>
-                <div class="summary-val">${esc(r.occupancyRate ?? 0)}% (Còn ${Number(r.vacantBeds || 0)} chỗ)</div>
-            </div>
-            <div class="summary-cell">
-                <div class="summary-label">Doanh thu dự kiến kỳ</div>
-                <div class="summary-val">${Number(r.totalRevenue || 0).toLocaleString('vi-VN')} đ</div>
-            </div>
-        </div>
-    </div>
+        `;
 
-    <h2>II. Ma trận vận hành &amp; công suất theo tòa nhà</h2>
-    <table class="data">
-        <thead>
-            <tr>
-                <th style="width:36px;">STT</th>
-                <th>Tòa nhà</th>
-                <th>Số phòng</th>
-                <th>Tổng giường</th>
-                <th>Đang ở</th>
-                <th>Còn trống</th>
-                <th>Lấp đầy</th>
-                <th>Doanh thu kỳ</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${rowsHtml || '<tr><td colspan="8" style="text-align:center;">Không có dữ liệu tòa nhà</td></tr>'}
-        </tbody>
-    </table>
+        document.body.classList.add('ktx-printing-contract');
+        container.innerHTML = `
+            <div id="contractPrintModalShell" class="fixed inset-0 z-50 flex flex-col items-center justify-start p-4 md:p-6 bg-black/65 backdrop-blur-xs overflow-y-auto animate-fade-in" onclick="if (event.target === this) KtxApp.closeModal()">
+                <div class="no-print w-full max-w-[210mm] shrink-0 flex items-center justify-between gap-3 mb-3 px-4 py-3 rounded-xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-[#232B3B] shadow-lg" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        <span class="material-symbols-outlined text-[18px] text-[#0B2A5B] dark:text-blue-400">description</span>
+                        <span>Xem trước văn bản báo cáo thống kê (Khổ A4) · ${esc(year)}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="KtxApp.closeModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">Đóng</button>
+                        <button type="button" onclick="KtxApp.printContractDocument()" class="px-4 py-1.5 rounded-lg bg-[#0B2A5B] hover:bg-[#143F8C] text-white text-xs font-semibold flex items-center gap-1.5 shadow-2xs">
+                            <span class="material-symbols-outlined text-[16px]">print</span>
+                            <span>In văn bản báo cáo</span>
+                        </button>
+                    </div>
+                </div>
 
-    <div class="signatures">
-        <div class="sig-box">
-            <div class="sig-title">Người lập biểu</div>
-            <div class="sig-note">(Ký và ghi rõ họ tên)</div>
-            <div class="sig-space"></div>
-        </div>
-        <div class="sig-box">
-            <div class="sig-note">${dateStr}</div>
-            <div class="sig-title">Trưởng Ban Quản lý KTX</div>
-            <div class="sig-note">(Ký, đóng dấu)</div>
-            <div class="sig-space"></div>
-        </div>
-    </div>
-</body>
-</html>`;
-
-        const win = window.open('', '_blank', 'width=900,height=700');
-        if (!win) {
-            if (window.KtxApp && typeof KtxApp.showToast === 'function') {
-                KtxApp.showToast('Trình duyệt đang chặn cửa sổ bật lên (pop-up). Vui lòng cho phép để in báo cáo A4.', 'error');
-            }
-            return;
-        }
-        win.document.open();
-        win.document.write(html);
-        win.document.close();
-        win.focus();
-        setTimeout(() => win.print(), 250);
+                <div id="contractPrintSheet" onclick="event.stopPropagation()" class="w-full max-w-[210mm] h-auto bg-white text-black px-10 py-8 mb-6 shrink-0 shadow-2xl rounded-2xl border border-slate-200">
+                    ${sheetHtml}
+                </div>
+            </div>
+        `;
     }
 
     function exportReportsCsv() {
@@ -3726,15 +3716,43 @@ window.KtxExtendedViews = (function () {
         if (modalContainer) modalContainer.innerHTML = '';
     }
 
-    function downloadCsv(filename, rows) {
-        const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + rows.map(e => e.map(cell => `"${cell}"`).join(',')).join('\n');
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement('a');
-        link.setAttribute('href', encodedUri);
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    async function downloadCsv(filename, rows, customTitle) {
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        const headers = rows[0].map(c => String(c ?? ''));
+        const dataRows = rows.slice(1).map(r => r.map(c => String(c ?? '')));
+        const xlsxFile = String(filename || 'BaoCao_KTX_UTC2').replace(/\.csv$/i, '') + '.xlsx';
+        const year = window.KtxApp?.getSelectedAcademicYear?.() || 'KTX UTC2';
+        const title = customTitle || (xlsxFile.includes('lop')
+            ? 'DANH SÁCH LỚP CHUYÊN NGÀNH & KHOA VIỆN KÝ TÚC XÁ UTC2'
+            : (xlsxFile.includes('dien_nuoc')
+                ? 'BÁO CÁO CHỈ SỐ ĐIỆN NƯỚC & DỊCH VỤ KÝ TÚC XÁ UTC2'
+                : 'BÁO CÁO THỐNG KÊ TỔNG KẾT KÝ TÚC XÁ UTC2'));
+        try {
+            const res = await fetch('/api/baocao/export-table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title,
+                    sheetName: 'BaoCao',
+                    fileName: xlsxFile,
+                    academicYear: year,
+                    headers,
+                    rows: dataRows
+                })
+            });
+            if (!res.ok) throw new Error('fail');
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = xlsxFile;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            window.KtxApp?.showToast?.('Xuất file Excel thất bại.', 'error');
+        }
     }
 
     document.addEventListener('click', (e) => {
@@ -3755,6 +3773,26 @@ window.KtxExtendedViews = (function () {
     });
     window.addEventListener('scroll', closeAllExtendedActionMenus, true);
     window.addEventListener('resize', closeAllExtendedActionMenus);
+
+    function exportTicketsExcel() {
+        const params = new URLSearchParams();
+        if (extState.ticketBuilding && extState.ticketBuilding !== 'ALL') params.set('building', extState.ticketBuilding);
+        if (extState.ticketPriority && extState.ticketPriority !== 'ALL') params.set('priority', extState.ticketPriority);
+        if (extState.ticketTab && extState.ticketTab !== 'ALL') params.set('status', extState.ticketTab);
+        if (extState.ticketSearch && extState.ticketSearch.trim()) params.set('search', extState.ticketSearch.trim());
+        const year = window.KtxApp?.getSelectedAcademicYear?.();
+        if (year) params.set('academicYear', year);
+        window.location.href = `/api/suachua/export?${params.toString()}`;
+    }
+
+    function exportViolationsExcel() {
+        const params = new URLSearchParams();
+        if (extState.violationPenaltyType && extState.violationPenaltyType !== 'ALL') params.set('penalty', extState.violationPenaltyType);
+        if (extState.violationSearch && extState.violationSearch.trim()) params.set('search', extState.violationSearch.trim());
+        const year = window.KtxApp?.getSelectedAcademicYear?.();
+        if (year) params.set('academicYear', year);
+        window.location.href = `/api/vipham/export?${params.toString()}`;
+    }
 
     return {
         hasView,
@@ -3842,6 +3880,8 @@ window.KtxExtendedViews = (function () {
         toggleStaffStatus,
         openAddStaffModal,
         submitAddStaff,
+        exportTicketsExcel,
+        exportViolationsExcel,
         // Report methods
         exportReportsCsv,
         printReportsPdf,

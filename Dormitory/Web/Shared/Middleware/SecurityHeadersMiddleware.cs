@@ -28,8 +28,8 @@ public sealed class SecurityHeadersMiddleware
         }
 
         headers["Content-Security-Policy"] = _isDevelopment
-            ? "default-src 'self' blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; connect-src 'self'; font-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
-            : "default-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; connect-src 'self'; font-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
+            ? "default-src 'self' blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; connect-src 'self'; font-src 'self' data: https://fonts.gstatic.com https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+            : "default-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; connect-src 'self'; font-src 'self' data: https://fonts.gstatic.com https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
 
         await _next(context);
     }

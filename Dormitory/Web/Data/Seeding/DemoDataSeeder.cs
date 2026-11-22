@@ -855,6 +855,100 @@ namespace Dormitory.Web.Data.Seeding
                 );
                 await context.SaveChangesAsync();
             }
+
+            await RefreshDemoTestScenariosAsync(context);
+        }
+
+        private static async Task RefreshDemoTestScenariosAsync(ApplicationDbContext context)
+        {
+            var now = DateTime.Now;
+            var today = DateTime.Today;
+
+            // 1. Chuẩn hóa giới tính ('nam' / 'nu') để tránh hiển thị sai giới tính
+            var invalidGenderStudents = await context.SinhViens
+                .Where(s => s.GioiTinh != "nam" && s.GioiTinh != "nu")
+                .ToListAsync();
+            foreach (var sv in invalidGenderStudents)
+            {
+                sv.GioiTinh = string.Equals(sv.GioiTinh?.Trim(), "nam", StringComparison.OrdinalIgnoreCase)
+                    ? "nam"
+                    : "nu";
+            }
+
+            // 2. Đảm bảo đủ 3 đợt đăng ký (Đang mở, Sắp mở, Đã đóng)
+            var mainRound = await context.DotDangKys.FirstOrDefaultAsync(d => d.MaDotDangKy == "DOT_K65_2026");
+            if (mainRound != null)
+            {
+                if (mainRound.NgayDong < today.AddMonths(2))
+                {
+                    mainRound.NgayDong = today.AddMonths(4);
+                }
+            }
+
+            if (!await context.DotDangKys.AnyAsync(d => d.MaDotDangKy == "DOT_BS_2026"))
+            {
+                await context.DotDangKys.AddAsync(new DotDangKy
+                {
+                    MaDotDangKy = "DOT_BS_2026",
+                    TenDot = "Đợt xét tuyển bổ sung đầu khóa Năm học 2026-2027",
+                    MaKyHoc = "HK1_2026_2027",
+                    NgayMo = new DateTime(2026, 8, 1),
+                    NgayDong = new DateTime(2026, 9, 15)
+                });
+            }
+
+            if (!await context.DotDangKys.AnyAsync(d => d.MaDotDangKy == "DOT_HK2_2027"))
+            {
+                await context.DotDangKys.AddAsync(new DotDangKy
+                {
+                    MaDotDangKy = "DOT_HK2_2027",
+                    TenDot = "Đợt đăng ký nội trú Học kỳ 2 Năm học 2026-2027",
+                    MaKyHoc = "HK1_2026_2027",
+                    NgayMo = today.AddDays(45),
+                    NgayDong = today.AddDays(90)
+                });
+            }
+
+            // 3. Tự động gia hạn thời gian giữ chỗ 24h cho 3 tài khoản demo giữ chỗ (sv_huy, sv_han, sv_kiet) nếu bị quá hạn
+            var reservationScenarios = new (string DonId, string ContractId, string InvoiceId, int HoursLeft, string? ProofImg, string? RejectReason)[]
+            {
+                ("DK-004", "HD-2026-004", "HD-GC-004", 23, null, null),
+                ("DK-005", "HD-2026-005", "HD-GC-005", 22, "proof_sv05_dk.png", null),
+                ("DK-006", "HD-2026-006", "HD-GC-006", 21, "proof_sv06_rej.png", "Ảnh minh chứng bị mờ, vui lòng chụp rõ số tiền và mã giao dịch")
+            };
+
+            foreach (var item in reservationScenarios)
+            {
+                var don = await context.DonDangKys.FirstOrDefaultAsync(d => d.MaDonDangKy == item.DonId);
+                var hd = await context.HopDongs.FirstOrDefaultAsync(h => h.MaHopDong == item.ContractId);
+                var inv = await context.HoaDons.FirstOrDefaultAsync(i => i.MaHoaDon == item.InvoiceId);
+
+                if (don != null && (don.TrangThai == "hetHan" || (hd != null && hd.HanGiuCho <= now.AddHours(2))))
+                {
+                    don.TrangThai = "daDuyet";
+                    don.MaDotDangKy = "DOT_K65_2026";
+                    don.NgayDuyet = now.AddHours(-1);
+                }
+
+                if (hd != null && (hd.TrangThai == "daHuy" || hd.HanGiuCho == null || hd.HanGiuCho <= now.AddHours(2)))
+                {
+                    hd.TrangThai = "choThanhToan";
+                    hd.HanGiuCho = now.AddHours(item.HoursLeft);
+                    hd.NgayBatDau = today;
+                }
+
+                if (inv != null && (inv.TrangThai == "daHuy" || inv.HanThanhToan <= today))
+                {
+                    inv.TrangThai = "chuaThanhToan";
+                    inv.HanThanhToan = today.AddDays(1);
+                    inv.AnhMinhChung = item.ProofImg;
+                    inv.NgayNopMinhChung = item.ProofImg != null ? now.AddMinutes(-35) : null;
+                    inv.LyDoTuChoiMinhChung = item.RejectReason;
+                    inv.NgayTuChoiMinhChung = item.RejectReason != null ? now.AddMinutes(-15) : null;
+                }
+            }
+
+            await context.SaveChangesAsync();
         }
     }
 }

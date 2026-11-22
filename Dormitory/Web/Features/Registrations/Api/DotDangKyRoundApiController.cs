@@ -55,7 +55,7 @@ namespace Dormitory.Web.Features.Registrations.Api
             return Ok(rounds);
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateDotDangKyRequest req, [FromQuery] string? academicYear)
         {
@@ -74,7 +74,7 @@ namespace Dormitory.Web.Features.Registrations.Api
                 return BadRequest(new { message = "Tên đợt không được để trống." });
             if (cleanName.Length > 93)
                 return BadRequest(new { message = "Tên đợt không được vượt quá 93 ký tự." });
-            if (req.NgayDong.Date < req.NgayMo.Date)
+            if (req.NgayMo.Year < 2000 || req.NgayDong.Year < 2000 || req.NgayDong.Date < req.NgayMo.Date)
                 return BadRequest(new { message = "Ngày đóng phải sau hoặc bằng ngày mở." });
 
             if (await _context.DotDangKys.AnyAsync(d => d.MaDotDangKy == cleanCode))
@@ -174,7 +174,7 @@ namespace Dormitory.Web.Features.Registrations.Api
             });
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(string id, [FromBody] CreateDotDangKyRequest req)
         {
@@ -195,7 +195,7 @@ namespace Dormitory.Web.Features.Registrations.Api
                 return BadRequest(new { success = false, message = "Tên đợt không được để trống." });
             if (cleanName.Length > 93)
                 return BadRequest(new { success = false, message = "Tên đợt không được vượt quá 93 ký tự." });
-            if (req.NgayDong.Date < req.NgayMo.Date)
+            if (req.NgayMo.Year < 2000 || req.NgayDong.Year < 2000 || req.NgayDong.Date < req.NgayMo.Date)
                 return BadRequest(new { success = false, message = "Ngày đóng phải sau hoặc bằng ngày mở." });
 
             // Giữ mã đợt không đổi (PK); chỉ cập nhật tên (vẫn ở trạng thái nháp) và thời gian.
@@ -221,7 +221,7 @@ namespace Dormitory.Web.Features.Registrations.Api
                     .OrderBy(k => k.NgayBatDau)
                     .FirstOrDefaultAsync();
                 if (kyHoc == null)
-                    return BadRequest(new { success = false, message = "Năm học mục tiêu chưa có kỳ học nào." });
+                    return BadRequest(ApiResponse.Fail("Năm học được chọn chưa có học kỳ để gắn đợt đăng ký."));
                 round.MaKyHoc = kyHoc.MaKyHoc;
             }
 
@@ -259,7 +259,7 @@ namespace Dormitory.Web.Features.Registrations.Api
             });
         }
 
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(string id)
         {
@@ -279,7 +279,7 @@ namespace Dormitory.Web.Features.Registrations.Api
 
             return Ok(new { success = true, message = $"Đã xoá đợt đăng ký {cleanId}." });
         }
-        [Authorize(Policy = RoleNames.AdminOrManagerPolicy)]
+        [Authorize(Policy = RoleNames.ManagerOnlyPolicy)]
         [HttpPost("{id}/publish")]
         public async Task<IActionResult> Publish(string id)
         {
